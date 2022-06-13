@@ -30,28 +30,19 @@ from lsst.utils.classes import cached_getter
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._bounds import _B
     from .._column_tag import _T
     from .._relation_visitor import _U, RelationVisitor
 
 
 @final
-class ProjectedRelation(Relation[_T, _B]):
-    def __init__(self, base: Relation[_T, _B], columns: AbstractSet[_T]):
+class ProjectedRelation(Relation[_T]):
+    def __init__(self, base: Relation[_T], columns: AbstractSet[_T]):
         self._base = base
         self._columns = columns
 
     @property
     def columns(self) -> AbstractSet[_T]:
         return self._columns
-
-    @property
-    def bounds(self) -> _B:
-        return self._base.bounds
-
-    @property
-    def connections(self) -> AbstractSet[frozenset[_T]]:
-        return self._base.connections
 
     @property  # type: ignore
     @cached_getter
@@ -70,8 +61,5 @@ class ProjectedRelation(Relation[_T, _B]):
     def doomed_by(self) -> AbstractSet[str]:
         return self._base.doomed_by
 
-    def projected(self, columns: AbstractSet[_T]) -> Relation[_T, _B]:
-        return ProjectedRelation(self._base, columns)
-
-    def visit(self, visitor: RelationVisitor[_T, _B, _U]) -> _U:
+    def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_projected(self, self._base, self._columns)

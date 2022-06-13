@@ -25,35 +25,29 @@ __all__ = ("SelectedRelation",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
-from lsst.utils.classes import cached_getter
-
 from .._relation import Relation
+from .._exceptions import MissingColumnError
 
 if TYPE_CHECKING:
-    from .._bounds import _B
     from .._column_tag import _T
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
 @final
-class SelectedRelation(Relation[_T, _B]):
-    def __init__(self, base: Relation[_T, _B], predicates: tuple[Predicate[_T, _B], ...]):
+class SelectedRelation(Relation[_T]):
+    def __init__(self, base: Relation[_T], predicates: tuple[Predicate[_T], ...]):
+        for p in predicates:
+            if not p.columns_required <= self.columns:
+                raise MissingColumnError(
+                    f"Predicate {p} needs columns {set(p.columns_required - self.columns)}."
+                )
         self._base = base
         self._predicates = predicates
 
     @property
     def columns(self) -> AbstractSet[_T]:
         return self._base.columns
-
-    @property  # type: ignore
-    @cached_getter
-    def bounds(self) -> _B:
-        return self._base.bounds.intersection(*[p.bounds for p in self._predicates])
-
-    @property
-    def connections(self) -> AbstractSet[frozenset[_T]]:
-        return self._base.connections
 
     @property
     def is_full(self) -> bool:
@@ -63,8 +57,5 @@ class SelectedRelation(Relation[_T, _B]):
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
         return self._base.unique_keys
 
-    def selected(self, *predicates: Predicate) -> Relation:
-        return SelectedRelation(self._base, self._predicates + predicates)
-
-    def visit(self, visitor: RelationVisitor[_T, _B, _U]) -> _U:
+    def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_selected(self, self._base, self._predicates)

@@ -31,23 +31,20 @@ from lsst.utils.classes import cached_getter
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._bounds import _B
     from .._column_tag import _T
     from .._join_condition import JoinCondition
     from .._relation_visitor import _U, RelationVisitor
 
 
 @final
-class JoinRelation(Relation[_T, _B]):
+class JoinRelation(Relation[_T]):
     def __init__(
         self,
-        relations: tuple[Relation[_T, _B], ...],
+        relations: tuple[Relation[_T], ...] = (),
         conditions: Iterable[JoinCondition[_T]] = (),
-        extra_connections: Iterable[frozenset[_T]] = (),
     ):
         self._relations = relations
         self._conditions = tuple(conditions)
-        self._extra_connections = frozenset(extra_connections)
 
     @property  # type: ignore
     @cached_getter
@@ -59,27 +56,14 @@ class JoinRelation(Relation[_T, _B]):
 
     @property  # type: ignore
     @cached_getter
-    def bounds(self) -> _B:
-        return self._relations[0].bounds.intersection(*[r.bounds for r in self._relations[1:]])
-
-    @property  # type: ignore
-    @cached_getter
-    def connections(self) -> AbstractSet[frozenset[_T]]:
-        result: set[frozenset[_T]] = set(self._extra_connections)
-        for relation in self._relations:
-            result.update(relation.connections)
-        return result
-
-    @property  # type: ignore
-    @cached_getter
     def is_full(self) -> bool:
         return all(r.is_full for r in self._relations)
 
     @property  # type: ignore
     @cached_getter
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
-        current_keys: set[frozenset[_T]] = set(self._relations[0].unique_keys)
-        for relation in self._relations[1:]:
+        current_keys: set[frozenset[_T]] = set()
+        for relation in self._relations:
             current_keys = {
                 key1.union(key2) for key1, key2 in itertools.product(current_keys, relation.unique_keys)
             }
@@ -93,14 +77,5 @@ class JoinRelation(Relation[_T, _B]):
             result.update(relation.doomed_by)
         return result
 
-    def _flatten_join_relations(self) -> Iterable[Relation[_T, _B]]:
-        return self._relations
-
-    def _flatten_join_conditions(self) -> Iterable[JoinCondition[_T]]:
-        return self._conditions
-
-    def _flatten_join_extra_connections(self) -> Iterable[frozenset[_T]]:
-        return self._extra_connections
-
-    def visit(self, visitor: RelationVisitor[_T, _B, _U]) -> _U:
-        return visitor.visit_join(self, self._relations, self._conditions, self._extra_connections)
+    def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
+        return visitor.visit_join(self, self._relations, self._conditions)

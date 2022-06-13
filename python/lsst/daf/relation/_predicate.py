@@ -27,17 +27,11 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Generic
 
 if TYPE_CHECKING:
-    from ._bounds import _B
     from ._column_tag import _T
 
 
-class Predicate(Generic[_T, _B]):
+class Predicate(Generic[_T]):
     @property
     @abstractmethod
     def columns_required(self) -> AbstractSet[_T]:
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
-    def bounds(self) -> _B:
         raise NotImplementedError()

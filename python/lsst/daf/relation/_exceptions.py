@@ -24,12 +24,22 @@ from __future__ import annotations
 __all__ = (
     "MismatchedUnionError",
     "MissingColumnError",
+    "RelationalAlgebraError",
+    "UnmatchedJoinConditionError",
 )
 
 
-class MismatchedUnionError(RuntimeError):
+class RelationalAlgebraError(RuntimeError):
     pass
 
 
-class MissingColumnError(RuntimeError):
+class MismatchedUnionError(RelationalAlgebraError):
+    pass
+
+
+class MissingColumnError(RelationalAlgebraError):
+    pass
+
+
+class UnmatchedJoinConditionError(RelationalAlgebraError):
     pass

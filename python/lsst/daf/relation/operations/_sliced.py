@@ -23,20 +23,41 @@ from __future__ import annotations
 
 __all__ = ("SlicedRelation",)
 
-from typing import TYPE_CHECKING, AbstractSet, Iterable, final
+from typing import TYPE_CHECKING, AbstractSet, final
 
 from .._relation import Relation
+from .._exceptions import MissingColumnError
 
 if TYPE_CHECKING:
-    from .._bounds import _B
     from .._column_tag import _T
     from .._order_by_term import OrderByTerm
     from .._relation_visitor import _U, RelationVisitor
 
 
 @final
-class SlicedRelation(Relation[_T, _B]):
+class SlicedRelation(Relation[_T]):
     def __init__(self, base: Relation, order_by: tuple[OrderByTerm[_T], ...], offset: int, limit: int | None):
+        # TypeError may seem strange below, but it's what Python usually raises
+        # when you pass an invalid combination of arguments to a function.
+        if not order_by:
+            raise TypeError(
+                "Cannot slice an unordered relation; to obtain an arbitrary "
+                "set of result rows from an unordered relation, pass offset "
+                "and/or limit to_sql_executable when executing it."
+            )
+        if not offset and limit is None:
+            raise TypeError(
+                "Cannot order a relation unless it is being sliced with "
+                "nontrivial offset and/or limit; to obtain ordered rows from "
+                "a relation, pass order_by to to_sql_executable when "
+                "executing it."
+            )
+
+        for t in order_by:
+            if not t.columns_required <= self.columns:
+                raise MissingColumnError(
+                    f"OrderByTerm {t} needs columns {set(t.columns_required - self.columns)}."
+                )
         self._base = base
         self._order_by = order_by
         self._offset = offset
@@ -45,14 +66,6 @@ class SlicedRelation(Relation[_T, _B]):
     @property
     def columns(self) -> AbstractSet[_T]:
         return self._base.columns
-
-    @property
-    def bounds(self) -> _B:
-        return self._base.bounds
-
-    @property
-    def connections(self) -> AbstractSet[frozenset[_T]]:
-        return self._base.connections
 
     @property
     def is_full(self) -> bool:
@@ -70,25 +83,5 @@ class SlicedRelation(Relation[_T, _B]):
             result.add("Relation has been sliced to zero length.")
         return result
 
-    def sliced(
-        self, order_by: Iterable[OrderByTerm[_T]], offset: int = 0, limit: int | None = None
-    ) -> Relation:
-        if not order_by:
-            order_by = self._order_by
-        else:
-            order_by = list(order_by)
-            order_by.extend(self._order_by)
-        combined_offset = self._offset + offset
-        if limit is not None:
-            combined_limit: int | None
-            if self._limit is not None:
-                original_stop = self._offset + self._limit
-                new_stop = offset + limit
-                combined_stop = min(original_stop, new_stop)
-                combined_limit = max(combined_stop - offset, 0)
-            else:
-                combined_limit = self._limit
-        return SlicedRelation(self._base, tuple(order_by), offset=combined_offset, limit=combined_limit)
-
-    def visit(self, visitor: RelationVisitor[_T, _B, _U]) -> _U:
+    def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_sliced(self, self._base, self._order_by, self._offset, self._limit)

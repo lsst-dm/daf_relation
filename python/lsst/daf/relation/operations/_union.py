@@ -23,48 +23,34 @@ from __future__ import annotations
 
 __all__ = ("UnionRelation",)
 
-from typing import TYPE_CHECKING, AbstractSet, Iterable, Iterator, final
+from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._bounds import _B
     from .._column_tag import _T
-    from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
 @final
-class UnionRelation(Relation[_T, _B]):
+class UnionRelation(Relation[_T]):
     def __init__(
         self,
-        relations: tuple[Relation[_T, _B], ...],
-        unique_keys: AbstractSet[frozenset[_T]],
-        extra_doomed_by: AbstractSet[str],
+        columns: AbstractSet[_T],
+        relations: tuple[Relation[_T], ...] = (),
+        unique_keys: AbstractSet[frozenset[_T]] = frozenset(),
+        extra_doomed_by: AbstractSet[str] = frozenset(),
     ):
+        self._columns = columns
         self._relations = relations
         self._unique_keys = unique_keys
         self._extra_doomed_by = extra_doomed_by
 
     @property
     def columns(self) -> AbstractSet[_T]:
-        return self._relations[0].columns
-
-    @property  # type: ignore
-    @cached_getter
-    def bounds(self) -> _B:
-        return self._relations[0].bounds.union(*[r.bounds for r in self._relations[1:]])
-
-    @property  # type: ignore
-    @cached_getter
-    def connections(self) -> AbstractSet[frozenset[_T]]:
-        first, *rest = self._relations
-        result = set(first.connections)
-        for relation in rest:
-            result.intersection_update(relation.connections)
-        return result
+        return self._columns
 
     @property  # type: ignore
     @cached_getter
@@ -85,20 +71,11 @@ class UnionRelation(Relation[_T, _B]):
             result.update(related.doomed_by)
         return result
 
-    def projected(self, columns: AbstractSet[_T]) -> Relation[_T, _B]:
-        return Relation.union(*[related.projected(columns) for related in self._relations])
-
-    def selected(self, *predicates: Predicate[_T, _B]) -> Relation[_T, _B]:
-        return Relation.union(*[relation.selected(*predicates) for relation in self._relations])
-
-    def _flatten_union_relations(self) -> Iterator[Relation[_T, _B]]:
-        return iter(self._relations)
-
-    def _flatten_union_doomed_by(self) -> Iterable[str]:
-        result = set(self._extra_doomed_by)
-        for relation in self._relations:
-            result.update(relation._flatten_union_doomed_by())
-        return result
-
-    def visit(self, visitor: RelationVisitor[_T, _B, _U]) -> _U:
-        return visitor.visit_union(self, self._relations, self._unique_keys, self._extra_doomed_by)
+    def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
+        return visitor.visit_union(
+            self,
+            self._columns,
+            self._relations,
+            unique_keys=self._unique_keys,
+            extra_doomed_by=self._extra_doomed_by,
+        )
