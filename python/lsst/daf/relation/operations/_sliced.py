@@ -25,8 +25,8 @@ __all__ = ("SlicedRelation",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
-from .._relation import Relation
 from .._exceptions import MissingColumnError
+from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T

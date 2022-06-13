@@ -24,12 +24,13 @@ from __future__ import annotations
 __all__ = ("RelationVisitor",)
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Generic, Sequence, TypeVar
+from typing import TYPE_CHECKING, AbstractSet, Any, Generic, Sequence, TypeVar
 
 if TYPE_CHECKING:
     from . import operations
     from ._column_tag import _T
     from ._join_condition import JoinCondition
+    from ._leaf_relation import LeafRelation
     from ._order_by_term import OrderByTerm
     from ._predicate import Predicate
     from ._relation import Relation
@@ -39,6 +40,14 @@ _U = TypeVar("_U", covariant=True)
 
 
 class RelationVisitor(Generic[_T, _U]):
+    @abstractmethod
+    def visit_leaf(
+        self,
+        visited: LeafRelation[_T],
+        state: dict[str, Any],
+    ) -> _U:
+        raise NotImplementedError()
+
     @abstractmethod
     def visit_join(
         self,

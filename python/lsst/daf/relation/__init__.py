@@ -22,6 +22,7 @@
 from ._column_tag import *
 from ._exceptions import *
 from ._join_condition import *
+from ._leaf_relation import *
 from ._order_by_term import *
 from ._predicate import *
 from ._relation import *

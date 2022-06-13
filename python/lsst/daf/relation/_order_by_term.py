@@ -23,15 +23,18 @@ from __future__ import annotations
 
 __all__ = ("OrderByTerm",)
 
-from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Generic
+import dataclasses
+from typing import TYPE_CHECKING, AbstractSet, Any, Generic
 
 if TYPE_CHECKING:
     from ._column_tag import _T
 
 
+@dataclasses.dataclass
 class OrderByTerm(Generic[_T]):
-    @property
-    @abstractmethod
-    def columns_required(self) -> AbstractSet[_T]:
-        raise NotImplementedError()
+    state: dict[str, Any]
+    columns_required: AbstractSet[_T]
+    reverse: bool = True
+
+    def reversed(self) -> OrderByTerm[_T]:
+        return dataclasses.replace(self, reverse=not self.reverse)

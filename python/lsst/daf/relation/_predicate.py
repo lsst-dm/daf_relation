@@ -23,15 +23,14 @@ from __future__ import annotations
 
 __all__ = ("Predicate",)
 
-from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Generic
+import dataclasses
+from typing import TYPE_CHECKING, AbstractSet, Any, Generic
 
 if TYPE_CHECKING:
     from ._column_tag import _T
 
 
+@dataclasses.dataclass(frozen=True, eq=False)
 class Predicate(Generic[_T]):
-    @property
-    @abstractmethod
-    def columns_required(self) -> AbstractSet[_T]:
-        raise NotImplementedError()
+    state: dict[str, Any]
+    columns_required: AbstractSet[_T]

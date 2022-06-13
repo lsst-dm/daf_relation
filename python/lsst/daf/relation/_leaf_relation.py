@@ -21,23 +21,42 @@
 
 from __future__ import annotations
 
-__all__ = ("JoinCondition",)
+__all__ = ("LeafRelation",)
 
+from typing import TYPE_CHECKING, AbstractSet, Any, final
 
-import dataclasses
-from typing import TYPE_CHECKING, AbstractSet, Any, Generic
+from ._relation import Relation
 
 if TYPE_CHECKING:
     from ._column_tag import _T
+    from ._relation_visitor import _U, RelationVisitor
 
 
-@dataclasses.dataclass(frozen=True, eq=False)
-class JoinCondition(Generic[_T]):
-    state: dict[str, Any]
-    columns_required: tuple[AbstractSet[_T], AbstractSet[_T]]
-    reverse: bool = False
+@final
+class LeafRelation(Relation[_T]):
+    def __init__(
+        self,
+        state: dict[str, Any],
+        columns: AbstractSet[_T],
+        unique_keys: AbstractSet[frozenset[_T]],
+        full_keys: AbstractSet[_T],
+    ):
+        self._state = state
+        self._columns = columns
+        self._unique_keys = unique_keys
+        self._full_keys = full_keys
 
-    def reversed(self) -> JoinCondition[_T]:
-        return dataclasses.replace(
-            self, columns_required=tuple(reversed(self.columns_required)), reverse=not self.reverse
-        )
+    @property
+    def columns(self) -> AbstractSet[_T]:
+        return self._columns
+
+    @property
+    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+        return self._unique_keys
+
+    @property
+    def full_keys(self) -> AbstractSet[_T]:
+        return self._full_keys
+
+    def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
+        return visitor.visit_leaf(self, self._state)

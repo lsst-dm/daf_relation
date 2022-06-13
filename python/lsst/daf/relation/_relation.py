@@ -26,7 +26,6 @@ __all__ = ("Relation",)
 from abc import abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable
 
-
 if TYPE_CHECKING:
     from ._column_tag import _T
     from ._join_condition import JoinCondition
