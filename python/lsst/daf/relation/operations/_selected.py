@@ -50,10 +50,6 @@ class SelectedRelation(Relation[_T]):
         return self._base.columns
 
     @property
-    def is_full(self) -> bool:
-        return False
-
-    @property
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
         return self._base.unique_keys
 

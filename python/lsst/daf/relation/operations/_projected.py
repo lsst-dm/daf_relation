@@ -50,14 +50,6 @@ class ProjectedRelation(Relation[_T]):
         return {keys for keys in self._base.unique_keys if keys.issubset(self._columns)}
 
     @property
-    def is_full(self) -> bool:
-        return self._base.is_full
-
-    @property
-    def is_materialized(self) -> bool:
-        return self._base.is_materialized
-
-    @property
     def doomed_by(self) -> AbstractSet[str]:
         return self._base.doomed_by
 

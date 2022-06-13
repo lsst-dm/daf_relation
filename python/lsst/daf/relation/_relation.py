@@ -26,6 +26,7 @@ __all__ = ("Relation",)
 from abc import abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable
 
+
 if TYPE_CHECKING:
     from ._column_tag import _T
     from ._join_condition import JoinCondition
@@ -58,17 +59,8 @@ class Relation(Generic[_T]):
 
     @property
     @abstractmethod
-    def is_full(self) -> bool:
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
         raise NotImplementedError()
-
-    @property
-    def is_materialized(self) -> bool:
-        return False
 
     @property
     def doomed_by(self) -> AbstractSet[str]:

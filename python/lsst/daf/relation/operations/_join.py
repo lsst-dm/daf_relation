@@ -56,11 +56,6 @@ class JoinRelation(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def is_full(self) -> bool:
-        return all(r.is_full for r in self._relations)
-
-    @property  # type: ignore
-    @cached_getter
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
         current_keys: set[frozenset[_T]] = set()
         for relation in self._relations:

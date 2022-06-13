@@ -52,11 +52,6 @@ class UnionRelation(Relation[_T]):
     def columns(self) -> AbstractSet[_T]:
         return self._columns
 
-    @property  # type: ignore
-    @cached_getter
-    def is_full(self) -> bool:
-        return any(r.is_full for r in self._relations)
-
     @property
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
         return self._unique_keys
