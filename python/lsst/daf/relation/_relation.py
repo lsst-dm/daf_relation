@@ -78,8 +78,9 @@ class Relation(Generic[_T, _B]):
         raise NotImplementedError()
 
     @property
-    def is_unique(self) -> bool:
-        return False
+    @abstractmethod
+    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+        raise NotImplementedError()
 
     @property
     def is_materialized(self) -> bool:
@@ -89,11 +90,11 @@ class Relation(Generic[_T, _B]):
     def doomed_by(self) -> AbstractSet[str]:
         return frozenset()
 
-    def forced_unique(self) -> Relation[_T, _B]:
-        if not self.is_unique:
+    def forced_unique(self, keys: AbstractSet[frozenset[_T]]) -> Relation[_T, _B]:
+        if not self.unique_keys:
             from .operations import ForcedUniqueRelation
 
-            return ForcedUniqueRelation(self)
+            return ForcedUniqueRelation(self, keys)
         else:
             return self
 
@@ -182,7 +183,9 @@ class Relation(Generic[_T, _B]):
 
         return SlicedRelation(self, order_by, offset, limit)
 
-    def union(self, *others: Relation[_T, _B]) -> Relation[_T, _B]:
+    def union(
+        self, *others: Relation[_T, _B], unique_keys: AbstractSet[frozenset[_T]] = frozenset()
+    ) -> Relation[_T, _B]:
         # See `join` for what this fallback logic does; in this case it's any
         # zero relation that plays the role of the unit relation, and the
         # doomed_by messages that play the role of the join conditions.
@@ -202,10 +205,10 @@ class Relation(Generic[_T, _B]):
             relations.extend(new_relations)
             extra_doomed_by.update(other._flatten_union_doomed_by())
         if len(relations) < 2:
-            return fallback
+            return fallback.forced_unique(unique_keys)
         from .operations import UnionRelation
 
-        return UnionRelation(tuple(relations), extra_doomed_by)
+        return UnionRelation(tuple(relations), unique_keys, extra_doomed_by)
 
     def _flatten_join_relations(self) -> Iterable[Relation[_T, _B]]:
         return (self,)

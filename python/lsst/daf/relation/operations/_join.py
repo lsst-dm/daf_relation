@@ -77,8 +77,13 @@ class JoinRelation(Relation[_T, _B]):
 
     @property  # type: ignore
     @cached_getter
-    def is_unique(self) -> bool:
-        return all(r.is_unique for r in self._relations)
+    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+        current_keys: set[frozenset[_T]] = set(self._relations[0].unique_keys)
+        for relation in self._relations[1:]:
+            current_keys = {
+                key1.union(key2) for key1, key2 in itertools.product(current_keys, relation.unique_keys)
+            }
+        return current_keys
 
     @property  # type: ignore
     @cached_getter

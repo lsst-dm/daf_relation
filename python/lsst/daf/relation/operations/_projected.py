@@ -53,6 +53,11 @@ class ProjectedRelation(Relation[_T, _B]):
     def connections(self) -> AbstractSet[frozenset[_T]]:
         return self._base.connections
 
+    @property  # type: ignore
+    @cached_getter
+    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+        return {keys for keys in self._base.unique_keys if keys.issubset(self._columns)}
+
     @property
     def is_full(self) -> bool:
         return self._base.is_full

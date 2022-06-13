@@ -60,8 +60,8 @@ class SelectedRelation(Relation[_T, _B]):
         return False
 
     @property
-    def is_unique(self) -> bool:
-        return self._base.is_unique
+    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+        return self._base.unique_keys
 
     def selected(self, *predicates: Predicate) -> Relation:
         return SelectedRelation(self._base, self._predicates + predicates)

@@ -55,8 +55,8 @@ class UnitRelation(Relation[_T, _B]):
         return True
 
     @property
-    def is_unique(self) -> bool:
-        return True
+    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+        return {frozenset()}
 
     @property
     def is_materialized(self) -> bool:

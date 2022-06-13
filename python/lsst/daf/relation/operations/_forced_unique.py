@@ -35,8 +35,9 @@ if TYPE_CHECKING:
 
 @final
 class ForcedUniqueRelation(Relation[_T, _B]):
-    def __init__(self, base: Relation[_T, _B]):
+    def __init__(self, base: Relation[_T, _B], keys: AbstractSet[frozenset[_T]]):
         self._base = base
+        self._keys = keys
 
     @property
     def columns(self) -> AbstractSet[_T]:
@@ -55,12 +56,12 @@ class ForcedUniqueRelation(Relation[_T, _B]):
         return self._base.is_full
 
     @property
-    def is_unique(self) -> bool:
-        return True
+    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+        return self._keys
 
     @property
     def doomed_by(self) -> AbstractSet[str]:
         return self._base.doomed_by
 
     def visit(self, visitor: RelationVisitor[_T, _B, _U]) -> _U:
-        return visitor.visit_forced_unique(self, self._base)
+        return visitor.visit_forced_unique(self, self._base, self._keys)

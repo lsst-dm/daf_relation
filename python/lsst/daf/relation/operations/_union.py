@@ -38,8 +38,14 @@ if TYPE_CHECKING:
 
 @final
 class UnionRelation(Relation[_T, _B]):
-    def __init__(self, relations: tuple[Relation[_T, _B], ...], extra_doomed_by: AbstractSet[str]):
+    def __init__(
+        self,
+        relations: tuple[Relation[_T, _B], ...],
+        unique_keys: AbstractSet[frozenset[_T]],
+        extra_doomed_by: AbstractSet[str],
+    ):
         self._relations = relations
+        self._unique_keys = unique_keys
         self._extra_doomed_by = extra_doomed_by
 
     @property
@@ -66,8 +72,8 @@ class UnionRelation(Relation[_T, _B]):
         return any(r.is_full for r in self._relations)
 
     @property
-    def is_unique(self) -> bool:
-        return True
+    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+        return self._unique_keys
 
     @property  # type: ignore
     @cached_getter
@@ -95,4 +101,4 @@ class UnionRelation(Relation[_T, _B]):
         return result
 
     def visit(self, visitor: RelationVisitor[_T, _B, _U]) -> _U:
-        return visitor.visit_union(self, self._relations, self._extra_doomed_by)
+        return visitor.visit_union(self, self._relations, self._unique_keys, self._extra_doomed_by)

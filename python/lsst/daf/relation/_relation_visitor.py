@@ -42,7 +42,10 @@ _U = TypeVar("_U", covariant=True)
 class RelationVisitor(Generic[_T, _B, _U]):
     @abstractmethod
     def visit_forced_unique(
-        self, visited: operations.ForcedUniqueRelation[_T, _B], base: Relation[_T, _B]
+        self,
+        visited: operations.ForcedUniqueRelation[_T, _B],
+        base: Relation[_T, _B],
+        unique_keys: AbstractSet[frozenset[_T]],
     ) -> _U:
         raise NotImplementedError()
 
@@ -87,6 +90,7 @@ class RelationVisitor(Generic[_T, _B, _U]):
         self,
         visited: operations.UnionRelation[_T, _B],
         relations: Sequence[Relation[_T, _B]],
+        unique_keys: AbstractSet[frozenset[_T]],
         extra_doomed_by: AbstractSet[str],
     ) -> _U:
         raise NotImplementedError()
