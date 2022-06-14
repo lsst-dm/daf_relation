@@ -57,5 +57,9 @@ class RelationVisitor(Generic[_T, _U]):
         raise NotImplementedError()
 
     @abstractmethod
+    def visit_transfer(self, visited: operations.TransferRelation) -> _U:
+        raise NotImplementedError()
+
+    @abstractmethod
     def visit_union(self, visited: operations.UnionRelation[_T]) -> _U:
         raise NotImplementedError()

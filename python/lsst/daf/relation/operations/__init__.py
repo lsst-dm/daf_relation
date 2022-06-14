@@ -23,4 +23,5 @@ from ._join import *
 from ._projected import *
 from ._selected import *
 from ._sliced import *
+from ._transfer import *
 from ._union import *

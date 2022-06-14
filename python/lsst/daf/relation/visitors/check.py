@@ -102,6 +102,9 @@ class Check(RelationVisitor[_T, None]):
                     f"columns {o.columns_required - visited.base.columns}."
                 )
 
+    def visit_transfer(self, visited: operations.TransferRelation[_T]) -> None:
+        pass
+
     def visit_union(self, visited: operations.UnionRelation[_T]) -> None:
         for relation in visited.relations:
             if relation.engine != visited.engine:
