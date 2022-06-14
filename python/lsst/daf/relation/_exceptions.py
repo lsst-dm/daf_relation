@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 __all__ = (
+    "InvalidSliceError",
     "MismatchedUnionError",
     "MissingColumnError",
     "RelationalAlgebraError",
@@ -30,6 +31,10 @@ __all__ = (
 
 
 class RelationalAlgebraError(RuntimeError):
+    pass
+
+
+class InvalidSliceError(RelationalAlgebraError):
     pass
 
 
