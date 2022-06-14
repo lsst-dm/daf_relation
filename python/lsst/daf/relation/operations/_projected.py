@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 @final
 class ProjectedRelation(Relation[_T]):
     def __init__(self, base: Relation[_T], columns: AbstractSet[_T]):
-        self._base = base
+        self.base = base
         self._columns = columns
 
     @property
@@ -47,11 +47,11 @@ class ProjectedRelation(Relation[_T]):
     @property  # type: ignore
     @cached_getter
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
-        return {keys for keys in self._base.unique_keys if keys.issubset(self._columns)}
+        return {keys for keys in self.base.unique_keys if keys.issubset(self._columns)}
 
     @property
     def doomed_by(self) -> AbstractSet[str]:
-        return self._base.doomed_by
+        return self.base.doomed_by
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_projected(self, self._base, self._columns)
+        return visitor.visit_projected(self)

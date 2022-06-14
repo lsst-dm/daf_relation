@@ -58,26 +58,26 @@ class SlicedRelation(Relation[_T]):
                 raise MissingColumnError(
                     f"OrderByTerm {t} needs columns {set(t.columns_required - self.columns)}."
                 )
-        self._base = base
-        self._order_by = order_by
-        self._offset = offset
-        self._limit = limit
+        self.base = base
+        self.order_by = order_by
+        self.offset = offset
+        self.limit = limit
 
     @property
     def columns(self) -> AbstractSet[_T]:
-        return self._base.columns
+        return self.base.columns
 
     @property
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
-        return self._base.unique_keys
+        return self.base.unique_keys
 
     @property
     def doomed_by(self) -> AbstractSet[str]:
-        result = self._base.doomed_by
-        if self._limit == 0:
+        result = self.base.doomed_by
+        if self.limit == 0:
             result = set(result)
             result.add("Relation has been sliced to zero length.")
         return result
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_sliced(self, self._base, self._order_by, self._offset, self._limit)
+        return visitor.visit_sliced(self)

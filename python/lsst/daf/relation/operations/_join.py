@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("JoinRelation",)
 
 import itertools
-from typing import TYPE_CHECKING, AbstractSet, Iterable, final
+from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
@@ -41,16 +41,16 @@ class JoinRelation(Relation[_T]):
     def __init__(
         self,
         relations: tuple[Relation[_T], ...] = (),
-        conditions: Iterable[JoinCondition[_T]] = (),
+        conditions: tuple[JoinCondition[_T], ...] = (),
     ):
-        self._relations = relations
-        self._conditions = tuple(conditions)
+        self.relations = relations
+        self.conditions = conditions
 
     @property  # type: ignore
     @cached_getter
     def columns(self) -> AbstractSet[_T]:
         result: set[_T] = set()
-        for relation in self._relations:
+        for relation in self.relations:
             result.update(relation.columns)
         return result
 
@@ -58,7 +58,7 @@ class JoinRelation(Relation[_T]):
     @cached_getter
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
         current_keys: set[frozenset[_T]] = set()
-        for relation in self._relations:
+        for relation in self.relations:
             current_keys = {
                 key1.union(key2) for key1, key2 in itertools.product(current_keys, relation.unique_keys)
             }
@@ -68,9 +68,9 @@ class JoinRelation(Relation[_T]):
     @cached_getter
     def doomed_by(self) -> AbstractSet[str]:
         result: set[str] = set()
-        for relation in self._relations:
+        for relation in self.relations:
             result.update(relation.doomed_by)
         return result
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_join(self, self._relations, self._conditions)
+        return visitor.visit_join(self)

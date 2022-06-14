@@ -49,7 +49,7 @@ class Relation(Generic[_T]):
     ) -> Relation[_T]:
         from .operations import UnionRelation
 
-        return UnionRelation(columns, (), unique_keys, doomed_by)
+        return UnionRelation(columns, (), unique_keys, frozenset(doomed_by))
 
     @property
     @abstractmethod
@@ -77,7 +77,7 @@ class Relation(Generic[_T]):
     ) -> Relation[_T]:
         from .operations import JoinRelation
 
-        return JoinRelation((self,) + others, conditions=conditions)
+        return JoinRelation((self,) + others, conditions=tuple(conditions))
 
     def projected(self, columns: AbstractSet[_T]) -> Relation[_T]:
         from .operations import ProjectedRelation

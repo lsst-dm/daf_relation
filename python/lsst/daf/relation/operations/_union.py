@@ -41,12 +41,12 @@ class UnionRelation(Relation[_T]):
         columns: AbstractSet[_T],
         relations: tuple[Relation[_T], ...] = (),
         unique_keys: AbstractSet[frozenset[_T]] = frozenset(),
-        extra_doomed_by: AbstractSet[str] = frozenset(),
+        extra_doomed_by: frozenset[str] = frozenset(),
     ):
         self._columns = columns
-        self._relations = relations
+        self.relations = relations
         self._unique_keys = unique_keys
-        self._extra_doomed_by = extra_doomed_by
+        self.extra_doomed_by = extra_doomed_by
 
     @property
     def columns(self) -> AbstractSet[_T]:
@@ -59,18 +59,12 @@ class UnionRelation(Relation[_T]):
     @property  # type: ignore
     @cached_getter
     def doomed_by(self) -> AbstractSet[str]:
-        result = set(self._extra_doomed_by)
-        for related in self._relations:
+        result = set(self.extra_doomed_by)
+        for related in self.relations:
             if not related.doomed_by:
                 return frozenset()
             result.update(related.doomed_by)
         return result
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_union(
-            self,
-            self._columns,
-            self._relations,
-            unique_keys=self._unique_keys,
-            extra_doomed_by=self._extra_doomed_by,
-        )
+        return visitor.visit_union(self)

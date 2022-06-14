@@ -42,16 +42,16 @@ class SelectedRelation(Relation[_T]):
                 raise MissingColumnError(
                     f"Predicate {p} needs columns {set(p.columns_required - self.columns)}."
                 )
-        self._base = base
-        self._predicates = predicates
+        self.base = base
+        self.predicates = predicates
 
     @property
     def columns(self) -> AbstractSet[_T]:
-        return self._base.columns
+        return self.base.columns
 
     @property
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
-        return self._base.unique_keys
+        return self.base.unique_keys
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_selected(self, self._base, self._predicates)
+        return visitor.visit_selected(self)

@@ -41,10 +41,10 @@ class LeafRelation(Relation[_T]):
         unique_keys: AbstractSet[frozenset[_T]],
         full_keys: AbstractSet[_T],
     ):
-        self._state = state
+        self.state = state
         self._columns = columns
         self._unique_keys = unique_keys
-        self._full_keys = full_keys
+        self.full_keys = full_keys
 
     @property
     def columns(self) -> AbstractSet[_T]:
@@ -54,9 +54,5 @@ class LeafRelation(Relation[_T]):
     def unique_keys(self) -> AbstractSet[frozenset[_T]]:
         return self._unique_keys
 
-    @property
-    def full_keys(self) -> AbstractSet[_T]:
-        return self._full_keys
-
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_leaf(self, self._state)
+        return visitor.visit_leaf(self)
