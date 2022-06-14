@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable
 
 if TYPE_CHECKING:
     from ._column_tag import _T
+    from ._engine_tag import EngineTag
     from ._join_condition import JoinCondition
     from ._order_by_term import OrderByTerm
     from ._predicate import Predicate
@@ -36,20 +37,26 @@ if TYPE_CHECKING:
 
 class Relation(Generic[_T]):
     @staticmethod
-    def make_unit() -> Relation[_T]:
+    def make_unit(engine: EngineTag) -> Relation[_T]:
         from .operations import JoinRelation
 
-        return JoinRelation()
+        return JoinRelation(engine)
 
     @staticmethod
     def make_zero(
+        engine: EngineTag,
         columns: AbstractSet[_T],
         unique_keys: AbstractSet[frozenset[_T]] = frozenset(),
         doomed_by: AbstractSet[str] = frozenset(),
     ) -> Relation[_T]:
         from .operations import UnionRelation
 
-        return UnionRelation(columns, (), unique_keys, frozenset(doomed_by))
+        return UnionRelation(engine, columns, (), unique_keys, frozenset(doomed_by))
+
+    @property
+    @abstractmethod
+    def engine(self) -> EngineTag:
+        raise NotImplementedError()
 
     @property
     @abstractmethod
@@ -68,7 +75,7 @@ class Relation(Generic[_T]):
     def forced_unique(self, keys: AbstractSet[frozenset[_T]]) -> Relation[_T]:
         from .operations import UnionRelation
 
-        return UnionRelation(self.columns, (self,), keys, frozenset())
+        return UnionRelation(self.engine, self.columns, (self,), keys, frozenset())
 
     def join(
         self,
@@ -77,7 +84,7 @@ class Relation(Generic[_T]):
     ) -> Relation[_T]:
         from .operations import JoinRelation
 
-        return JoinRelation((self,) + others, conditions=tuple(conditions))
+        return JoinRelation(self.engine, (self,) + others, conditions=tuple(conditions))
 
     def projected(self, columns: AbstractSet[_T]) -> Relation[_T]:
         from .operations import ProjectedRelation
@@ -102,6 +109,7 @@ class Relation(Generic[_T]):
         from .operations import UnionRelation
 
         return UnionRelation(
+            self.engine,
             self.columns,
             (self,) + others,
             unique_keys=self.unique_keys,

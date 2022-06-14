@@ -29,6 +29,7 @@ from ._relation import Relation
 
 if TYPE_CHECKING:
     from ._column_tag import _T
+    from ._engine_tag import EngineTag
     from ._relation_visitor import _U, RelationVisitor
 
 
@@ -36,15 +37,23 @@ if TYPE_CHECKING:
 class LeafRelation(Relation[_T]):
     def __init__(
         self,
-        state: dict[str, Any],
+        name: str,
+        engine: EngineTag,
+        state: Any,
         columns: AbstractSet[_T],
         unique_keys: AbstractSet[frozenset[_T]],
         full_keys: AbstractSet[_T],
     ):
+        self.name = name
+        self._engine = engine
         self.state = state
         self._columns = columns
         self._unique_keys = unique_keys
         self.full_keys = full_keys
+
+    @property
+    def engine(self) -> EngineTag:
+        return self._engine
 
     @property
     def columns(self) -> AbstractSet[_T]:

@@ -28,9 +28,12 @@ from typing import TYPE_CHECKING, AbstractSet, Any, Generic
 
 if TYPE_CHECKING:
     from ._column_tag import _T
+    from ._engine_tag import EngineTag
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
 class Predicate(Generic[_T]):
-    state: dict[str, Any]
+    name: str
+    state: Any
+    engine: EngineTag
     columns_required: AbstractSet[_T]

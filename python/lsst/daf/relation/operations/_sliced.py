@@ -30,6 +30,7 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
+    from .._engine_tag import EngineTag
     from .._order_by_term import OrderByTerm
     from .._relation_visitor import _U, RelationVisitor
 
@@ -62,6 +63,10 @@ class SlicedRelation(Relation[_T]):
         self.order_by = order_by
         self.offset = offset
         self.limit = limit
+
+    @property
+    def engine(self) -> EngineTag:
+        return self.base.engine
 
     @property
     def columns(self) -> AbstractSet[_T]:

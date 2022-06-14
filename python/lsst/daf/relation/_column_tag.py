@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("ColumnTag",)
 
-from typing import TYPE_CHECKING, Hashable, Iterable, Protocol, TypeVar
+from typing import TYPE_CHECKING, Hashable, Protocol, TypeVar
 
 if TYPE_CHECKING:
 

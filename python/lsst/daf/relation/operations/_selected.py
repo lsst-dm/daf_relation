@@ -30,6 +30,7 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
+    from .._engine_tag import EngineTag
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
@@ -44,6 +45,10 @@ class SelectedRelation(Relation[_T]):
                 )
         self.base = base
         self.predicates = predicates
+
+    @property
+    def engine(self) -> EngineTag:
+        return self.base.engine
 
     @property
     def columns(self) -> AbstractSet[_T]:

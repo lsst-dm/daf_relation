@@ -32,6 +32,7 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
+    from .._engine_tag import EngineTag
     from .._join_condition import JoinCondition
     from .._relation_visitor import _U, RelationVisitor
 
@@ -40,11 +41,17 @@ if TYPE_CHECKING:
 class JoinRelation(Relation[_T]):
     def __init__(
         self,
+        engine: EngineTag,
         relations: tuple[Relation[_T], ...] = (),
         conditions: tuple[JoinCondition[_T], ...] = (),
     ):
+        self._engine = engine
         self.relations = relations
         self.conditions = conditions
+
+    @property
+    def engine(self) -> EngineTag:
+        return self._engine
 
     @property  # type: ignore
     @cached_getter

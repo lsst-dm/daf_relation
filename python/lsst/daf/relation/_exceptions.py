@@ -34,6 +34,10 @@ class RelationalAlgebraError(RuntimeError):
     pass
 
 
+class EngineMismatchError(RelationalAlgebraError):
+    pass
+
+
 class InvalidSliceError(RelationalAlgebraError):
     pass
 

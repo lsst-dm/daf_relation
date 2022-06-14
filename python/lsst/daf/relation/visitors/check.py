@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 from .. import operations
 from .._relation_visitor import RelationVisitor
 from .._exceptions import (
+    EngineMismatchError,
     InvalidSliceError,
     MismatchedUnionError,
     MissingColumnError,
@@ -45,7 +46,18 @@ class Check(RelationVisitor[_T, None]):
         pass
 
     def visit_join(self, visited: operations.JoinRelation[_T]) -> None:
+        for relation in visited.relations:
+            if relation.engine != visited.engine:
+                raise EngineMismatchError(
+                    f"Join member {relation} has engine {relation.engine}, "
+                    f"while join has {visited.engine}."
+                )
         for condition in visited.conditions:
+            if condition.engine != visited.engine:
+                raise EngineMismatchError(
+                    f"Join condition {condition} has engine {condition.engine}, "
+                    f"while join has {visited.engine}."
+                )
             c0, c1 = condition.columns_required
             for r0, r1 in itertools.permutations(visited.relations, 2):
                 if c0 <= r0.columns and c1 <= r1.columns:
@@ -62,6 +74,10 @@ class Check(RelationVisitor[_T, None]):
 
     def visit_selected(self, visited: operations.SelectedRelation[_T]) -> None:
         for p in visited.predicates:
+            if p.engine != visited.engine:
+                raise EngineMismatchError(
+                    f"Predicate {p} has engine {p.engine}, while relation has {visited.engine}."
+                )
             if not p.columns_required <= visited.base.columns:
                 raise MissingColumnError(
                     f"Predicate {p} for base relation {visited.base} needs "
@@ -75,9 +91,24 @@ class Check(RelationVisitor[_T, None]):
             raise InvalidSliceError(
                 "Cannot order a relation unless it is being sliced with nontrivial offset and/or limit."
             )
+        for o in visited.order_by:
+            if o.engine != visited.engine:
+                raise EngineMismatchError(
+                    f"Order-by term {o} has engine {o.engine}, while relation has {visited.engine}."
+                )
+            if not o.columns_required <= visited.base.columns:
+                raise MissingColumnError(
+                    f"Order-by term {o} for base relation {visited.base} needs "
+                    f"columns {o.columns_required - visited.base.columns}."
+                )
 
     def visit_union(self, visited: operations.UnionRelation[_T]) -> None:
         for relation in visited.relations:
+            if relation.engine != visited.engine:
+                raise EngineMismatchError(
+                    f"Union member {relation} has engine {relation.engine}, "
+                    f"while union has {visited.engine}."
+                )
             if relation.columns != visited.columns:
                 raise MismatchedUnionError(
                     f"Mismatched union columns: {set(relation.columns)} != {set(visited.columns)} "

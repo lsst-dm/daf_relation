@@ -21,26 +21,10 @@
 
 from __future__ import annotations
 
-__all__ = ("JoinCondition",)
+__all__ = ("EngineTag",)
+
+from typing import Hashable, Protocol
 
 
-import dataclasses
-from typing import TYPE_CHECKING, AbstractSet, Any, Generic
-
-if TYPE_CHECKING:
-    from ._column_tag import _T
-    from ._engine_tag import EngineTag
-
-
-@dataclasses.dataclass(frozen=True, eq=False)
-class JoinCondition(Generic[_T]):
-    name: str
-    engine: EngineTag
-    state: Any
-    columns_required: tuple[AbstractSet[_T], AbstractSet[_T]]
-    reverse: bool = False
-
-    def reversed(self) -> JoinCondition[_T]:
-        return dataclasses.replace(
-            self, columns_required=tuple(reversed(self.columns_required)), reverse=not self.reverse
-        )
+class EngineTag(Hashable, Protocol):
+    pass

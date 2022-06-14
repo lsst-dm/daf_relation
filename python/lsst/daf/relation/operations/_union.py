@@ -31,6 +31,7 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
+    from .._engine_tag import EngineTag
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -38,15 +39,21 @@ if TYPE_CHECKING:
 class UnionRelation(Relation[_T]):
     def __init__(
         self,
+        engine: EngineTag,
         columns: AbstractSet[_T],
         relations: tuple[Relation[_T], ...] = (),
         unique_keys: AbstractSet[frozenset[_T]] = frozenset(),
         extra_doomed_by: frozenset[str] = frozenset(),
     ):
+        self._engine = engine
         self._columns = columns
         self.relations = relations
         self._unique_keys = unique_keys
         self.extra_doomed_by = extra_doomed_by
+
+    @property
+    def engine(self) -> EngineTag:
+        return self._engine
 
     @property
     def columns(self) -> AbstractSet[_T]:

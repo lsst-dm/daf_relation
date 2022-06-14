@@ -31,6 +31,7 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
+    from .._engine_tag import EngineTag
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -39,6 +40,10 @@ class ProjectedRelation(Relation[_T]):
     def __init__(self, base: Relation[_T], columns: AbstractSet[_T]):
         self.base = base
         self._columns = columns
+
+    @property
+    def engine(self) -> EngineTag:
+        return self.base.engine
 
     @property
     def columns(self) -> AbstractSet[_T]:
