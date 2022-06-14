@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("SelectedRelation",)
+__all__ = ("Selection",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 
 @final
-class SelectedRelation(Relation[_T]):
+class Selection(Relation[_T]):
     def __init__(self, base: Relation[_T], predicates: tuple[Predicate[_T], ...]):
         for p in predicates:
             if not p.columns_required <= self.columns:
@@ -59,4 +59,4 @@ class SelectedRelation(Relation[_T]):
         return self.base.unique_keys
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_selected(self)
+        return visitor.visit_selection(self)

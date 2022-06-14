@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("ProjectedRelation",)
+__all__ = ("Projection",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 
 @final
-class ProjectedRelation(Relation[_T]):
+class Projection(Relation[_T]):
     def __init__(self, base: Relation[_T], columns: AbstractSet[_T]):
         self.base = base
         self._columns = columns
@@ -59,4 +59,4 @@ class ProjectedRelation(Relation[_T]):
         return self.base.doomed_by
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_projected(self)
+        return visitor.visit_projection(self)

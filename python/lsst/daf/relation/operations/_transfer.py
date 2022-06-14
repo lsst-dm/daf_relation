@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("TransferRelation",)
+__all__ = ("Transfer",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 @final
-class TransferRelation(Relation[_T]):
+class Transfer(Relation[_T]):
     def __init__(self, base: Relation[_T], destination: EngineTag):
         self.base = base
         self._destination = destination

@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("LeafRelation",)
+__all__ = ("Leaf",)
 
 from typing import TYPE_CHECKING, AbstractSet, Any, final
 
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 @final
-class LeafRelation(Relation[_T]):
+class Leaf(Relation[_T]):
     def __init__(
         self,
         name: str,

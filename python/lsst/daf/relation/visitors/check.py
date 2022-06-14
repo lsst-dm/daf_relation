@@ -38,14 +38,14 @@ from .._exceptions import (
 
 if TYPE_CHECKING:
     from .._column_tag import _T
-    from .._leaf_relation import LeafRelation
+    from .._leaf import Leaf
 
 
 class Check(RelationVisitor[_T, None]):
-    def visit_leaf(self, visited: LeafRelation[_T]) -> None:
+    def visit_leaf(self, visited: Leaf[_T]) -> None:
         pass
 
-    def visit_join(self, visited: operations.JoinRelation[_T]) -> None:
+    def visit_join(self, visited: operations.Join[_T]) -> None:
         for relation in visited.relations:
             if relation.engine != visited.engine:
                 raise EngineMismatchError(
@@ -65,14 +65,14 @@ class Check(RelationVisitor[_T, None]):
             else:
                 raise UnmatchedJoinConditionError(f"No match for join condition {condition}.")
 
-    def visit_projected(self, visited: operations.ProjectedRelation[_T]) -> None:
+    def visit_projection(self, visited: operations.Projection[_T]) -> None:
         if not (visited.columns <= visited.base.columns):
             raise MissingColumnError(
                 f"Cannot project column(s) {set(visited.columns) - visited.base.columns} "
                 f"that are not present in the base relation {visited.base}."
             )
 
-    def visit_selected(self, visited: operations.SelectedRelation[_T]) -> None:
+    def visit_selection(self, visited: operations.Selection[_T]) -> None:
         for p in visited.predicates:
             if p.engine != visited.engine:
                 raise EngineMismatchError(
@@ -84,7 +84,7 @@ class Check(RelationVisitor[_T, None]):
                     f"columns {p.columns_required - visited.base.columns}."
                 )
 
-    def visit_sliced(self, visited: operations.SlicedRelation[_T]) -> None:
+    def visit_slice(self, visited: operations.Slice[_T]) -> None:
         if not visited.order_by:
             raise InvalidSliceError("Cannot slice an unordered relation.")
         if not visited.offset and visited.limit is None:
@@ -102,10 +102,10 @@ class Check(RelationVisitor[_T, None]):
                     f"columns {o.columns_required - visited.base.columns}."
                 )
 
-    def visit_transfer(self, visited: operations.TransferRelation[_T]) -> None:
+    def visit_transfer(self, visited: operations.Transfer[_T]) -> None:
         pass
 
-    def visit_union(self, visited: operations.UnionRelation[_T]) -> None:
+    def visit_union(self, visited: operations.Union[_T]) -> None:
         for relation in visited.relations:
             if relation.engine != visited.engine:
                 raise EngineMismatchError(

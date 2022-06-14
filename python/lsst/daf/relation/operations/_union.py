@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("UnionRelation",)
+__all__ = ("Union",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 
 @final
-class UnionRelation(Relation[_T]):
+class Union(Relation[_T]):
     def __init__(
         self,
         engine: EngineTag,

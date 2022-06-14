@@ -20,8 +20,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from ._join import *
-from ._projected import *
-from ._selected import *
-from ._sliced import *
+from ._projection import *
+from ._selection import *
+from ._slice import *
 from ._transfer import *
 from ._union import *

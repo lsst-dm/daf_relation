@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("JoinRelation",)
+__all__ = ("Join",)
 
 import itertools
 from typing import TYPE_CHECKING, AbstractSet, final
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 
 @final
-class JoinRelation(Relation[_T]):
+class Join(Relation[_T]):
     def __init__(
         self,
         engine: EngineTag,

@@ -31,20 +31,20 @@ from .._relation_visitor import RelationVisitor
 if TYPE_CHECKING:
     from .._column_tag import _T
     from .._join_condition import JoinCondition
-    from .._leaf_relation import LeafRelation
+    from .._leaf import Leaf
     from .._relation import Relation
 
 
 class Simplify(RelationVisitor[_T, Relation[_T]]):
-    def visit_leaf(self, visited: LeafRelation[_T]) -> Relation[_T]:
+    def visit_leaf(self, visited: Leaf[_T]) -> Relation[_T]:
         return visited
 
-    def visit_join(self, visited: operations.JoinRelation[_T]) -> Relation[_T]:
+    def visit_join(self, visited: operations.Join[_T]) -> Relation[_T]:
         relations_flat: list[Relation[_T]] = []
         conditions_flat: list[JoinCondition[_T]] = []
         for original in visited.relations:
             match original.visit(self):
-                case operations.JoinRelation(relations=relations, conditions=conditions):
+                case operations.Join(relations=relations, conditions=conditions):
                     relations_flat.extend(relations)
                     conditions_flat.extend(conditions)
                 case simplified:
@@ -52,36 +52,36 @@ class Simplify(RelationVisitor[_T, Relation[_T]]):
         if len(relations_flat) == 1 and not conditions_flat:
             return relations_flat[0]
         else:
-            return operations.JoinRelation(visited.engine, tuple(relations_flat), tuple(conditions_flat))
+            return operations.Join(visited.engine, tuple(relations_flat), tuple(conditions_flat))
 
-    def visit_projected(self, visited: operations.ProjectedRelation[_T]) -> Relation[_T]:
+    def visit_projection(self, visited: operations.Projection[_T]) -> Relation[_T]:
         simplified_base = visited.base.visit(self)
         if visited.columns == visited.base.columns:
             return simplified_base
         match simplified_base:
-            case operations.ProjectedRelation(base=base):
-                return operations.ProjectedRelation(base, visited.columns)
+            case operations.Projection(base=base):
+                return operations.Projection(base, visited.columns)
             case _:
                 if simplified_base is visited.base:
                     return visited
-                return operations.ProjectedRelation(simplified_base, visited.columns)
+                return operations.Projection(simplified_base, visited.columns)
 
-    def visit_selected(self, visited: operations.SelectedRelation[_T]) -> Relation[_T]:
+    def visit_selection(self, visited: operations.Selection[_T]) -> Relation[_T]:
         simplified_base = visited.base.visit(self)
         if not visited.predicates:
             return simplified_base
         match simplified_base:
-            case operations.SelectedRelation(base=base, predicates=predicates):
-                return operations.SelectedRelation(base, predicates + visited.predicates)
+            case operations.Selection(base=base, predicates=predicates):
+                return operations.Selection(base, predicates + visited.predicates)
             case _:
                 if simplified_base is visited.base:
                     return visited
-                return operations.SelectedRelation(simplified_base, visited.predicates)
+                return operations.Selection(simplified_base, visited.predicates)
 
-    def visit_sliced(self, visited: operations.SlicedRelation[_T]) -> Relation[_T]:
+    def visit_slice(self, visited: operations.Slice[_T]) -> Relation[_T]:
         simplified_base = visited.base.visit(self)
         match simplified_base:
-            case operations.SlicedRelation(base=base, order_by=order_by, offset=offset, limit=limit):
+            case operations.Slice(base=base, order_by=order_by, offset=offset, limit=limit):
                 order_by_list = list(order_by)
                 order_by_list.extend(visited.order_by)
                 combined_offset = visited.offset + offset
@@ -94,34 +94,32 @@ class Simplify(RelationVisitor[_T, Relation[_T]]):
                         combined_limit = max(combined_stop - offset, 0)
                     else:
                         combined_limit = visited.limit
-                return operations.SlicedRelation(base, tuple(order_by_list), combined_offset, combined_limit)
+                return operations.Slice(base, tuple(order_by_list), combined_offset, combined_limit)
             case _:
                 if simplified_base is visited.base:
                     return visited
-                return operations.SlicedRelation(
-                    simplified_base, visited.order_by, visited.offset, visited.limit
-                )
+                return operations.Slice(simplified_base, visited.order_by, visited.offset, visited.limit)
 
-    def visit_transfer(self, visited: operations.TransferRelation[_T]) -> Relation[_T]:
+    def visit_transfer(self, visited: operations.Transfer[_T]) -> Relation[_T]:
         simplified_base = visited.base.visit(self)
         if simplified_base.engine == visited.engine:
             return simplified_base
         match simplified_base:
-            case operations.TransferRelation(base=base):
+            case operations.Transfer(base=base):
                 if base.engine == visited.engine:
                     return base
-                return operations.TransferRelation(base, visited.engine)
+                return operations.Transfer(base, visited.engine)
             case _:
                 if simplified_base is visited.base:
                     return visited
-                return operations.TransferRelation(simplified_base, visited.engine)
+                return operations.Transfer(simplified_base, visited.engine)
 
-    def visit_union(self, visited: operations.UnionRelation[_T]) -> Relation[_T]:
+    def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
         relations_flat: list[Relation[_T]] = []
         extra_doomed_by_flat: set[str] = set()
         for original in visited.relations:
             match original.visit(self):
-                case operations.UnionRelation(relations=relations, extra_doomed_by=extra_doomed_by):
+                case operations.Union(relations=relations, extra_doomed_by=extra_doomed_by):
                     relations_flat.extend(relations)
                     extra_doomed_by_flat.update(extra_doomed_by)
                 case simplified:
@@ -129,7 +127,7 @@ class Simplify(RelationVisitor[_T, Relation[_T]]):
         if len(relations_flat) == 1 and not extra_doomed_by_flat:
             return relations_flat[0]
         else:
-            return operations.UnionRelation(
+            return operations.Union(
                 visited.engine,
                 visited.columns,
                 tuple(relations_flat),

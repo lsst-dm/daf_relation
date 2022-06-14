@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("SlicedRelation",)
+__all__ = ("Slice",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 
 @final
-class SlicedRelation(Relation[_T]):
+class Slice(Relation[_T]):
     def __init__(self, base: Relation, order_by: tuple[OrderByTerm[_T], ...], offset: int, limit: int | None):
         # TypeError may seem strange below, but it's what Python usually raises
         # when you pass an invalid combination of arguments to a function.
@@ -85,4 +85,4 @@ class SlicedRelation(Relation[_T]):
         return result
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_sliced(self)
+        return visitor.visit_slice(self)

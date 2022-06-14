@@ -38,9 +38,9 @@ if TYPE_CHECKING:
 class Relation(Generic[_T]):
     @staticmethod
     def make_unit(engine: EngineTag) -> Relation[_T]:
-        from .operations import JoinRelation
+        from .operations import Join
 
-        return JoinRelation(engine)
+        return Join(engine)
 
     @staticmethod
     def make_zero(
@@ -49,9 +49,9 @@ class Relation(Generic[_T]):
         unique_keys: AbstractSet[frozenset[_T]] = frozenset(),
         doomed_by: AbstractSet[str] = frozenset(),
     ) -> Relation[_T]:
-        from .operations import UnionRelation
+        from .operations import Union
 
-        return UnionRelation(engine, columns, (), unique_keys, frozenset(doomed_by))
+        return Union(engine, columns, (), unique_keys, frozenset(doomed_by))
 
     @property
     @abstractmethod
@@ -73,42 +73,42 @@ class Relation(Generic[_T]):
         return frozenset()
 
     def forced_unique(self, keys: AbstractSet[frozenset[_T]]) -> Relation[_T]:
-        from .operations import UnionRelation
+        from .operations import Union
 
-        return UnionRelation(self.engine, self.columns, (self,), keys, frozenset())
+        return Union(self.engine, self.columns, (self,), keys, frozenset())
 
     def join(
         self,
         *others: Relation[_T],
         conditions: Iterable[JoinCondition[_T]] = (),
     ) -> Relation[_T]:
-        from .operations import JoinRelation
+        from .operations import Join
 
-        return JoinRelation(self.engine, (self,) + others, conditions=tuple(conditions))
+        return Join(self.engine, (self,) + others, conditions=tuple(conditions))
 
-    def projected(self, columns: AbstractSet[_T]) -> Relation[_T]:
-        from .operations import ProjectedRelation
+    def projection(self, columns: AbstractSet[_T]) -> Relation[_T]:
+        from .operations import Projection
 
-        return ProjectedRelation(self, columns)
+        return Projection(self, columns)
 
-    def selected(self, *predicates: Predicate[_T]) -> Relation[_T]:
-        from .operations import SelectedRelation
+    def selection(self, *predicates: Predicate[_T]) -> Relation[_T]:
+        from .operations import Selection
 
-        return SelectedRelation(self, predicates)
+        return Selection(self, predicates)
 
-    def sliced(
+    def slice(
         self, order_by: Iterable[OrderByTerm[_T]], offset: int = 0, limit: int | None = None
     ) -> Relation[_T]:
-        from .operations import SlicedRelation
+        from .operations import Slice
 
-        return SlicedRelation(self, tuple(order_by), offset, limit)
+        return Slice(self, tuple(order_by), offset, limit)
 
     def union(
         self, *others: Relation[_T], unique_keys: AbstractSet[frozenset[_T]] = frozenset()
     ) -> Relation[_T]:
-        from .operations import UnionRelation
+        from .operations import Union
 
-        return UnionRelation(
+        return Union(
             self.engine,
             self.columns,
             (self,) + others,

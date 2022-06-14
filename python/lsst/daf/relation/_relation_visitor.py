@@ -30,36 +30,36 @@ if TYPE_CHECKING:
     from . import operations
     from ._column_tag import _T
 
-    from ._leaf_relation import LeafRelation
+    from ._leaf import Leaf
 
 _U = TypeVar("_U", covariant=True)
 
 
 class RelationVisitor(Generic[_T, _U]):
     @abstractmethod
-    def visit_leaf(self, visited: LeafRelation[_T]) -> _U:
+    def visit_leaf(self, visited: Leaf[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_join(self, visited: operations.JoinRelation[_T]) -> _U:
+    def visit_join(self, visited: operations.Join[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_projected(self, visited: operations.ProjectedRelation[_T]) -> _U:
+    def visit_projection(self, visited: operations.Projection[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_selected(self, visited: operations.SelectedRelation[_T]) -> _U:
+    def visit_selection(self, visited: operations.Selection[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_sliced(self, visited: operations.SlicedRelation[_T]) -> _U:
+    def visit_slice(self, visited: operations.Slice[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_transfer(self, visited: operations.TransferRelation) -> _U:
+    def visit_transfer(self, visited: operations.Transfer) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_union(self, visited: operations.UnionRelation[_T]) -> _U:
+    def visit_union(self, visited: operations.Union[_T]) -> _U:
         raise NotImplementedError()
