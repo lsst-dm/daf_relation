@@ -21,10 +21,36 @@
 
 from __future__ import annotations
 
-__all__ = ("EngineTag",)
+__all__ = ("EngineTag", "EngineTree")
 
-from typing import Hashable, Protocol
+import dataclasses
+from typing import Callable, Hashable, Mapping, Protocol, TypeVar
 
 
 class EngineTag(Hashable, Protocol):
     pass
+
+
+_V = TypeVar("_V")
+
+
+@dataclasses.dataclass(frozen=True)
+class EngineTree:
+    tag: EngineTag
+    sources: Mapping[EngineTag, EngineTree]
+
+    def find(
+        self, tag: EngineTag, initial: _V, recurse: Callable[[EngineTree], _V | None]
+    ) -> _V | None:
+        if self.tag == tag:
+            # Found it, start unrolling the recursion.
+            return initial
+        else:
+            # Recurse until we find the given tag.
+            for source_tree in self.sources.values():
+                if (result := recurse(source_tree)) is not None:
+                    # Found our tag downstream, keep unrolling the
+                    # recursion.
+                    return result
+            # This branch is a dead-end.
+            return None

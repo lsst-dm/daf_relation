@@ -21,39 +21,41 @@
 
 from __future__ import annotations
 
-__all__ = ("Transfer",)
+__all__ = ("_TEMPLATE",)
 
-from typing import TYPE_CHECKING, AbstractSet, final
+from typing import TYPE_CHECKING, AbstractSet
 
-from .._relation import Relation
+from .. import operations
+from .._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
     from .._column_tag import _T
     from .._engines import EngineTag
-    from .._relation_visitor import _U, RelationVisitor
+    from .._leaf import Leaf
+    from .._relation import Relation
 
 
-@final
-class Transfer(Relation[_T]):
-    def __init__(self, base: Relation[_T], destination: EngineTag):
-        self.base = base
-        self._destination = destination
+class _TEMPLATE(RelationVisitor[_T, Relation[_T]]):
+    def __init__(self, engines: AbstractSet[EngineTag]):
+        self.engines = engines
 
-    @property
-    def engine(self) -> EngineTag:
-        return self._destination
+    def visit_leaf(self, visited: Leaf[_T]) -> Relation[_T]:
+        return visited
 
-    @property
-    def columns(self) -> AbstractSet[_T]:
-        return self.base.columns
+    def visit_join(self, visited: operations.Join[_T]) -> Relation[_T]:
+        return visited
 
-    @property
-    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
-        return self.base.unique_keys
+    def visit_projection(self, visited: operations.Projection[_T]) -> Relation[_T]:
+        return visited
 
-    @property
-    def doomed_by(self) -> AbstractSet[str]:
-        return self.base.doomed_by
+    def visit_selection(self, visited: operations.Selection[_T]) -> Relation[_T]:
+        return visited
 
-    def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
-        return visitor.visit_transfer(self)
+    def visit_slice(self, visited: operations.Slice[_T]) -> Relation[_T]:
+        return visited
+
+    def visit_transfer(self, visited: operations.Transfer[_T]) -> Relation[_T]:
+        return visited
+
+    def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
+        return visited

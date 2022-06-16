@@ -23,48 +23,22 @@ from __future__ import annotations
 
 __all__ = ("InsertTransfers",)
 
-import dataclasses
 from collections import defaultdict
-from typing import TYPE_CHECKING, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, cast
 
+from .._engines import EngineTag, EngineTree
 from .. import operations
 from .._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
     from .._column_tag import _T
-    from .._engine_tag import EngineTag
     from .._join_condition import JoinCondition
     from .._leaf import Leaf
     from .._relation import Relation
 
 
-_V = TypeVar("_V")
-
-
-@dataclasses.dataclass(slots=True)
-class EngineMergeTree:
-    sources: dict[EngineTag, EngineMergeTree]
-    destination: EngineTag
-
-    def find(
-        self, destination: EngineTag, initial: _V, recurse: Callable[[EngineMergeTree], _V | None]
-    ) -> _V | None:
-        if self.destination == destination:
-            # Found it, start unrolling the recursion.
-            return initial
-        else:
-            # Recurse until we find the given destination.
-            for source_tree in self.sources.values():
-                if (result := recurse(source_tree)) is not None:
-                    # Found our destination downstream, keep unrolling the
-                    # recursion.
-                    return result
-            # This branch is a dead-end.
-            return None
-
-
 class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
-    def __init__(self, paths: EngineMergeTree):
+    def __init__(self, paths: EngineTree):
         self.paths = paths
 
     def visit_leaf(self, visited: Leaf[_T]) -> Relation[_T]:
@@ -87,10 +61,10 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
         # go.
         conditions_to_do = {condition for condition in visited.conditions}
 
-        def traverse(tree: EngineMergeTree) -> Relation[_T] | None:
+        def traverse(tree: EngineTree) -> Relation[_T] | None:
             # Relations that were part of the (recursively processed) original
             # join with the destination engine.
-            destination_relations = relations_by_engine.pop(tree.destination, [])
+            destination_relations = relations_by_engine.pop(tree.tag, [])
             # Relations with other engines that should be combined via the
             # destination engine if there are more than one, or passed through
             # as-is if there is only one.
@@ -107,18 +81,18 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
                 # instead transfer them all to the destination engine and then
                 # join.
                 destination_relations.extend(
-                    operations.Transfer(base, tree.destination) for base in source_relations
+                    operations.Transfer(base, tree.tag) for base in source_relations
                 )
                 # Identify join conditions that can operate within this engine
                 # and the relations now in that engine.
                 matching_conditions: set[JoinCondition[_T]] = {
                     condition
                     for condition in conditions_to_do
-                    if tree.destination in condition.state and condition.match(destination_relations)
+                    if tree.tag in condition.state and condition.match(destination_relations)
                 }
                 conditions_to_do.difference_update(matching_conditions)
                 return operations.Join(
-                    tree.destination, tuple(destination_relations), frozenset(matching_conditions)
+                    tree.tag, tuple(destination_relations), frozenset(matching_conditions)
                 )
             elif destination_relations:
                 # Only one relation, and it's already in the destination
@@ -162,18 +136,18 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
         if processed_base is visited.base and not todo:
             return visited
 
-        def traverse(tree: EngineMergeTree) -> Relation[_T] | None:
+        def traverse(tree: EngineTree) -> Relation[_T] | None:
             # Recurse until we find processed_base.engine in the tree, or fail
             # to.
             if (base := tree.find(processed_base.engine, processed_base, traverse)) is None:
                 return None
             # Look for predicates that support the current (destination)
             # engine.
-            matching = {predicate for predicate in todo if tree.destination in predicate.state}
+            matching = {predicate for predicate in todo if tree.tag in predicate.state}
             if matching:
                 todo.difference_update(matching)
-                if base.engine != tree.destination:
-                    base = operations.Transfer(base, tree.destination)
+                if base.engine != tree.tag:
+                    base = operations.Transfer(base, tree.tag)
                 return operations.Selection(base, frozenset(matching))
             else:
                 return base
@@ -196,7 +170,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
         if processed_base is visited.base and processed_base.engine in supported_engines:
             return visited
 
-        def traverse(tree: EngineMergeTree) -> tuple[Relation[_T], bool] | None:
+        def traverse(tree: EngineTree) -> tuple[Relation[_T], bool] | None:
             # Recurse until we find processed_base.engine in the tree, or fail
             # to.
             if (base_and_done := tree.find(processed_base.engine, (processed_base, False), traverse)) is None:
@@ -207,9 +181,9 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
             if done:
                 return base, True
             # See if we can apply all of the order_by terms in this engine.
-            if tree.destination in supported_engines:
-                if base.engine != tree.destination:
-                    base = operations.Transfer(base, tree.destination)
+            if tree.tag in supported_engines:
+                if base.engine != tree.tag:
+                    base = operations.Transfer(base, tree.tag)
                 return (
                     operations.Slice(base, visited.order_by, offset=visited.offset, limit=visited.limit),
                     True,
@@ -247,10 +221,10 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
         if no_changes:
             return visited
 
-        def traverse(tree: EngineMergeTree) -> Relation[_T] | None:
+        def traverse(tree: EngineTree) -> Relation[_T] | None:
             # Relations that were part of the (recursively processed) original
             # union with the destination engine.
-            destination_relations = relations_by_engine.pop(tree.destination, [])
+            destination_relations = relations_by_engine.pop(tree.tag, [])
             # Relations with other engines that should be combined via the
             # destination engine if there are more than one, or passed through
             # as-is if there is only one.
@@ -267,10 +241,10 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
                 # and instead transfer them all to the destination engine and
                 # then union.
                 destination_relations.extend(
-                    operations.Transfer(base, tree.destination) for base in source_relations
+                    operations.Transfer(base, tree.tag) for base in source_relations
                 )
                 return operations.Union(
-                    tree.destination,
+                    tree.tag,
                     visited.columns,
                     tuple(destination_relations),
                     unique_keys=visited.unique_keys,

@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Generic
 
 if TYPE_CHECKING:
     from ._column_tag import _T
-    from ._engine_tag import EngineTag
+    from ._engines import EngineTag
 
 
 @dataclasses.dataclass(frozen=True)
