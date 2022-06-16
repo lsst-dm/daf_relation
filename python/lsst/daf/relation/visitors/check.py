@@ -44,21 +44,21 @@ if TYPE_CHECKING:
 
 
 class Check(RelationVisitor[_T, None]):
-    def __init__(self, check_engine_consistency: bool):
-        self.check_engine_consistency = check_engine_consistency
+    def __init__(self, engine_consistency: bool):
+        self.engine_consistency = engine_consistency
 
     def visit_leaf(self, visited: Leaf[_T]) -> None:
         self._check_unique_keys(visited)
 
     def visit_join(self, visited: operations.Join[_T]) -> None:
         for relation in visited.relations:
-            if self.check_engine_consistency and relation.engine != visited.engine:
+            if self.engine_consistency and relation.engine != visited.engine:
                 raise EngineMismatchError(
                     f"Join member {relation} has engine {relation.engine}, "
                     f"while join has {visited.engine}."
                 )
         for condition in visited.conditions:
-            if self.check_engine_consistency and visited.engine not in condition.state:
+            if self.engine_consistency and visited.engine not in condition.state:
                 raise EngineMismatchError(
                     f"Join condition {condition} supports engine(s) {set(condition.state.keys())}, "
                     f"while join has {visited.engine}."
@@ -75,7 +75,7 @@ class Check(RelationVisitor[_T, None]):
 
     def visit_selection(self, visited: operations.Selection[_T]) -> None:
         for p in visited.predicates:
-            if self.check_engine_consistency and visited.engine not in p.state:
+            if self.engine_consistency and visited.engine not in p.state:
                 raise EngineMismatchError(
                     f"Predicate {p} supports engine(s) {set(p.state.keys())}, "
                     f"while relation has {visited.engine}."
@@ -94,7 +94,7 @@ class Check(RelationVisitor[_T, None]):
                 "Cannot order a relation unless it is being sliced with nontrivial offset and/or limit."
             )
         for o in visited.order_by:
-            if self.check_engine_consistency and visited.engine not in o.state:
+            if self.engine_consistency and visited.engine not in o.state:
                 raise EngineMismatchError(
                     f"Order-by term {o} supports engine(s) {set(o.state.keys())}, "
                     f"while relation has {visited.engine}."
@@ -119,7 +119,7 @@ class Check(RelationVisitor[_T, None]):
                         f"Union is declared to have unique key {set(key)}, but "
                         f"member {relation} is not unique with those columns."
                     )
-            if self.check_engine_consistency and relation.engine != visited.engine:
+            if self.engine_consistency and relation.engine != visited.engine:
                 raise EngineMismatchError(
                     f"Union member {relation} has engine {relation.engine}, "
                     f"while union has {visited.engine}."

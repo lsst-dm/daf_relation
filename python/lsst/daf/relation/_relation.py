@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("Relation",)
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable
+from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, TypeVar
 
 if TYPE_CHECKING:
     from ._column_tag import _T
@@ -33,6 +33,9 @@ if TYPE_CHECKING:
     from ._order_by_term import OrderByTerm
     from ._predicate import Predicate
     from ._relation_visitor import _U, RelationVisitor
+
+
+_S = TypeVar("_S", bound="Relation")
 
 
 class Relation(Generic[_T]):
@@ -119,3 +122,21 @@ class Relation(Generic[_T]):
     @abstractmethod
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         raise NotImplementedError()
+
+    def checked(self: _S, engine_consistency: bool = True) -> _S:
+        from .visitors.check import Check
+        self.visit(Check(engine_consistency))
+        return self
+
+    def assert_checked(self: _S) -> _S:
+        if __debug__:
+            return self.checked()
+        return self
+
+    def simplified(self) -> Relation[_T]:
+        from .visitors.simplify import Simplify
+        return self.visit(Simplify())
+
+    def assert_simplified(self: _S) -> _S:
+        assert self.simplified() is self, f"Relation {self} expected to be already simplified."
+        return self
