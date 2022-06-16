@@ -24,14 +24,11 @@ from __future__ import annotations
 __all__ = ("EngineTag", "EngineTree")
 
 import dataclasses
-from typing import AbstractSet, Callable, Hashable, Protocol, TypeVar
+from typing import AbstractSet, Hashable, Iterator, Protocol
 
 
 class EngineTag(Hashable, Protocol):
     pass
-
-
-_V = TypeVar("_V")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -47,16 +44,9 @@ class EngineTree:
                 return source
         return cls(tag, sources)
 
-    def find(self, tag: EngineTag, initial: _V, recurse: Callable[[EngineTree], _V | None]) -> _V | None:
-        if self.tag == tag:
-            # Found it, start unrolling the recursion.
-            return initial
+    def backtrack_from(self, tag: EngineTag) -> Iterator[EngineTag]:
+        if tag == self.tag:
+            yield tag
         else:
-            # Recurse until we find the given tag.
-            for source_tree in self.sources:
-                if (result := recurse(source_tree)) is not None:
-                    # Found our tag downstream, keep unrolling the
-                    # recursion.
-                    return result
-            # This branch is a dead-end.
-            return None
+            for source in self.sources:
+                yield from source.backtrack_from(tag)

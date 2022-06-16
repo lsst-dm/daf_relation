@@ -22,10 +22,12 @@
 from __future__ import annotations
 
 __all__ = (
+    "EngineMismatchError",
     "InvalidSliceError",
     "MismatchedUnionError",
     "MissingColumnError",
     "RelationalAlgebraError",
+    "TransferSolverError",
     "UnmatchedJoinConditionError",
 )
 
@@ -35,6 +37,10 @@ class RelationalAlgebraError(RuntimeError):
 
 
 class EngineMismatchError(RelationalAlgebraError):
+    pass
+
+
+class TransferSolverError(RelationalAlgebraError):
     pass
 
 

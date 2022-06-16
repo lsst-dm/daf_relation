@@ -26,9 +26,11 @@ __all__ = ("InsertTransfers",)
 from collections import defaultdict
 from typing import TYPE_CHECKING, cast
 
+from .._exceptions import EngineMismatchError, TransferSolverError
 from .._engines import EngineTag, EngineTree
 from .. import operations
 from .._relation_visitor import RelationVisitor
+from .push_predicates import PushPredicates
 
 if TYPE_CHECKING:
     from .._column_tag import _T
@@ -80,9 +82,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
                 # has instructed us not to join them in that engine, and
                 # instead transfer them all to the destination engine and then
                 # join.
-                destination_relations.extend(
-                    operations.Transfer(base, tree.tag) for base in source_relations
-                )
+                destination_relations.extend(operations.Transfer(base, tree.tag) for base in source_relations)
                 # Identify join conditions that can operate within this engine
                 # and the relations now in that engine.
                 matching_conditions: set[JoinCondition[_T]] = {
@@ -91,9 +91,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
                     if tree.tag in condition.state and condition.match(destination_relations)
                 }
                 conditions_to_do.difference_update(matching_conditions)
-                return operations.Join(
-                    tree.tag, tuple(destination_relations), frozenset(matching_conditions)
-                )
+                return operations.Join(tree.tag, tuple(destination_relations), frozenset(matching_conditions))
             elif destination_relations:
                 # Only one relation, and it's already in the destination
                 # engine.
@@ -124,88 +122,76 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
     def visit_projection(self, visited: operations.Projection[_T]) -> Relation[_T]:
         # A Projection can happen in any engine, so we just need to recursively
         # visit the base relation.
-        processed_base = visited.base.visit(self)
-        if processed_base is visited.base:
+        base = visited.base.visit(self)
+        if base is visited.base:
             return visited
         else:
-            return operations.Projection(processed_base, visited.columns)
+            return operations.Projection(base, visited.columns)
 
     def visit_selection(self, visited: operations.Selection[_T]) -> Relation[_T]:
-        processed_base = visited.base.visit(self)
-        todo = {predicate for predicate in visited.predicates if processed_base.engine not in predicate.state}
-        if processed_base is visited.base and not todo:
-            return visited
+        # Recursively insert transfers into the base relation, then see if we
+        # can evaluate all predicates in the engine that leaves us in.
+        base = visited.base.visit(self)
+        if all(base.engine in p.state for p in visited.predicates):
+            if base is visited.base:
+                return visited
+            return operations.Selection(base, visited.predicates)
 
-        def traverse(tree: EngineTree) -> Relation[_T] | None:
-            # Recurse until we find processed_base.engine in the tree, or fail
-            # to.
-            if (base := tree.find(processed_base.engine, processed_base, traverse)) is None:
-                return None
-            # Look for predicates that support the current (destination)
-            # engine.
-            matching = {predicate for predicate in todo if tree.tag in predicate.state}
+        # Now try to push predicates down towards leaf relations; this doesn't
+        # require any new transfers and hence can't break the consistency with
+        # self.paths already established by the earlier recursion.
+        push_result = base.visit(PushPredicates(visited.predicates))
+        base = push_result.relation
+        if push_result.matched == visited.predicates:
+            return base
+
+        # No choice but to insert transfers between base and the selections
+        # that apply the remaining predicates, which needs to be done along a
+        # path consistent with self.paths.
+        to_do = set(visited.predicates)
+        to_do.difference_update(push_result.matched)
+        for engine in self.paths.backtrack_from(base.engine.tag):
+            matching = {p for p in to_do if engine in p.state}
             if matching:
-                todo.difference_update(matching)
-                if base.engine != tree.tag:
-                    base = operations.Transfer(base, tree.tag)
-                return operations.Selection(base, frozenset(matching))
-            else:
-                return base
+                if base.engine.tag != engine:
+                    base = operations.Transfer(base, engine)
+                base = operations.Selection(base, frozenset(matching))
+                to_do.difference_update(matching)
+                if not to_do:
+                    return base
 
-        # Actually run the traversal and check that we succeeded.
-        result = traverse(self.paths)
-        if result is None:
-            raise RuntimeError(f"Engine path tree does not include selection base {processed_base}.")
-        if todo:
-            raise RuntimeError(
-                f"Engine path tree does not allow predicates {todo} to be applied to {result}."
-            )
-        return result
+        raise TransferSolverError(
+            f"Engine path tree does not allow predicates {to_do} to be applied to {base}."
+        )
 
     def visit_slice(self, visited: operations.Slice[_T]) -> Relation[_T]:
-        processed_base = visited.base.visit(self)
+        # Recursively insert transfers into the base relation, then see if we
+        # can evaluate all order-by terms in the engine that leaves us in.
+        base = visited.base.visit(self)
         supported_engines: set[EngineTag] = {visited.order_by[0].state.keys()}
         for term in visited.order_by[1:]:
             supported_engines.intersection_update(term.state.keys())
-        if processed_base is visited.base and processed_base.engine in supported_engines:
+        if base is visited.base and base.engine in supported_engines:
             return visited
 
-        def traverse(tree: EngineTree) -> tuple[Relation[_T], bool] | None:
-            # Recurse until we find processed_base.engine in the tree, or fail
-            # to.
-            if (base_and_done := tree.find(processed_base.engine, (processed_base, False), traverse)) is None:
-                return None
-            # Did we already find the slice at at another level?  If so, just
-            # keep unwinding the recursion.
-            base, done = base_and_done
-            if done:
-                return base, True
-            # See if we can apply all of the order_by terms in this engine.
-            if tree.tag in supported_engines:
-                if base.engine != tree.tag:
-                    base = operations.Transfer(base, tree.tag)
-                return (
-                    operations.Slice(base, visited.order_by, offset=visited.offset, limit=visited.limit),
-                    True,
-                )
-            return base, False
+        for engine in self.paths.backtrack_from(base.engine.tag):
+            if engine in supported_engines:
+                if base.engine != engine:
+                    base = operations.Transfer(base, engine)
+                return operations.Slice(base, visited.order_by, offset=visited.offset, limit=visited.limit)
 
-        # Actually run the traversal and check that we succeeded.
-        if (result_and_done := traverse(self.paths)) is None:
-            raise RuntimeError(f"Engine path tree does not include slice base {processed_base}.")
-        result, done = result_and_done
-        if not done:
-            if not supported_engines:
-                raise RuntimeError(f"Order-by terms {visited.order_by} have no supported engines in common.")
-            else:
-                raise RuntimeError(
-                    f"Engine path tree does not allow order-by terms {visited.order_by} "
-                    f"with supported engines {supported_engines} to be applied to {result}."
-                )
-        return result
+        if not supported_engines:
+            raise EngineMismatchError(
+                f"Order-by terms {visited.order_by} have no supported engines in common."
+            )
+        else:
+            raise TransferSolverError(
+                f"Engine path tree does not allow order-by terms {visited.order_by} "
+                f"with supported engines {supported_engines} to be applied to {base}."
+            )
 
     def visit_transfer(self, visited: operations.Transfer[_T]) -> Relation[_T]:
-        return visited
+        raise TransferSolverError("Trees visited by to InsertTransfers should not start with any transfers.")
 
     def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
         # Recurse into relations and group them by engine, while tracking
@@ -240,9 +226,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
                 # path tree has instructed us not to union them in that engine,
                 # and instead transfer them all to the destination engine and
                 # then union.
-                destination_relations.extend(
-                    operations.Transfer(base, tree.tag) for base in source_relations
-                )
+                destination_relations.extend(operations.Transfer(base, tree.tag) for base in source_relations)
                 return operations.Union(
                     tree.tag,
                     visited.columns,
