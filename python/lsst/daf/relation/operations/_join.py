@@ -26,13 +26,14 @@ __all__ = ("Join",)
 import itertools
 from typing import TYPE_CHECKING, AbstractSet, final
 
+
 from lsst.utils.classes import cached_getter
 
+from .._engines import EngineTag, EngineTree
 from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
-    from .._engines import EngineTag
     from .._join_condition import JoinCondition
     from .._relation_visitor import _U, RelationVisitor
 
@@ -49,9 +50,10 @@ class Join(Relation[_T]):
         self.relations = relations
         self.conditions = conditions
 
-    @property
-    def engine(self) -> EngineTag:
-        return self._engine
+    @property  # type: ignore
+    @cached_getter
+    def engine(self) -> EngineTree:
+        return EngineTree.build(self._engine, {r.engine for r in self.relations})
 
     @property  # type: ignore
     @cached_getter

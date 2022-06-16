@@ -30,7 +30,7 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
-    from .._engines import EngineTag
+    from .._engines import EngineTree
     from .._order_by_term import OrderByTerm
     from .._relation_visitor import _U, RelationVisitor
 
@@ -65,7 +65,7 @@ class Slice(Relation[_T]):
         self.limit = limit
 
     @property
-    def engine(self) -> EngineTag:
+    def engine(self) -> EngineTree:
         return self.base.engine
 
     @property

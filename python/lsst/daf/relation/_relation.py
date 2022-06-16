@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable
 
 if TYPE_CHECKING:
     from ._column_tag import _T
-    from ._engines import EngineTag
+    from ._engines import EngineTag, EngineTree
     from ._join_condition import JoinCondition
     from ._order_by_term import OrderByTerm
     from ._predicate import Predicate
@@ -55,7 +55,7 @@ class Relation(Generic[_T]):
 
     @property
     @abstractmethod
-    def engine(self) -> EngineTag:
+    def engine(self) -> EngineTree:
         raise NotImplementedError()
 
     @property

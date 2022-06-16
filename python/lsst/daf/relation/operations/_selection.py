@@ -30,7 +30,7 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
-    from .._engines import EngineTag
+    from .._engines import EngineTree
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
@@ -47,7 +47,7 @@ class Selection(Relation[_T]):
         self.predicates = predicates
 
     @property
-    def engine(self) -> EngineTag:
+    def engine(self) -> EngineTree:
         return self.base.engine
 
     @property

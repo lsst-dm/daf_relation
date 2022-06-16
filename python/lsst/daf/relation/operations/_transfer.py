@@ -25,11 +25,11 @@ __all__ = ("Transfer",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
+from .._engines import EngineTag, EngineTree
 from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
-    from .._engines import EngineTag
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -40,8 +40,8 @@ class Transfer(Relation[_T]):
         self._destination = destination
 
     @property
-    def engine(self) -> EngineTag:
-        return self._destination
+    def engine(self) -> EngineTree:
+        return EngineTree.build(self._destination, {self.base.engine})
 
     @property
     def columns(self) -> AbstractSet[_T]:

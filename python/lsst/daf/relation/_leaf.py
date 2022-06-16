@@ -25,11 +25,11 @@ __all__ = ("Leaf",)
 
 from typing import TYPE_CHECKING, AbstractSet, Any, final
 
+from ._engines import EngineTag, EngineTree
 from ._relation import Relation
 
 if TYPE_CHECKING:
     from ._column_tag import _T
-    from ._engines import EngineTag
     from ._relation_visitor import _U, RelationVisitor
 
 
@@ -45,14 +45,14 @@ class Leaf(Relation[_T]):
         full_keys: AbstractSet[_T],
     ):
         self.name = name
-        self._engine = engine
+        self._engine = EngineTree.build(engine)
         self.state = state
         self._columns = columns
         self._unique_keys = unique_keys
         self.full_keys = full_keys
 
     @property
-    def engine(self) -> EngineTag:
+    def engine(self) -> EngineTree:
         return self._engine
 
     @property

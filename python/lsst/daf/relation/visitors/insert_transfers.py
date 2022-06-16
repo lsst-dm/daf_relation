@@ -70,7 +70,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
             # as-is if there is only one.
             source_relations: list[Relation[_T]] = [
                 source_relation
-                for source_tree in tree.sources.values()
+                for source_tree in tree.sources
                 if (source_relation := traverse(source_tree)) is not None
             ]
             if len(destination_relations) + len(source_relations) > 1:
@@ -230,7 +230,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
             # as-is if there is only one.
             source_relations: list[Relation[_T]] = [
                 source_relation
-                for source_tree in tree.sources.values()
+                for source_tree in tree.sources
                 if (source_relation := traverse(source_tree)) is not None
             ]
             if len(destination_relations) + len(source_relations) > 1:

@@ -27,11 +27,11 @@ from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
+from .._engines import EngineTag, EngineTree
 from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
-    from .._engines import EngineTag
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -51,9 +51,10 @@ class Union(Relation[_T]):
         self._unique_keys = unique_keys
         self.extra_doomed_by = extra_doomed_by
 
-    @property
-    def engine(self) -> EngineTag:
-        return self._engine
+    @property  # type: ignore
+    @cached_getter
+    def engine(self) -> EngineTree:
+        return EngineTree.build(self._engine, {r.engine for r in self.relations})
 
     @property
     def columns(self) -> AbstractSet[_T]:
