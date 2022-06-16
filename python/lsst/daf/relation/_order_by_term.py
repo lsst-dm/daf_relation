@@ -24,20 +24,19 @@ from __future__ import annotations
 __all__ = ("OrderByTerm",)
 
 import dataclasses
-from typing import TYPE_CHECKING, AbstractSet, Any, Generic
+from typing import TYPE_CHECKING, Any, Generic
 
 if TYPE_CHECKING:
     from ._column_tag import _T
     from ._engine_tag import EngineTag
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class OrderByTerm(Generic[_T]):
     name: str
-    engine: EngineTag
-    state: Any
-    columns_required: AbstractSet[_T]
-    reverse: bool = True
+    columns_required: frozenset[_T]
+    ascending: bool = True
+    state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
 
     def reversed(self) -> OrderByTerm[_T]:
-        return dataclasses.replace(self, reverse=not self.reverse)
+        return dataclasses.replace(self, ascending=not self.ascending)

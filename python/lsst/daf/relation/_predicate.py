@@ -24,16 +24,15 @@ from __future__ import annotations
 __all__ = ("Predicate",)
 
 import dataclasses
-from typing import TYPE_CHECKING, AbstractSet, Any, Generic
+from typing import TYPE_CHECKING, Any, Generic
 
 if TYPE_CHECKING:
     from ._column_tag import _T
     from ._engine_tag import EngineTag
 
 
-@dataclasses.dataclass(frozen=True, eq=False)
+@dataclasses.dataclass(frozen=True)
 class Predicate(Generic[_T]):
     name: str
-    state: Any
-    engine: EngineTag
-    columns_required: AbstractSet[_T]
+    columns_required: frozenset[_T]
+    state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)

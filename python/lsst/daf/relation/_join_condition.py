@@ -25,22 +25,25 @@ __all__ = ("JoinCondition",)
 
 
 import dataclasses
-from typing import TYPE_CHECKING, AbstractSet, Any, Generic
+import itertools
+from typing import TYPE_CHECKING, Any, Generic, Iterable
 
 if TYPE_CHECKING:
     from ._column_tag import _T
     from ._engine_tag import EngineTag
+    from ._relation import Relation
 
 
-@dataclasses.dataclass(frozen=True, eq=False)
+@dataclasses.dataclass(frozen=True)
 class JoinCondition(Generic[_T]):
     name: str
-    engine: EngineTag
-    state: Any
-    columns_required: tuple[AbstractSet[_T], AbstractSet[_T]]
-    reverse: bool = False
+    columns_required: tuple[frozenset[_T], frozenset[_T]]
+    state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
 
-    def reversed(self) -> JoinCondition[_T]:
-        return dataclasses.replace(
-            self, columns_required=tuple(reversed(self.columns_required)), reverse=not self.reverse
-        )
+    def match(self, relations: Iterable[Relation[_T]]) -> list[tuple[int, int]]:
+        c0, c1 = self.columns_required
+        result: list[tuple[int, int]] = []
+        for (i0, r0), (i1, r1) in itertools.permutations(enumerate(relations), 2):
+            if c0 <= r0.columns and c1 <= r1.columns:
+                result.append((i0, i1))
+        return result
