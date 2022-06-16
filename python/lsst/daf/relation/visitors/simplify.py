@@ -41,18 +41,25 @@ class Simplify(RelationVisitor[_T, Relation[_T]]):
 
     def visit_join(self, visited: operations.Join[_T]) -> Relation[_T]:
         relations_flat: list[Relation[_T]] = []
-        conditions_flat: list[JoinCondition[_T]] = []
+        conditions_flat: set[JoinCondition[_T]] = set()
+        any_changes = False
         for original in visited.relations:
-            match original.visit(self):
+            simplified = original.visit(self)
+            any_changes = any_changes or simplified is not original
+            match simplified:
                 case operations.Join(relations=relations, conditions=conditions):
                     relations_flat.extend(relations)
-                    conditions_flat.extend(conditions)
+                    conditions_flat.update(conditions)
+                    any_changes = True
                 case simplified:
                     relations_flat.append(simplified)
-        if len(relations_flat) == 1 and not conditions_flat:
+        if len(relations_flat) == 1:
+            assert not conditions_flat, "Should be guaranteed by previous Check visitor."
             return relations_flat[0]
+        elif not any_changes:
+            return visited
         else:
-            return operations.Join(visited.engine, tuple(relations_flat), tuple(conditions_flat))
+            return operations.Join(visited.engine, tuple(relations_flat), frozenset(conditions_flat))
 
     def visit_projection(self, visited: operations.Projection[_T]) -> Relation[_T]:
         simplified_base = visited.base.visit(self)
@@ -72,7 +79,7 @@ class Simplify(RelationVisitor[_T, Relation[_T]]):
             return simplified_base
         match simplified_base:
             case operations.Selection(base=base, predicates=predicates):
-                return operations.Selection(base, predicates + visited.predicates)
+                return operations.Selection(base, predicates | visited.predicates)
             case _:
                 if simplified_base is visited.base:
                     return visited
@@ -117,15 +124,21 @@ class Simplify(RelationVisitor[_T, Relation[_T]]):
     def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
         relations_flat: list[Relation[_T]] = []
         extra_doomed_by_flat: set[str] = set()
+        any_changes = False
         for original in visited.relations:
-            match original.visit(self):
+            simplified = original.visit(self)
+            match simplified:
                 case operations.Union(relations=relations, extra_doomed_by=extra_doomed_by):
                     relations_flat.extend(relations)
                     extra_doomed_by_flat.update(extra_doomed_by)
-                case simplified:
+                    any_changes = True
+                case _:
                     relations_flat.append(simplified)
+                    any_changes = any_changes or simplified is not original
         if len(relations_flat) == 1 and not extra_doomed_by_flat:
             return relations_flat[0]
+        elif not any_changes:
+            return visited
         else:
             return operations.Union(
                 visited.engine,

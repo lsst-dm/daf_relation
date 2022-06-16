@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 @final
 class Selection(Relation[_T]):
-    def __init__(self, base: Relation[_T], predicates: tuple[Predicate[_T], ...]):
+    def __init__(self, base: Relation[_T], predicates: frozenset[Predicate[_T]]):
         for p in predicates:
             if not p.columns_required <= self.columns:
                 raise MissingColumnError(

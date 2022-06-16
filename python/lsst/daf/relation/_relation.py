@@ -84,17 +84,17 @@ class Relation(Generic[_T]):
     ) -> Relation[_T]:
         from .operations import Join
 
-        return Join(self.engine, (self,) + others, conditions=tuple(conditions))
+        return Join(self.engine, (self,) + others, conditions=frozenset(conditions))
 
     def projection(self, columns: AbstractSet[_T]) -> Relation[_T]:
         from .operations import Projection
 
-        return Projection(self, columns)
+        return Projection(self, frozenset(columns))
 
     def selection(self, *predicates: Predicate[_T]) -> Relation[_T]:
         from .operations import Selection
 
-        return Selection(self, predicates)
+        return Selection(self, frozenset(predicates))
 
     def slice(
         self, order_by: Iterable[OrderByTerm[_T]], offset: int = 0, limit: int | None = None

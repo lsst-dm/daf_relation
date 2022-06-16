@@ -43,7 +43,7 @@ class Join(Relation[_T]):
         self,
         engine: EngineTag,
         relations: tuple[Relation[_T], ...] = (),
-        conditions: tuple[JoinCondition[_T], ...] = (),
+        conditions: frozenset[JoinCondition[_T]] = frozenset(),
     ):
         self._engine = engine
         self.relations = relations

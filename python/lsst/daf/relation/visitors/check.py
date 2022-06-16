@@ -30,6 +30,7 @@ from .. import operations
 from .._relation_visitor import RelationVisitor
 from .._exceptions import (
     EngineMismatchError,
+    InconsistentUniqueKeysError,
     InvalidSliceError,
     MismatchedUnionError,
     MissingColumnError,
@@ -39,30 +40,30 @@ from .._exceptions import (
 if TYPE_CHECKING:
     from .._column_tag import _T
     from .._leaf import Leaf
+    from .._relation import Relation
 
 
 class Check(RelationVisitor[_T, None]):
+    def __init__(self, check_engine_consistency: bool):
+        self.check_engine_consistency = check_engine_consistency
+
     def visit_leaf(self, visited: Leaf[_T]) -> None:
-        pass
+        self._check_unique_keys(visited)
 
     def visit_join(self, visited: operations.Join[_T]) -> None:
         for relation in visited.relations:
-            if relation.engine != visited.engine:
+            if self.check_engine_consistency and relation.engine != visited.engine:
                 raise EngineMismatchError(
                     f"Join member {relation} has engine {relation.engine}, "
                     f"while join has {visited.engine}."
                 )
         for condition in visited.conditions:
-            if condition.engine != visited.engine:
+            if self.check_engine_consistency and visited.engine not in condition.state:
                 raise EngineMismatchError(
-                    f"Join condition {condition} has engine {condition.engine}, "
+                    f"Join condition {condition} supports engine(s) {set(condition.state.keys())}, "
                     f"while join has {visited.engine}."
                 )
-            c0, c1 = condition.columns_required
-            for r0, r1 in itertools.permutations(visited.relations, 2):
-                if c0 <= r0.columns and c1 <= r1.columns:
-                    break
-            else:
+            if not condition.match(visited.relations):
                 raise UnmatchedJoinConditionError(f"No match for join condition {condition}.")
 
     def visit_projection(self, visited: operations.Projection[_T]) -> None:
@@ -74,9 +75,10 @@ class Check(RelationVisitor[_T, None]):
 
     def visit_selection(self, visited: operations.Selection[_T]) -> None:
         for p in visited.predicates:
-            if p.engine != visited.engine:
+            if self.check_engine_consistency and visited.engine not in p.state:
                 raise EngineMismatchError(
-                    f"Predicate {p} has engine {p.engine}, while relation has {visited.engine}."
+                    f"Predicate {p} supports engine(s) {set(p.state.keys())}, "
+                    f"while relation has {visited.engine}."
                 )
             if not p.columns_required <= visited.base.columns:
                 raise MissingColumnError(
@@ -92,9 +94,10 @@ class Check(RelationVisitor[_T, None]):
                 "Cannot order a relation unless it is being sliced with nontrivial offset and/or limit."
             )
         for o in visited.order_by:
-            if o.engine != visited.engine:
+            if self.check_engine_consistency and visited.engine not in o.state:
                 raise EngineMismatchError(
-                    f"Order-by term {o} has engine {o.engine}, while relation has {visited.engine}."
+                    f"Order-by term {o} supports engine(s) {set(o.state.keys())}, "
+                    f"while relation has {visited.engine}."
                 )
             if not o.columns_required <= visited.base.columns:
                 raise MissingColumnError(
@@ -106,8 +109,17 @@ class Check(RelationVisitor[_T, None]):
         pass
 
     def visit_union(self, visited: operations.Union[_T]) -> None:
+        self._check_unique_keys(visited)
         for relation in visited.relations:
-            if relation.engine != visited.engine:
+            for key in visited.unique_keys:
+                if key not in relation.unique_keys and not any(
+                    key.issuperset(relation_key) for relation_key in relation.unique_keys
+                ):
+                    raise InconsistentUniqueKeysError(
+                        f"Union is declared to have unique key {set(key)}, but "
+                        f"member {relation} is not unique with those columns."
+                    )
+            if self.check_engine_consistency and relation.engine != visited.engine:
                 raise EngineMismatchError(
                     f"Union member {relation} has engine {relation.engine}, "
                     f"while union has {visited.engine}."
@@ -116,4 +128,12 @@ class Check(RelationVisitor[_T, None]):
                 raise MismatchedUnionError(
                     f"Mismatched union columns: {set(relation.columns)} != {set(visited.columns)} "
                     f"for relation {relation}."
+                )
+
+    def _check_unique_keys(self, relation: Relation[_T]) -> None:
+        for k1, k2 in itertools.permutations(relation.unique_keys, 2):
+            if not k1.issuperset(k2):
+                raise InconsistentUniqueKeysError(
+                    f"Relation {relation} unique key {set(k1)} is redundant, "
+                    f"since {set(k2)} is already unique."
                 )

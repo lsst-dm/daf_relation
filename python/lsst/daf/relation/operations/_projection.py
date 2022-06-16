@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 @final
 class Projection(Relation[_T]):
-    def __init__(self, base: Relation[_T], columns: AbstractSet[_T]):
+    def __init__(self, base: Relation[_T], columns: frozenset[_T]):
         self.base = base
         self._columns = columns
 
@@ -46,7 +46,7 @@ class Projection(Relation[_T]):
         return self.base.engine
 
     @property
-    def columns(self) -> AbstractSet[_T]:
+    def columns(self) -> frozenset[_T]:
         return self._columns
 
     @property  # type: ignore

@@ -38,6 +38,10 @@ class EngineMismatchError(RelationalAlgebraError):
     pass
 
 
+class InconsistentUniqueKeysError(RelationalAlgebraError):
+    pass
+
+
 class InvalidSliceError(RelationalAlgebraError):
     pass
 
