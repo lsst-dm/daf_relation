@@ -75,11 +75,6 @@ class Relation(Generic[_T]):
     def doomed_by(self) -> AbstractSet[str]:
         return frozenset()
 
-    def forced_unique(self, keys: AbstractSet[frozenset[_T]]) -> Relation[_T]:
-        from .operations import Union
-
-        return Union(self.engine, self.columns, (self,), keys, frozenset())
-
     def join(
         self,
         *others: Relation[_T],
