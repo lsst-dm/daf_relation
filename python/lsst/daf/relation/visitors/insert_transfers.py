@@ -140,7 +140,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
         # Now try to push predicates down towards leaf relations; this doesn't
         # require any new transfers and hence can't break the consistency with
         # self.paths already established by the earlier recursion.
-        push_result = base.visit(PushPredicates(visited.predicates))
+        push_result = base.visit(PushPredicates(visited.predicates, until_single_engine=True))
         base = push_result.relation
         if push_result.matched == visited.predicates:
             return base

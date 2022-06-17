@@ -51,13 +51,16 @@ class _Result(Generic[_T]):
 
 
 class PushPredicates(RelationVisitor[_T, _Result[_T]]):
-    def __init__(self, predicates: AbstractSet[Predicate[_T]]):
+    def __init__(self, predicates: AbstractSet[Predicate[_T]], *, until_single_engine: bool):
         self.predicates = predicates
+        self.until_single_engine = until_single_engine
 
     def visit_leaf(self, visited: Leaf[_T]) -> _Result[_T]:
         return _Result.finish(visited, self.predicates)
 
     def visit_join(self, visited: operations.Join[_T]) -> _Result[_T]:
+        if self.until_single_engine and visited.engine.depth == 1:
+            return _Result.finish(visited, self.predicates)
         # We can push a predicate past a join if we can push it into any of its
         # members, but it's also fine to push the same predicate into multiple
         # members (and usually a good idea, unless it's a particularly
@@ -81,6 +84,8 @@ class PushPredicates(RelationVisitor[_T, _Result[_T]]):
         return _Result.finish(base, remaining_predicates)
 
     def visit_projection(self, visited: operations.Projection[_T]) -> _Result[_T]:
+        if self.until_single_engine and visited.engine.depth == 1:
+            return _Result.finish(visited, self.predicates)
         # We can always push predicates past a projection if the projection's
         # base can handle them, because the projection always inherits its
         # base's engine tree and it can only remove columns.
@@ -88,6 +93,8 @@ class PushPredicates(RelationVisitor[_T, _Result[_T]]):
         return _Result(operations.Projection(r.relation, visited.columns), self.predicates - r.matched)
 
     def visit_selection(self, visited: operations.Selection[_T]) -> _Result[_T]:
+        if self.until_single_engine and visited.engine.depth == 1:
+            return _Result.finish(visited, self.predicates)
         # We can always push new predicates past a selection if the selection's
         # base can handle them, because the selection always inherits its
         # base's engine tree (and we require here that the tree already have
@@ -108,15 +115,19 @@ class PushPredicates(RelationVisitor[_T, _Result[_T]]):
         return _Result.finish(visited, self.predicates)
 
     def visit_transfer(self, visited: operations.Transfer[_T]) -> _Result[_T]:
+        if self.until_single_engine and visited.engine.depth == 1:
+            return _Result.finish(visited, self.predicates)
         # We may be able to push predicates past a transfer if they support
         # the source engine.  There may be others we can handle with an outer
-        # selection after the transfer,and some we can't handle at all.
+        # selection after the transfer, and some we can't handle at all.
         r = visited.base.visit(self)
         return _Result.finish(
             operations.Transfer(r.relation, visited.engine.tag), self.predicates - r.matched
         )
 
     def visit_union(self, visited: operations.Union[_T]) -> _Result[_T]:
+        if self.until_single_engine and visited.engine.depth == 1:
+            return _Result.finish(visited, self.predicates)
         unmatched_in_any: set[Predicate[_T]] = set()
         new_relations: list[Relation[_T]] = []
         for relation in visited.relations:
@@ -127,7 +138,7 @@ class PushPredicates(RelationVisitor[_T, _Result[_T]]):
         if unmatched_in_any:
             # Some relations didn't accept all predicates.  Need to try agai,
             # and this time just pass the set they can all accept.
-            new_visitor = PushPredicates(matched)
+            new_visitor = PushPredicates(matched, until_single_engine=self.until_single_engine)
             new_relations.clear()
             for relation in visited.relations:
                 r = relation.visit(new_visitor)
