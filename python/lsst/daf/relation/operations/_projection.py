@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
+from .._exceptions import ColumnError
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -60,3 +61,12 @@ class Projection(Relation[_T]):
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_projection(self)
+
+    def check(self, recursive: bool = True) -> None:
+        if not (self.columns <= self.base.columns):
+            raise ColumnError(
+                f"Cannot project column(s) {set(self.columns) - self.base.columns} "
+                f"that are not present in the base relation {self.base}."
+            )
+        if recursive:
+            self.base.check()

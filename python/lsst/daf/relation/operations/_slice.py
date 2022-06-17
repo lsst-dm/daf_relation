@@ -25,7 +25,7 @@ __all__ = ("Slice",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
-from .._exceptions import MissingColumnError
+from .._exceptions import ColumnError, EngineError, RelationalAlgebraError
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -38,27 +38,6 @@ if TYPE_CHECKING:
 @final
 class Slice(Relation[_T]):
     def __init__(self, base: Relation, order_by: tuple[OrderByTerm[_T], ...], offset: int, limit: int | None):
-        # TypeError may seem strange below, but it's what Python usually raises
-        # when you pass an invalid combination of arguments to a function.
-        if not order_by:
-            raise TypeError(
-                "Cannot slice an unordered relation; to obtain an arbitrary "
-                "set of result rows from an unordered relation, pass offset "
-                "and/or limit to_sql_executable when executing it."
-            )
-        if not offset and limit is None:
-            raise TypeError(
-                "Cannot order a relation unless it is being sliced with "
-                "nontrivial offset and/or limit; to obtain ordered rows from "
-                "a relation, pass order_by to to_sql_executable when "
-                "executing it."
-            )
-
-        for t in order_by:
-            if not t.columns_required <= self.columns:
-                raise MissingColumnError(
-                    f"OrderByTerm {t} needs columns {set(t.columns_required - self.columns)}."
-                )
         self.base = base
         self.order_by = order_by
         self.offset = offset
@@ -86,3 +65,24 @@ class Slice(Relation[_T]):
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_slice(self)
+
+    def check(self, *, recursive: bool = True) -> None:
+        if not self.order_by:
+            raise RelationalAlgebraError("Cannot slice an unordered relation.")
+        if not self.offset and self.limit is None:
+            raise RelationalAlgebraError(
+                "Cannot order a relation unless it is being sliced with nontrivial offset and/or limit."
+            )
+        for o in self.order_by:
+            if self.engine not in o.state:
+                raise EngineError(
+                    f"Order-by term {o} supports engine(s) {set(o.state.keys())}, "
+                    f"while relation has {self.engine}."
+                )
+            if not o.columns_required <= self.base.columns:
+                raise ColumnError(
+                    f"Order-by term {o} for base relation {self.base} needs "
+                    f"columns {o.columns_required - self.base.columns}."
+                )
+        if recursive:
+            self.base.check()

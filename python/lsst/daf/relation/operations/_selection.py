@@ -25,7 +25,7 @@ __all__ = ("Selection",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
-from .._exceptions import MissingColumnError
+from .._exceptions import EngineError, ColumnError
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -38,11 +38,6 @@ if TYPE_CHECKING:
 @final
 class Selection(Relation[_T]):
     def __init__(self, base: Relation[_T], predicates: frozenset[Predicate[_T]]):
-        for p in predicates:
-            if not p.columns_required <= self.columns:
-                raise MissingColumnError(
-                    f"Predicate {p} needs columns {set(p.columns_required - self.columns)}."
-                )
         self.base = base
         self.predicates = predicates
 
@@ -60,3 +55,18 @@ class Selection(Relation[_T]):
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_selection(self)
+
+    def check(self, *, recursive: bool = True) -> None:
+        for p in self.predicates:
+            if self.engine not in p.state:
+                raise EngineError(
+                    f"Predicate {p} supports engine(s) {set(p.state.keys())}, "
+                    f"while relation has {self.engine}."
+                )
+            if not p.columns_required <= self.base.columns:
+                raise ColumnError(
+                    f"Predicate {p} for base relation {self.base} needs "
+                    f"columns {p.columns_required - self.base.columns}."
+                )
+        if recursive:
+            self.base.check()

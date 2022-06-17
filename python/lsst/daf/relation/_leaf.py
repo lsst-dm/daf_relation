@@ -65,3 +65,6 @@ class Leaf(Relation[_T]):
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_leaf(self)
+
+    def check(self, *, recursive: bool = True) -> None:
+        self._check_unique_keys()

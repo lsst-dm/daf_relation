@@ -23,8 +23,11 @@ from __future__ import annotations
 
 __all__ = ("Relation",)
 
+import itertools
 from abc import abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, TypeVar
+
+from ._exceptions import ColumnError
 
 if TYPE_CHECKING:
     from ._column_tag import _T
@@ -118,20 +121,32 @@ class Relation(Generic[_T]):
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         raise NotImplementedError()
 
-    def checked(self: _S, engine_consistency: bool = True) -> _S:
-        from .visitors.check import Check
-        self.visit(Check(engine_consistency))
+    @abstractmethod
+    def check(self, *, recursive: bool = True) -> None:
+        raise NotImplementedError()
+
+    def checked(self: _S, *, recursive: bool = True) -> _S:
+        self.check(recursive=recursive)
         return self
 
-    def assert_checked(self: _S) -> _S:
+    def assert_checked(self: _S, *, recursive: bool = True) -> _S:
         if __debug__:
-            return self.checked()
+            return self.checked(recursive=recursive)
         return self
 
     def simplified(self) -> Relation[_T]:
         from .visitors.simplify import Simplify
+
         return self.visit(Simplify())
 
     def assert_simplified(self: _S) -> _S:
         assert self.simplified() is self, f"Relation {self} expected to be already simplified."
         return self
+
+    def _check_unique_keys(self) -> None:
+        for k1, k2 in itertools.permutations(self.unique_keys, 2):
+            if not k1.issuperset(k2):
+                raise ColumnError(
+                    f"Relation {self} unique key {set(k1)} is redundant, "
+                    f"since {set(k2)} is already unique."
+                )

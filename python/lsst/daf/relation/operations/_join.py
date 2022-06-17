@@ -26,10 +26,10 @@ __all__ = ("Join",)
 import itertools
 from typing import TYPE_CHECKING, AbstractSet, final
 
-
 from lsst.utils.classes import cached_getter
 
 from .._engines import EngineTag, EngineTree
+from .._exceptions import EngineError, RelationalAlgebraError
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -83,3 +83,20 @@ class Join(Relation[_T]):
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_join(self)
+
+    def check(self, *, recursive: bool = True) -> None:
+        for relation in self.relations:
+            if relation.engine != self.engine:
+                raise EngineError(
+                    f"Join member {relation} has engine {relation.engine}, while join has {self.engine}."
+                )
+            if recursive:
+                relation.check()
+        for condition in self.conditions:
+            if self.engine not in condition.state:
+                raise EngineError(
+                    f"Join condition {condition} supports engine(s) {set(condition.state.keys())}, "
+                    f"while join has {self.engine}."
+                )
+            if not condition.match(self.relations):
+                raise RelationalAlgebraError(f"No match for join condition {condition}.")

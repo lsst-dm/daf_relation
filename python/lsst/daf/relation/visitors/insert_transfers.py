@@ -26,7 +26,7 @@ __all__ = ("InsertTransfers",)
 from collections import defaultdict
 from typing import TYPE_CHECKING, cast
 
-from .._exceptions import EngineMismatchError, TransferSolverError
+from .._exceptions import EngineError
 from .._engines import EngineTag, EngineTree
 from .. import operations
 from .._relation_visitor import RelationVisitor
@@ -160,7 +160,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
                 if not to_do:
                     return base
 
-        raise TransferSolverError(
+        raise EngineError(
             f"Engine path tree does not allow predicates {to_do} to be applied to {base}."
         )
 
@@ -181,17 +181,17 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
                 return operations.Slice(base, visited.order_by, offset=visited.offset, limit=visited.limit)
 
         if not supported_engines:
-            raise EngineMismatchError(
+            raise EngineError(
                 f"Order-by terms {visited.order_by} have no supported engines in common."
             )
         else:
-            raise TransferSolverError(
+            raise EngineError(
                 f"Engine path tree does not allow order-by terms {visited.order_by} "
                 f"with supported engines {supported_engines} to be applied to {base}."
             )
 
     def visit_transfer(self, visited: operations.Transfer[_T]) -> Relation[_T]:
-        raise TransferSolverError("Trees visited by to InsertTransfers should not start with any transfers.")
+        raise EngineError("Trees visited by to InsertTransfers should not start with any transfers.")
 
     def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
         # Recurse into relations and group them by engine, while tracking

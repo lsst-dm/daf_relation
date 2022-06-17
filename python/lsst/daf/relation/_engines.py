@@ -54,3 +54,9 @@ class EngineTree:
     @property
     def depth(self) -> int:
         return 1 + max(source.depth for source in self.sources)
+
+    def __contains__(self, tag: EngineTag) -> bool:
+        if tag == self.tag:
+            return True
+        else:
+            return any(tag in source for source in self.sources)

@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, AbstractSet, final
 from lsst.utils.classes import cached_getter
 
 from .._engines import EngineTag, EngineTree
+from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -76,3 +77,27 @@ class Union(Relation[_T]):
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_union(self)
+
+    def check(self, *, recursive: bool = True) -> None:
+        self._check_unique_keys()
+        for relation in self.relations:
+            for key in self.unique_keys:
+                if key not in relation.unique_keys and not any(
+                    key.issuperset(relation_key) for relation_key in relation.unique_keys
+                ):
+                    raise ColumnError(
+                        f"Union is declared to have unique key {set(key)}, but "
+                        f"member {relation} is not unique with those columns."
+                    )
+            if relation.engine != self.engine:
+                raise EngineError(
+                    f"Union member {relation} has engine {relation.engine}, "
+                    f"while union has {self.engine}."
+                )
+            if relation.columns != self.columns:
+                raise ColumnError(
+                    f"Mismatched union columns: {set(relation.columns)} != {set(self.columns)} "
+                    f"for relation {relation}."
+                )
+            if recursive:
+                relation.check()
