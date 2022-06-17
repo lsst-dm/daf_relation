@@ -86,12 +86,12 @@ class Join(Relation[_T]):
 
     def check(self, *, recursive: bool = True) -> None:
         for relation in self.relations:
+            if recursive:
+                relation.check(recursive=True)
             if relation.engine != self.engine:
                 raise EngineError(
                     f"Join member {relation} has engine {relation.engine}, while join has {self.engine}."
                 )
-            if recursive:
-                relation.check()
         for condition in self.conditions:
             if self.engine not in condition.state:
                 raise EngineError(
@@ -100,3 +100,28 @@ class Join(Relation[_T]):
                 )
             if not condition.match(self.relations):
                 raise RelationalAlgebraError(f"No match for join condition {condition}.")
+
+    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        relations_flat: list[Relation[_T]] = []
+        conditions_flat: set[JoinCondition[_T]] = set()
+        any_changes = False
+        for original in self.relations:
+            if recursive:
+                simplified = original.simplified(recursive=True)
+                any_changes = any_changes or simplified is not original
+            else:
+                simplified = original
+            match simplified:
+                case Join(relations=relations, conditions=conditions):
+                    relations_flat.extend(relations)
+                    conditions_flat.update(conditions)
+                    any_changes = True
+                case simplified:
+                    relations_flat.append(simplified)
+        if len(relations_flat) == 1:
+            assert not conditions_flat, "Should be guaranteed by previous Check visitor."
+            return relations_flat[0]
+        elif not any_changes:
+            return self
+        else:
+            return Join(self.engine, tuple(relations_flat), frozenset(conditions_flat))

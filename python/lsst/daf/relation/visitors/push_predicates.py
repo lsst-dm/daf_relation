@@ -31,8 +31,8 @@ from .._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
     from .._column_tag import _T
-    from .._predicate import Predicate
     from .._leaf import Leaf
+    from .._predicate import Predicate
     from .._relation import Relation
 
 

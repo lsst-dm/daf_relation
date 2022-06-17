@@ -25,7 +25,7 @@ __all__ = ("Selection",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
-from .._exceptions import EngineError, ColumnError
+from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -57,6 +57,8 @@ class Selection(Relation[_T]):
         return visitor.visit_selection(self)
 
     def check(self, *, recursive: bool = True) -> None:
+        if recursive:
+            self.base.check(recursive=True)
         for p in self.predicates:
             if self.engine not in p.state:
                 raise EngineError(
@@ -68,5 +70,17 @@ class Selection(Relation[_T]):
                     f"Predicate {p} for base relation {self.base} needs "
                     f"columns {p.columns_required - self.base.columns}."
                 )
+
+    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        base = self.base
         if recursive:
-            self.base.check()
+            base = base.simplified(recursive=True)
+        if not self.predicates:
+            return base
+        match base:
+            case Selection(base=base, predicates=predicates):
+                return Selection(base, predicates | self.predicates)
+            case _:
+                if base is self.base:
+                    return self
+                return Selection(base, self.predicates)

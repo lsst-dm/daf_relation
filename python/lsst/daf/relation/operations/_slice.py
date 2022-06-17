@@ -67,6 +67,8 @@ class Slice(Relation[_T]):
         return visitor.visit_slice(self)
 
     def check(self, *, recursive: bool = True) -> None:
+        if recursive:
+            self.base.check(recursive=True)
         if not self.order_by:
             raise RelationalAlgebraError("Cannot slice an unordered relation.")
         if not self.offset and self.limit is None:
@@ -84,5 +86,27 @@ class Slice(Relation[_T]):
                     f"Order-by term {o} for base relation {self.base} needs "
                     f"columns {o.columns_required - self.base.columns}."
                 )
+
+    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        base = self.base
         if recursive:
-            self.base.check()
+            base = base.simplified(recursive=True)
+        match base:
+            case Slice(base=base, order_by=order_by, offset=offset, limit=limit):
+                order_by_list = list(order_by)
+                order_by_list.extend(self.order_by)
+                combined_offset = self.offset + offset
+                if limit is not None:
+                    combined_limit: int | None
+                    if self.limit is not None:
+                        original_stop = self.offset + self.limit
+                        new_stop = offset + limit
+                        combined_stop = min(original_stop, new_stop)
+                        combined_limit = max(combined_stop - offset, 0)
+                    else:
+                        combined_limit = self.limit
+                return Slice(base, tuple(order_by_list), combined_offset, combined_limit)
+            case _:
+                if base is self.base:
+                    return self
+                return Slice(base, self.order_by, self.offset, self.limit)

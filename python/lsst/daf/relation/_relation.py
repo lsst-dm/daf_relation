@@ -46,7 +46,7 @@ class Relation(Generic[_T]):
     def make_unit(engine: EngineTag) -> Relation[_T]:
         from .operations import Join
 
-        return Join(engine)
+        return Join(engine).assert_checked(recursive=False).assert_simplified(recursive=False)
 
     @staticmethod
     def make_zero(
@@ -57,7 +57,11 @@ class Relation(Generic[_T]):
     ) -> Relation[_T]:
         from .operations import Union
 
-        return Union(engine, columns, (), unique_keys, frozenset(doomed_by))
+        return (
+            Union(engine, columns, (), unique_keys, frozenset(doomed_by))
+            .checked(recursive=False)
+            .assert_simplified(recursive=False)
+        )
 
     @property
     @abstractmethod
@@ -85,36 +89,51 @@ class Relation(Generic[_T]):
     ) -> Relation[_T]:
         from .operations import Join
 
-        return Join(self.engine, (self,) + others, conditions=frozenset(conditions))
+        return (
+            Join(self.engine, (self,) + others, conditions=frozenset(conditions))
+            .checked(recursive=False)
+            .simplified(recursive=False)
+        )
 
     def projection(self, columns: AbstractSet[_T]) -> Relation[_T]:
         from .operations import Projection
 
-        return Projection(self, frozenset(columns))
+        return Projection(self, frozenset(columns)).checked(recursive=False).simplified(recursive=False)
 
     def selection(self, *predicates: Predicate[_T]) -> Relation[_T]:
         from .operations import Selection
 
-        return Selection(self, frozenset(predicates))
+        return Selection(self, frozenset(predicates)).checked(recursive=False).simplified(recursive=False)
 
     def slice(
         self, order_by: Iterable[OrderByTerm[_T]], offset: int = 0, limit: int | None = None
     ) -> Relation[_T]:
         from .operations import Slice
 
-        return Slice(self, tuple(order_by), offset, limit)
+        return (
+            Slice(self, tuple(order_by), offset, limit).checked(recursive=False).simplified(recursive=False)
+        )
+
+    def transfer(self, engine: EngineTag) -> Relation[_T]:
+        from .operations import Transfer
+
+        return Transfer(self, engine).checked(recursive=False).simplified(recursive=False)
 
     def union(
         self, *others: Relation[_T], unique_keys: AbstractSet[frozenset[_T]] = frozenset()
     ) -> Relation[_T]:
         from .operations import Union
 
-        return Union(
-            self.engine,
-            self.columns,
-            (self,) + others,
-            unique_keys=self.unique_keys,
-            extra_doomed_by=frozenset(),
+        return (
+            Union(
+                self.engine,
+                self.columns,
+                (self,) + others,
+                unique_keys=self.unique_keys,
+                extra_doomed_by=frozenset(),
+            )
+            .checked(recursive=False)
+            .simplified(recursive=False)
         )
 
     @abstractmethod
@@ -134,13 +153,14 @@ class Relation(Generic[_T]):
             return self.checked(recursive=recursive)
         return self
 
-    def simplified(self) -> Relation[_T]:
-        from .visitors.simplify import Simplify
+    @abstractmethod
+    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        raise NotImplementedError()
 
-        return self.visit(Simplify())
-
-    def assert_simplified(self: _S) -> _S:
-        assert self.simplified() is self, f"Relation {self} expected to be already simplified."
+    def assert_simplified(self: _S, *, recursive: bool = True) -> _S:
+        assert (
+            self.simplified(recursive=recursive) is self
+        ), f"Relation {self} expected to be already simplified."
         return self
 
     def _check_unique_keys(self) -> None:
@@ -149,4 +169,10 @@ class Relation(Generic[_T]):
                 raise ColumnError(
                     f"Relation {self} unique key {set(k1)} is redundant, "
                     f"since {set(k2)} is already unique."
+                )
+        for k in self.unique_keys:
+            if not k.issubset(self.columns):
+                raise ColumnError(
+                    f"Unique key {k} for relation {self} involves columns "
+                    f"{set(k - self.columns)} not in the relation."
                 )

@@ -27,7 +27,6 @@ from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
-from .._exceptions import EngineError
 from .._engines import EngineTag, EngineTree
 from .._relation import Relation
 
@@ -63,7 +62,21 @@ class Transfer(Relation[_T]):
         return visitor.visit_transfer(self)
 
     def check(self, *, recursive: bool = True) -> None:
-        if self.base.engine.tag == self._destination:
-            raise EngineError(f"Transfer of {self.base} to {self._destination} is unnecessary.")
         if recursive:
-            self.base.check()
+            self.base.check(recursive=True)
+
+    def simplified(self, recursive: bool = True) -> Relation[_T]:
+        base = self.base
+        if recursive:
+            base = base.simplified(recursive=True)
+        if base.engine == self.engine:
+            return base
+        match base:
+            case Transfer(base=base):
+                if base.engine == self.engine:
+                    return base
+                return Transfer(base, self.engine)
+            case _:
+                if base is self.base:
+                    return self
+                return Transfer(base, self.engine)

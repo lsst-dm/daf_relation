@@ -63,10 +63,24 @@ class Projection(Relation[_T]):
         return visitor.visit_projection(self)
 
     def check(self, recursive: bool = True) -> None:
+        if recursive:
+            self.base.check(recursive=True)
         if not (self.columns <= self.base.columns):
             raise ColumnError(
                 f"Cannot project column(s) {set(self.columns) - self.base.columns} "
                 f"that are not present in the base relation {self.base}."
             )
+
+    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        base = self.base
         if recursive:
-            self.base.check()
+            base = base.simplified()
+        if self.columns == self.base.columns:
+            return base
+        match base:
+            case Projection(base=base):
+                return Projection(base, self.columns)
+            case _:
+                if base is self.base:
+                    return self
+                return Projection(base, self.columns)

@@ -26,9 +26,9 @@ __all__ = ("InsertTransfers",)
 from collections import defaultdict
 from typing import TYPE_CHECKING, cast
 
-from .._exceptions import EngineError
-from .._engines import EngineTag, EngineTree
 from .. import operations
+from .._engines import EngineTag, EngineTree
+from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
 from .push_predicates import PushPredicates
 
@@ -160,9 +160,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
                 if not to_do:
                     return base
 
-        raise EngineError(
-            f"Engine path tree does not allow predicates {to_do} to be applied to {base}."
-        )
+        raise EngineError(f"Engine path tree does not allow predicates {to_do} to be applied to {base}.")
 
     def visit_slice(self, visited: operations.Slice[_T]) -> Relation[_T]:
         # Recursively insert transfers into the base relation, then see if we
@@ -181,9 +179,7 @@ class InsertTransfers(RelationVisitor[_T, Relation[_T]]):
                 return operations.Slice(base, visited.order_by, offset=visited.offset, limit=visited.limit)
 
         if not supported_engines:
-            raise EngineError(
-                f"Order-by terms {visited.order_by} have no supported engines in common."
-            )
+            raise EngineError(f"Order-by terms {visited.order_by} have no supported engines in common.")
         else:
             raise EngineError(
                 f"Engine path tree does not allow order-by terms {visited.order_by} "

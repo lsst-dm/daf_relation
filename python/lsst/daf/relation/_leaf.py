@@ -68,3 +68,6 @@ class Leaf(Relation[_T]):
 
     def check(self, *, recursive: bool = True) -> None:
         self._check_unique_keys()
+
+    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        return self

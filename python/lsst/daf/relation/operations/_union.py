@@ -81,6 +81,8 @@ class Union(Relation[_T]):
     def check(self, *, recursive: bool = True) -> None:
         self._check_unique_keys()
         for relation in self.relations:
+            if recursive:
+                relation.check(recursive=True)
             for key in self.unique_keys:
                 if key not in relation.unique_keys and not any(
                     key.issuperset(relation_key) for relation_key in relation.unique_keys
@@ -99,5 +101,33 @@ class Union(Relation[_T]):
                     f"Mismatched union columns: {set(relation.columns)} != {set(self.columns)} "
                     f"for relation {relation}."
                 )
+
+    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        relations_flat: list[Relation[_T]] = []
+        extra_doomed_by_flat: set[str] = set()
+        any_changes = False
+        for original in self.relations:
             if recursive:
-                relation.check()
+                simplified = original.simplified(recursive=True)
+                any_changes = any_changes or simplified is not original
+            else:
+                simplified = original
+            match simplified:
+                case Union(relations=relations, extra_doomed_by=extra_doomed_by):
+                    relations_flat.extend(relations)
+                    extra_doomed_by_flat.update(extra_doomed_by)
+                    any_changes = True
+                case _:
+                    relations_flat.append(simplified)
+        if len(relations_flat) == 1 and not extra_doomed_by_flat:
+            return relations_flat[0]
+        elif not any_changes:
+            return self
+        else:
+            return Union(
+                self.engine,
+                self.columns,
+                tuple(relations_flat),
+                self.unique_keys,
+                frozenset(extra_doomed_by_flat),
+            )
