@@ -42,14 +42,12 @@ class Leaf(Relation[_T]):
         state: Any,
         columns: AbstractSet[_T],
         unique_keys: AbstractSet[frozenset[_T]],
-        full_keys: AbstractSet[_T],
     ):
         self.name = name
         self._engine = EngineTree.build(engine)
         self.state = state
         self._columns = columns
         self._unique_keys = unique_keys
-        self.full_keys = full_keys
 
     @property
     def engine(self) -> EngineTree:
