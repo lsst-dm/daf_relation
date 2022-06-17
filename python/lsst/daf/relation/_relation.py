@@ -82,6 +82,14 @@ class Relation(Generic[_T]):
     def doomed_by(self) -> AbstractSet[str]:
         return frozenset()
 
+    def distinct(self, unique_keys: AbstractSet[frozenset[_T]] | None = None):
+        if unique_keys is None:
+            unique_keys = {frozenset(self.columns)}
+
+        from .operations import Distinct
+
+        return Distinct(self, unique_keys).checked(recursive=False).simplified(recursive=True)
+
     def join(
         self,
         *others: Relation[_T],
@@ -176,3 +184,6 @@ class Relation(Generic[_T]):
                     f"Unique key {k} for relation {self} involves columns "
                     f"{set(k - self.columns)} not in the relation."
                 )
+
+    def is_unique_key_covered(self, key: frozenset[_T]) -> bool:
+        return key in self.unique_keys or any(key.issuperset(my_key) for my_key in self.unique_keys)

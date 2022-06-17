@@ -36,6 +36,10 @@ _U = TypeVar("_U", covariant=True)
 
 class RelationVisitor(Generic[_T, _U]):
     @abstractmethod
+    def visit_distinct(self, visited: operations.Distinct[_T]) -> _U:
+        raise NotImplementedError()
+
+    @abstractmethod
     def visit_leaf(self, visited: Leaf[_T]) -> _U:
         raise NotImplementedError()
 
