@@ -28,7 +28,8 @@ from typing import AbstractSet, Hashable, Iterator, Protocol
 
 
 class EngineTag(Hashable, Protocol):
-    pass
+    def __str__(self) -> str:
+        ...
 
 
 @dataclasses.dataclass(frozen=True)

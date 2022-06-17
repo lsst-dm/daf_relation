@@ -38,3 +38,7 @@ class EngineError(RelationalAlgebraError):
 
 class ColumnError(RelationalAlgebraError):
     pass
+
+
+class RelationSerializationError(IOError):
+    pass

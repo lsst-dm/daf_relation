@@ -31,4 +31,5 @@ if TYPE_CHECKING:
 
 
 class ColumnTag(Hashable, Protocol):
-    pass
+    def __str__(self) -> str:
+        ...
