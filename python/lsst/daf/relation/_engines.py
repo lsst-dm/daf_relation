@@ -50,3 +50,7 @@ class EngineTree:
         else:
             for source in self.sources:
                 yield from source.backtrack_from(tag)
+
+    @property
+    def depth(self) -> int:
+        return 1 + max(source.depth for source in self.sources)
