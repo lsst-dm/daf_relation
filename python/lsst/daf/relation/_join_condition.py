@@ -28,19 +28,34 @@ import dataclasses
 import itertools
 from typing import TYPE_CHECKING, AbstractSet, Any, Generic, Iterable
 
+from ._column_tag import _T
+
 if TYPE_CHECKING:
-    from ._column_tag import _T
     from ._engines import EngineTag
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, eq=False)
 class JoinCondition(Generic[_T]):
     name: str
     columns_required: tuple[frozenset[_T], frozenset[_T]]
-    state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
+    state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, repr=False)
+    was_flipped: bool = dataclasses.field(default=False, repr=False)
+
+    def __eq__(self, other: Any) -> bool:
+        if self.__class__ == other.__class__:
+            return self.name == other.name and (
+                frozenset(self.columns_required) == frozenset(other.columns_required)
+            )
+        else:
+            return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash((self.name, frozenset(self.columns_required)))
 
     def flipped(self) -> JoinCondition[_T]:
-        return dataclasses.replace(self, columns_required=self.columns_required[::-1])
+        return dataclasses.replace(
+            self, columns_required=self.columns_required[::-1], was_flipped=not self.was_flipped
+        )
 
     @staticmethod
     def find_matching(

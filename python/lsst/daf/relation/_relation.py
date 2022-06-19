@@ -46,7 +46,7 @@ class Relation(Generic[_T]):
     def make_unit(engine: EngineTag) -> Relation[_T]:
         from .operations import Join
 
-        return Join(engine).assert_checked(recursive=False).assert_simplified(recursive=False)
+        return Join[_T](engine).assert_checked(recursive=False).assert_simplified(recursive=False)
 
     @staticmethod
     def make_zero(
