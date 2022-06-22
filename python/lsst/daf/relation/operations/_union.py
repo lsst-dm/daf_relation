@@ -125,7 +125,7 @@ class Union(Relation[_T]):
             return self
         else:
             return Union(
-                self.engine,
+                self.engine.tag,
                 self.columns,
                 tuple(relations_flat),
                 self.unique_keys,

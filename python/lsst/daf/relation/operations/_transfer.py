@@ -75,8 +75,8 @@ class Transfer(Relation[_T]):
             case Transfer(base=base):
                 if base.engine == self.engine:
                     return base
-                return Transfer(base, self.engine)
+                return Transfer(base, self.engine.tag)
             case _:
                 if base is self.base:
                     return self
-                return Transfer(base, self.engine)
+                return Transfer(base, self.engine.tag)

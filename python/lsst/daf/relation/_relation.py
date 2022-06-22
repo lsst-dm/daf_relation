@@ -98,7 +98,7 @@ class Relation(Generic[_T]):
         from .operations import Join
 
         return (
-            Join(self.engine, (self,) + others, conditions=frozenset(conditions))
+            Join(self.engine.tag, (self,) + others, conditions=frozenset(conditions))
             .checked(recursive=False)
             .simplified(recursive=False)
         )
@@ -134,7 +134,7 @@ class Relation(Generic[_T]):
 
         return (
             Union(
-                self.engine,
+                self.engine.tag,
                 self.columns,
                 (self,) + others,
                 unique_keys=self.unique_keys,

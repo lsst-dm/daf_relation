@@ -141,7 +141,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
 
     def visit_selection(self, visited: operations.Selection[_T]) -> RowIterable[_T]:
         rows = visited.base.visit(self)
-        rows, predicates_used = rows.try_selection(visited.engine, visited.predicates)
+        rows, predicates_used = rows.try_selection(visited.engine.tag, visited.predicates)
         remaining_predicates = visited.predicates - predicates_used
         return SelectionRowIterable(rows, tuple(p.state[visited.engine.tag] for p in remaining_predicates))
 

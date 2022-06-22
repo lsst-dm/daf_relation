@@ -127,7 +127,7 @@ class _ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], G
             )
             executable = executable.order_by(
                 *[
-                    self.column_types.convert_order_by(visited.engine, t, columns_available)
+                    self.column_types.convert_order_by(visited.engine.tag, t, columns_available)
                     for t in self.order_by
                 ]
             )

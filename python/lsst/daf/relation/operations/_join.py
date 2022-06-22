@@ -130,4 +130,4 @@ class Join(Relation[_T]):
         elif not any_changes:
             return self
         else:
-            return Join(self.engine, tuple(relations_flat), frozenset(conditions_flat))
+            return Join(self.engine.tag, tuple(relations_flat), frozenset(conditions_flat))
