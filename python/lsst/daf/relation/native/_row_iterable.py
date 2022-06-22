@@ -39,7 +39,7 @@ from typing import (
     Tuple,
 )
 
-from .._column_tag import _T
+from .._column_tag import _T, UniqueKey
 from .._engines import EngineTag
 from .._join_condition import JoinCondition
 from .._predicate import Predicate
@@ -87,13 +87,13 @@ class RowIterable(Generic[_T]):
     def materialization(self) -> Materialization:
         raise NotImplementedError()
 
-    def with_unique_index(self, key_columns: frozenset[_T]) -> UniqueIndexedRowIterable[_T]:
+    def with_unique_index(self, key_columns: UniqueKey[_T]) -> UniqueIndexedRowIterable[_T]:
         new_index: dict[tuple[Any, ...], Row[_T]] = {}
         self._build_unique_index(key_columns, new_index)
         return RowContainer(new_index.values(), {key_columns: new_index})
 
     def _build_unique_index(
-        self, key_columns: frozenset[_T], new_index: dict[tuple[Any, ...], Row[_T]]
+        self, key_columns: UniqueKey[_T], new_index: dict[tuple[Any, ...], Row[_T]]
     ) -> None:
         for row in self:
             key = tuple(row[c] for c in key_columns)
@@ -116,13 +116,13 @@ class RowIterable(Generic[_T]):
 
 class UniqueIndexedRowIterable(RowIterable[_T]):
     @abstractmethod
-    def get_unique_index(self, key_columns: frozenset[_T]) -> UniqueIndex[_T]:
+    def get_unique_index(self, key_columns: UniqueKey[_T]) -> UniqueIndex[_T]:
         raise NotImplementedError()
 
 
 class RowContainer(UniqueIndexedRowIterable[_T]):
     def __init__(
-        self, rows: Collection[Row[_T]], unique_indexes: dict[frozenset[_T], UniqueIndex[_T]] | None = None
+        self, rows: Collection[Row[_T]], unique_indexes: dict[UniqueKey[_T], UniqueIndex[_T]] | None = None
     ):
         self.rows = rows
         self._unique_indexes = dict(unique_indexes) if unique_indexes is not None else {}
@@ -137,13 +137,13 @@ class RowContainer(UniqueIndexedRowIterable[_T]):
     def materialization(self) -> Literal[Materialization.DIRECT]:
         return Materialization.DIRECT
 
-    def with_unique_index(self, key_columns: frozenset[_T]) -> RowContainer[_T]:
+    def with_unique_index(self, key_columns: UniqueKey[_T]) -> RowContainer[_T]:
         new_index: dict[tuple[Any, ...], Row[_T]] = {}
         if self._unique_indexes.setdefault(key_columns, new_index) is new_index:
             self._build_unique_index(key_columns, new_index)
         return self
 
-    def get_unique_index(self, key_columns: frozenset[_T]) -> UniqueIndex[_T]:
+    def get_unique_index(self, key_columns: UniqueKey[_T]) -> UniqueIndex[_T]:
         new_index: dict[tuple[Any, ...], Row[_T]] = {}
         if (existing_index := self._unique_indexes.setdefault(key_columns, new_index)) is not new_index:
             return existing_index

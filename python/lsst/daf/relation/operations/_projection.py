@@ -27,11 +27,11 @@ from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
+from .._columns import _T, UniqueKey
 from .._exceptions import ColumnError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._column_tag import _T
     from .._engines import EngineTree
     from .._relation_visitor import _U, RelationVisitor
 
@@ -52,7 +52,7 @@ class Projection(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
         return {keys for keys in self.base.unique_keys if keys.issubset(self._columns)}
 
     @property
@@ -62,25 +62,18 @@ class Projection(Relation[_T]):
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_projection(self)
 
-    def check(self, recursive: bool = True) -> None:
+    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        base = self.base
         if recursive:
-            self.base.check(recursive=True)
+            base = base.checked_and_simplified(recursive=True)
         if not (self.columns <= self.base.columns):
             raise ColumnError(
                 f"Cannot project column(s) {set(self.columns) - self.base.columns} "
                 f"that are not present in the base relation {self.base}."
             )
-
-    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        base = self.base
-        if recursive:
-            base = base.simplified()
-        if self.columns == self.base.columns:
-            return base
         match base:
-            case Projection(base=base):
-                return Projection(base, self.columns)
-            case _:
-                if base is self.base:
-                    return self
-                return Projection(base, self.columns)
+            case Projection(base=nested_base):
+                base = nested_base
+        if base is self.base:
+            return self
+        return Projection(base, self.columns)

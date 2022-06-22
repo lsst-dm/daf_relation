@@ -25,7 +25,7 @@ __all__ = ()
 
 from typing import TYPE_CHECKING, AbstractSet
 
-from .._column_tag import _T
+from .._column_tag import _T, is_unique_key_redundant
 from .._exceptions import EngineError
 from .._join_condition import JoinCondition
 from .._relation_visitor import RelationVisitor
@@ -82,20 +82,21 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
                     visited.engine.tag, join_rows, all_columns, visited.conditions - matched_conditions
                 )
         common_columns = frozenset(rel0.columns & rel1.columns)
-        if rel1.is_unique_key_covered(common_columns):
+        if is_unique_key_redundant(common_columns, rel1.unique_keys):
             return self._finish_join(
                 visited.engine.tag,
                 UniqueIndexJoinRowIterable(rows0, rows1, on_key=common_columns),
                 all_columns,
                 visited.conditions,
             )
-        if rows0.materialization == rows1.materialization and rel0.is_unique_key_covered(common_columns):
-            return self._finish_join(
-                visited.engine.tag,
-                UniqueIndexJoinRowIterable(rows1, rows0, on_key=common_columns),
-                all_columns,
-                visited.conditions,
-            )
+        if rows0.materialization == rows1.materialization:
+            if is_unique_key_redundant(common_columns, rel0.unique_keys):
+                return self._finish_join(
+                    visited.engine.tag,
+                    UniqueIndexJoinRowIterable(rows1, rows0, on_key=common_columns),
+                    all_columns,
+                    visited.conditions,
+                )
         return self._finish_join(
             visited.engine.tag,
             GeneralJoinRowIterable(rows0, rows1, on_key=common_columns),
@@ -128,7 +129,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         if join_rows is not None:
             return join_rows, matched_conditions
         common_columns = frozenset(base_relation.columns & next_relation.columns)
-        if next_relation.is_unique_key_covered(common_columns):
+        if is_unique_key_redundant(common_columns, next_relation.unique_keys):
             return UniqueIndexJoinRowIterable(base_rows, next_rows, on_key=common_columns), frozenset()
         else:
             return GeneralJoinRowIterable(base_rows, next_rows, on_key=common_columns), frozenset()

@@ -25,11 +25,11 @@ __all__ = ("Leaf",)
 
 from typing import TYPE_CHECKING, AbstractSet, Any, final
 
+from ._columns import _T, UniqueKey, drop_covered_internal_unique_keys
 from ._engines import EngineTag, EngineTree
 from ._relation import Relation
 
 if TYPE_CHECKING:
-    from ._column_tag import _T
     from ._relation_visitor import _U, RelationVisitor
 
 
@@ -41,7 +41,7 @@ class Leaf(Relation[_T]):
         engine: EngineTag,
         state: Any,
         columns: AbstractSet[_T],
-        unique_keys: AbstractSet[frozenset[_T]],
+        unique_keys: AbstractSet[UniqueKey[_T]],
     ):
         self.name = name
         self._engine = EngineTree.build(engine)
@@ -58,14 +58,20 @@ class Leaf(Relation[_T]):
         return self._columns
 
     @property
-    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
         return self._unique_keys
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_leaf(self)
 
-    def check(self, *, recursive: bool = True) -> None:
-        self._check_unique_keys()
-
-    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
+    def checked_and_simplified(
+        self,
+        *,
+        recursive: bool = True,
+        **kwargs: bool,
+    ) -> Relation[_T]:
+        self._check_unique_keys_in_columns()
+        unique_keys = drop_covered_internal_unique_keys(self.unique_keys)
+        if unique_keys != self.unique_keys:
+            return Leaf(self.name, self.engine.tag, self.state, self.columns, unique_keys)
         return self

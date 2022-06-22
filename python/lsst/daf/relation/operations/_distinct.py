@@ -25,17 +25,18 @@ __all__ = ("Distinct",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
+from .._columns import _T, UniqueKey, drop_covered_internal_unique_keys
 from .._engines import EngineTree
+from .._exceptions import RelationalAlgebraError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._column_tag import _T
     from .._relation_visitor import _U, RelationVisitor
 
 
 @final
 class Distinct(Relation[_T]):
-    def __init__(self, base: Relation[_T], unique_keys: AbstractSet[frozenset[_T]]):
+    def __init__(self, base: Relation[_T], unique_keys: AbstractSet[UniqueKey[_T]]):
         self.base = base
         self._unique_keys = unique_keys
 
@@ -48,7 +49,7 @@ class Distinct(Relation[_T]):
         return self.base.columns
 
     @property
-    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
         return self._unique_keys
 
     @property
@@ -58,19 +59,23 @@ class Distinct(Relation[_T]):
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_distinct(self)
 
-    def check(self, *, recursive: bool = True) -> None:
-        if recursive:
-            self.base.check(recursive=True)
-        self._check_unique_keys()
-
-    def simplified(self, recursive: bool = True) -> Relation[_T]:
+    def checked_and_simplified(self, recursive: bool = True) -> Relation[_T]:
         base = self.base
         if recursive:
-            base = base.simplified(recursive=True)
-        if all(base.is_unique_key_covered(key) for key in self._unique_keys):
-            return base
-        else:
-            if base is self.base:
-                return self
+            base = base.checked_and_simplified(recursive=True)
+        if not self.unique_keys:
+            raise RelationalAlgebraError(f"Distinct operation on {base} does not define any unique keys.")
+        unique_keys = drop_covered_internal_unique_keys(self.unique_keys)
+        if base.unique_keys:
+            if base.unique_keys == self.unique_keys:
+                return base
             else:
-                return Distinct(base, self._unique_keys)
+                raise RelationalAlgebraError(
+                    f"Base relation {base} is already unique on keys {base.unique_keys}, "
+                    f"but distinct operation declares it to be unique on {self.unique_keys}."
+                )
+        self._check_unique_keys_in_columns()
+        if unique_keys == self.unique_keys and base is self.base:
+            return self
+        else:
+            return Distinct(base, unique_keys)

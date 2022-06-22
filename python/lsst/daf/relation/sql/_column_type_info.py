@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, Mapping, Seque
 
 import sqlalchemy
 
-from .._column_tag import _T
+from .._columns import _T
 
 if TYPE_CHECKING:
     from .._engines import EngineTag

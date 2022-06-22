@@ -28,7 +28,7 @@ import dataclasses
 import itertools
 from typing import TYPE_CHECKING, AbstractSet, Any, Generic, Iterable
 
-from ._column_tag import _T
+from ._columns import _T
 
 if TYPE_CHECKING:
     from ._engines import EngineTag

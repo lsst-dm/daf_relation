@@ -21,9 +21,10 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnTag",)
+__all__ = ("ColumnTag", "UniqueKey")
 
-from typing import Hashable, Protocol, TypeVar
+import itertools
+from typing import AbstractSet, FrozenSet, Hashable, Protocol, TypeVar
 
 _T = TypeVar("_T", bound="ColumnTag")
 
@@ -31,3 +32,20 @@ _T = TypeVar("_T", bound="ColumnTag")
 class ColumnTag(Hashable, Protocol):
     def __str__(self) -> str:
         ...
+
+
+UniqueKey = FrozenSet[_T]
+
+
+def is_unique_key_covered(key: UniqueKey, base_keys: AbstractSet[UniqueKey]):
+    return key in base_keys or any(key.issuperset(base_key) for base_key in base_keys)
+
+
+def drop_covered_internal_unique_keys(keys: AbstractSet[UniqueKey]) -> set[UniqueKey]:
+    keys = set(keys)
+    while True:
+        to_drop = {k1 for k1, k2 in itertools.permutations(keys) if k1.issuperset(k2)}
+        if to_drop:
+            keys.difference_update(to_drop)
+        else:
+            return keys

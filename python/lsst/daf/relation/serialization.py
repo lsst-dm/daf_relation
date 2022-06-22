@@ -27,6 +27,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Any, Dict, Generic, Iterator
 
 from . import operations
+from ._columns import _T, UniqueKey
 from ._exceptions import RelationSerializationError
 from ._join_condition import JoinCondition
 from ._leaf import Leaf
@@ -35,7 +36,6 @@ from ._predicate import Predicate
 from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
-    from ._column_tag import _T
     from ._engines import EngineTag
     from ._relation import Relation
 
@@ -46,7 +46,7 @@ class MappingReader(Generic[_T]):
             case {"type": "distinct", "base": base, "unique_keys": unique_keys}:
                 return operations.Distinct(
                     self.read_relation(base), self.read_unique_keys(unique_keys)
-                ).checked(recursive=False)
+                ).checked_and_simplified(recursive=False)
             case {
                 "type": "leaf",
                 "name": str(name),
@@ -59,7 +59,7 @@ class MappingReader(Generic[_T]):
                     engine=self.read_engine(engine),
                     columns=self.read_columns(columns),
                     unique_keys=self.read_unique_keys(unique_keys),
-                ).checked(recursive=False)
+                ).checked_and_simplified(recursive=False)
             case {"type": "join", "engine": engine, "relations": relations, "conditions": conditions}:
                 return operations.Join(
                     self.read_engine(engine),
@@ -71,17 +71,17 @@ class MappingReader(Generic[_T]):
                         )
                     ),
                     conditions=self._read_raw_join_conditions(conditions),
-                ).checked(recursive=False)
+                ).checked_and_simplified(recursive=False)
             case {"type": "projection", "base": base, "columns": columns}:
                 return operations.Projection(
                     self.read_relation(base),
                     columns=frozenset(self.read_columns(columns)),
-                ).checked(recursive=False)
+                ).checked_and_simplified(recursive=False)
             case {"type": "selection", "base": base, "predicates": predicates}:
                 return operations.Selection(
                     self.read_relation(base),
                     predicates=self._read_raw_predicates(predicates),
-                ).checked(recursive=False)
+                ).checked_and_simplified(recursive=False)
             case {
                 "type": "slice",
                 "base": base,
@@ -94,11 +94,11 @@ class MappingReader(Generic[_T]):
                     order_by=self._read_raw_order_by(order_by),
                     offset=offset,
                     limit=limit,
-                ).checked(recursive=False)
+                ).checked_and_simplified(recursive=False)
             case {"type": "transfer", "base": base, "destination": destination}:
                 return operations.Transfer(
                     self.read_relation(base), destination=self.read_engine(destination)
-                ).checked(recursive=False)
+                ).checked_and_simplified(recursive=False)
             case {
                 "type": "union",
                 "engine": engine,
@@ -124,7 +124,7 @@ class MappingReader(Generic[_T]):
                             f"Expected an iterable representing doom messages, got {extra_doomed_by!r}.",
                         )
                     ),
-                ).checked(recursive=False)
+                ).checked_and_simplified(recursive=False)
             case _:
                 raise RelationSerializationError(
                     f"Expected mapping representing a relation, got {mapping!r}."
@@ -140,11 +140,11 @@ class MappingReader(Generic[_T]):
 
     @abstractmethod
     def read_leaf(
-        self, name: str, engine: EngineTag, columns: AbstractSet[_T], unique_keys: AbstractSet[frozenset[_T]]
+        self, name: str, engine: EngineTag, columns: AbstractSet[_T], unique_keys: AbstractSet[UniqueKey[_T]]
     ) -> Leaf[_T]:
         raise NotImplementedError()
 
-    def read_unique_keys(self, serialized: Any) -> AbstractSet[frozenset[_T]]:
+    def read_unique_keys(self, serialized: Any) -> AbstractSet[UniqueKey[_T]]:
         return {frozenset(self.read_columns(k)) for k in serialized}
 
     def read_join_condition(
@@ -339,5 +339,5 @@ class ToDict(RelationVisitor[_T, Dict[str, Any]]):
     def write_engine(self, engine: EngineTag) -> Any:
         return str(engine)
 
-    def write_unique_keys(self, unique_keys: AbstractSet[frozenset[_T]]) -> Any:
+    def write_unique_keys(self, unique_keys: AbstractSet[UniqueKey[_T]]) -> Any:
         return sorted(self.write_columns(key) for key in unique_keys)

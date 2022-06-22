@@ -27,12 +27,12 @@ from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
+from .._columns import _T, UniqueKey, is_unique_key_covered
 from .._engines import EngineTag, EngineTree
 from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._column_tag import _T
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -43,7 +43,7 @@ class Union(Relation[_T]):
         engine: EngineTag,
         columns: AbstractSet[_T],
         relations: tuple[Relation[_T], ...] = (),
-        unique_keys: AbstractSet[frozenset[_T]] = frozenset(),
+        unique_keys: AbstractSet[UniqueKey[_T]] = UniqueKey(),
         extra_doomed_by: frozenset[str] = frozenset(),
     ):
         self._engine = engine
@@ -62,7 +62,7 @@ class Union(Relation[_T]):
         return self._columns
 
     @property
-    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
         return self._unique_keys
 
     @property  # type: ignore
@@ -78,15 +78,36 @@ class Union(Relation[_T]):
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_union(self)
 
-    def check(self, *, recursive: bool = True) -> None:
-        self._check_unique_keys()
-        for relation in self.relations:
+    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        relations_flat: list[Relation[_T]] = []
+        extra_doomed_by_flat: set[str] = set()
+        any_changes = False
+        for original in self.relations:
             if recursive:
-                relation.check(recursive=True)
+                relation = original.checked_and_simplified(recursive=True)
+                any_changes = any_changes or relation is not original
+            else:
+                relation = original
+            if self.engine.tag.options.flatten_unions:
+                match relation:
+                    case Union(relations=relations, extra_doomed_by=extra_doomed_by):
+                        relations_flat.extend(relations)
+                        extra_doomed_by_flat.update(extra_doomed_by)
+                        any_changes = True
+                    case _:
+                        relations_flat.append(relation)
+            else:
+                relations_flat.append(relation)
+
+        if len(relations_flat) == 1 and not extra_doomed_by_flat:
+            return relations_flat[0]
+        if self.engine.tag.options.pairwise_unions_only:
+            if len(relations_flat) > 2:
+                raise EngineError(f"Engine {self.engine.tag} requires pairwise unions only.")
+        self._check_unique_keys_in_columns()
+        for relation in relations_flat:
             for key in self.unique_keys:
-                if key not in relation.unique_keys and not any(
-                    key.issuperset(relation_key) for relation_key in relation.unique_keys
-                ):
+                if not is_unique_key_covered(key, relation.unique_keys):
                     raise ColumnError(
                         f"Union is declared to have unique key {set(key)}, but "
                         f"member {relation} is not unique with those columns."
@@ -101,27 +122,7 @@ class Union(Relation[_T]):
                     f"Mismatched union columns: {set(relation.columns)} != {set(self.columns)} "
                     f"for relation {relation}."
                 )
-
-    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        relations_flat: list[Relation[_T]] = []
-        extra_doomed_by_flat: set[str] = set()
-        any_changes = False
-        for original in self.relations:
-            if recursive:
-                simplified = original.simplified(recursive=True)
-                any_changes = any_changes or simplified is not original
-            else:
-                simplified = original
-            match simplified:
-                case Union(relations=relations, extra_doomed_by=extra_doomed_by):
-                    relations_flat.extend(relations)
-                    extra_doomed_by_flat.update(extra_doomed_by)
-                    any_changes = True
-                case _:
-                    relations_flat.append(simplified)
-        if len(relations_flat) == 1 and not extra_doomed_by_flat:
-            return relations_flat[0]
-        elif not any_changes:
+        if not any_changes:
             return self
         else:
             return Union(

@@ -29,7 +29,8 @@ from typing import TYPE_CHECKING, Generic, Sequence
 import sqlalchemy
 
 from .. import operations
-from .._column_tag import _T
+from .._columns import _T
+from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
 from ._column_type_info import _L, ColumnTypeInfo
 from ._select_parts import SelectParts
@@ -85,19 +86,15 @@ class _ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], G
 
     def visit_slice(self, visited: operations.Slice[_T]) -> sqlalchemy.sql.expression.SelectBase:
         if self.order_by or self.offset or self.limit is not None:
-            # Use Slice.simplified to compose nested order_by, offset, and
-            # limit, and then execute with a visitor that doesn't apply any of
-            # these itself; that guarantees we'll use the else clause instead
-            # of this one on this call.
-            new_slice = operations.Slice(visited, tuple(self.order_by), self.offset, self.limit).simplified(
-                recursive=False
-            )
-            return new_slice.visit(dataclasses.replace(self, order_by=(), offset=0, limit=None))
+            # This visitor wants to impose its own slice operations on the
+            # final result.  Delegate to SelectParts, which will delegate back
+            # here using a visitor without any slice operations, and then wrap
+            # that in a subquery.
+            return self._use_select_parts(visited)
         else:
             # This visitor doesn't apply any slice operations, so we can use a
             # visitor that uses the slice's operations on its base.  If that
-            # base is itself a Slice (which can happen only if the relation
-            # isn't simplified), then we'll end up back in the `if` block
+            # base is itself a Slice, then we'll end up back in the `if` block
             # above, which will recurse back to this `else` block - but each
             # time we recurse, we pop one `Slice` off, and eventually we'll
             # hit some other kind of relation.
@@ -108,7 +105,7 @@ class _ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], G
             )
 
     def visit_transfer(self, visited: operations.Transfer) -> sqlalchemy.sql.expression.SelectBase:
-        raise NotImplementedError("SQL conversion only works on relation trees with no transfers.")
+        raise EngineError("SQL conversion only works on relation trees with no transfers.")
 
     def visit_union(self, visited: operations.Union[_T]) -> sqlalchemy.sql.expression.SelectBase:
         if not visited.relations:

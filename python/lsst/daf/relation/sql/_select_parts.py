@@ -24,14 +24,14 @@ from __future__ import annotations
 __all__ = ("SelectParts",)
 
 import dataclasses
-import itertools
 from collections import deque
 from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, Iterator, Mapping, Sequence, cast
 
 import sqlalchemy
 
 from .. import operations
-from .._column_tag import _T
+from .._columns import _T
+from .._exceptions import EngineError
 from .._leaf import Leaf
 from .._relation_visitor import RelationVisitor
 from ._column_type_info import _L, ColumnTypeInfo
@@ -182,7 +182,7 @@ class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         )
 
     def visit_transfer(self, visited: operations.Transfer) -> SelectParts[_T, _L]:
-        raise NotImplementedError("SQL conversion only works on relation trees with no transfers.")
+        raise EngineError("SQL conversion only works on relation trees with no transfers.")
 
     def visit_union(self, visited: operations.Union[_T]) -> SelectParts[_T, _L]:
         return SelectParts(

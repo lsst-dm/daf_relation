@@ -27,11 +27,11 @@ from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
+from .._columns import _T, UniqueKey
 from .._engines import EngineTag, EngineTree
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._column_tag import _T
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -51,7 +51,7 @@ class Transfer(Relation[_T]):
         return self.base.columns
 
     @property
-    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
         return self.base.unique_keys
 
     @property
@@ -61,14 +61,10 @@ class Transfer(Relation[_T]):
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_transfer(self)
 
-    def check(self, *, recursive: bool = True) -> None:
-        if recursive:
-            self.base.check(recursive=True)
-
-    def simplified(self, recursive: bool = True) -> Relation[_T]:
+    def checked_and_simplified(self, recursive: bool = True) -> Relation[_T]:
         base = self.base
         if recursive:
-            base = base.simplified(recursive=True)
+            base = base.checked_and_simplified(recursive=True)
         if base.engine == self.engine:
             return base
         match base:

@@ -23,14 +23,13 @@ from __future__ import annotations
 
 __all__ = ("Relation",)
 
-import itertools
 from abc import abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, TypeVar
 
+from ._columns import _T, UniqueKey
 from ._exceptions import ColumnError
 
 if TYPE_CHECKING:
-    from ._column_tag import _T
     from ._engines import EngineTag, EngineTree
     from ._join_condition import JoinCondition
     from ._order_by_term import OrderByTerm
@@ -46,21 +45,20 @@ class Relation(Generic[_T]):
     def make_unit(engine: EngineTag) -> Relation[_T]:
         from .operations import Join
 
-        return Join[_T](engine).assert_checked(recursive=False).assert_simplified(recursive=False)
+        return Join[_T](engine).assert_checked_and_simplified(recursive=False)
 
     @staticmethod
     def make_zero(
         engine: EngineTag,
         columns: AbstractSet[_T],
-        unique_keys: AbstractSet[frozenset[_T]] = frozenset(),
+        unique_keys: AbstractSet[UniqueKey[_T]] = frozenset(),
         doomed_by: AbstractSet[str] = frozenset(),
+        **kwargs: bool,
     ) -> Relation[_T]:
         from .operations import Union
 
-        return (
-            Union(engine, columns, (), unique_keys, frozenset(doomed_by))
-            .checked(recursive=False)
-            .assert_simplified(recursive=False)
+        return Union(engine, columns, (), unique_keys, frozenset(doomed_by)).checked_and_simplified(
+            recursive=False
         )
 
     @property
@@ -75,115 +73,81 @@ class Relation(Generic[_T]):
 
     @property
     @abstractmethod
-    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
         raise NotImplementedError()
 
     @property
     def doomed_by(self) -> AbstractSet[str]:
         return frozenset()
 
-    def distinct(self, unique_keys: AbstractSet[frozenset[_T]] | None = None):
+    def distinct(self, unique_keys: AbstractSet[UniqueKey[_T]] | None = None):
         if unique_keys is None:
-            unique_keys = {frozenset(self.columns)}
+            unique_keys = {UniqueKey(self.columns)}
 
         from .operations import Distinct
 
-        return Distinct(self, unique_keys).checked(recursive=False).simplified(recursive=True)
+        return Distinct(self, unique_keys).checked_and_simplified(recursive=False)
 
-    def join(
-        self,
-        *others: Relation[_T],
-        conditions: Iterable[JoinCondition[_T]] = (),
-    ) -> Relation[_T]:
+    def join(self, *others: Relation[_T], conditions: Iterable[JoinCondition[_T]] = ()) -> Relation[_T]:
         from .operations import Join
 
-        return (
-            Join(self.engine.tag, (self,) + others, conditions=frozenset(conditions))
-            .checked(recursive=False)
-            .simplified(recursive=False)
-        )
+        return Join(
+            self.engine.tag, (self,) + others, conditions=frozenset(conditions)
+        ).checked_and_simplified(recursive=False)
 
     def projection(self, columns: AbstractSet[_T]) -> Relation[_T]:
         from .operations import Projection
 
-        return Projection(self, frozenset(columns)).checked(recursive=False).simplified(recursive=False)
+        return Projection(self, frozenset(columns)).checked_and_simplified(recursive=False)
 
     def selection(self, *predicates: Predicate[_T]) -> Relation[_T]:
         from .operations import Selection
 
-        return Selection(self, frozenset(predicates)).checked(recursive=False).simplified(recursive=False)
+        return Selection(self, frozenset(predicates)).checked_and_simplified(recursive=False)
 
     def slice(
         self, order_by: Iterable[OrderByTerm[_T]], offset: int = 0, limit: int | None = None
     ) -> Relation[_T]:
         from .operations import Slice
 
-        return (
-            Slice(self, tuple(order_by), offset, limit).checked(recursive=False).simplified(recursive=False)
-        )
+        return Slice(self, tuple(order_by), offset, limit).checked_and_simplified(recursive=False)
 
     def transfer(self, engine: EngineTag) -> Relation[_T]:
         from .operations import Transfer
 
-        return Transfer(self, engine).checked(recursive=False).simplified(recursive=False)
+        return Transfer(self, engine).checked_and_simplified(recursive=False)
 
     def union(
-        self, *others: Relation[_T], unique_keys: AbstractSet[frozenset[_T]] = frozenset()
+        self, *others: Relation[_T], unique_keys: AbstractSet[UniqueKey[_T]] = frozenset()
     ) -> Relation[_T]:
         from .operations import Union
 
-        return (
-            Union(
-                self.engine.tag,
-                self.columns,
-                (self,) + others,
-                unique_keys=self.unique_keys,
-                extra_doomed_by=frozenset(),
-            )
-            .checked(recursive=False)
-            .simplified(recursive=False)
-        )
+        return Union(
+            self.engine.tag,
+            self.columns,
+            (self,) + others,
+            unique_keys=unique_keys,
+            extra_doomed_by=frozenset(),
+        ).checked_and_simplified(recursive=False)
 
     @abstractmethod
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def check(self, *, recursive: bool = True) -> None:
+    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
         raise NotImplementedError()
 
-    def checked(self: _S, *, recursive: bool = True) -> _S:
-        self.check(recursive=recursive)
-        return self
-
-    def assert_checked(self: _S, *, recursive: bool = True) -> _S:
-        if __debug__:
-            return self.checked(recursive=recursive)
-        return self
-
-    @abstractmethod
-    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        raise NotImplementedError()
-
-    def assert_simplified(self: _S, *, recursive: bool = True) -> _S:
+    def assert_checked_and_simplified(self: _S, *, recursive: bool = True) -> _S:
         assert (
-            self.simplified(recursive=recursive) is self
-        ), f"Relation {self} expected to be already simplified."
+            self.checked_and_simplified(recursive=recursive) is self
+        ), f"Relation {self} expected to be already checked and simplified."
         return self
 
-    def _check_unique_keys(self) -> None:
-        for k1, k2 in itertools.permutations(self.unique_keys, 2):
-            if not k1.issuperset(k2):
-                raise ColumnError(
-                    f"Relation {self} unique key {set(k1)} is redundant, "
-                    f"since {set(k2)} is already unique."
-                )
+    def _check_unique_keys_in_columns(self) -> None:
         for k in self.unique_keys:
             if not k.issubset(self.columns):
                 raise ColumnError(
                     f"Unique key {k} for relation {self} involves columns "
                     f"{set(k - self.columns)} not in the relation."
                 )
-
-    def is_unique_key_covered(self, key: frozenset[_T]) -> bool:
-        return key in self.unique_keys or any(key.issuperset(my_key) for my_key in self.unique_keys)

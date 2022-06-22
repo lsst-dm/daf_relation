@@ -21,14 +21,38 @@
 
 from __future__ import annotations
 
-__all__ = ("EngineTag", "EngineTree")
+__all__ = ("EngineTag", "EngineTree", "CheckAndSimplifyOptions")
 
 import dataclasses
 from typing import AbstractSet, Hashable, Iterator, Protocol
 
 
+@dataclasses.dataclass(frozen=True)
+class CheckAndSimplifyOptions:
+    flatten_joins: bool = True
+    flatten_unions: bool = True
+    pairwise_joins_only: bool = False
+    pairwise_unions_only: bool = False
+    sliced_sorts_only: bool = False
+    sorted_slices_only: bool = False
+
+    def __post_init__(self) -> None:
+        if self.pairwise_joins_only and self.flatten_joins:
+            raise ValueError(
+                "Inconsistent options: cannot require pairwise joins when joins are being flattened."
+            )
+        if self.pairwise_unions_only and self.flatten_unions:
+            raise ValueError(
+                "Inconsistent options: cannot require pairwise unions when unions are being flattened."
+            )
+
+
 class EngineTag(Hashable, Protocol):
     def __str__(self) -> str:
+        ...
+
+    @property
+    def options(self) -> CheckAndSimplifyOptions:
         ...
 
 

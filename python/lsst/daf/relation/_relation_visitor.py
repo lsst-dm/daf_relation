@@ -26,9 +26,10 @@ __all__ = ("RelationVisitor",)
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from ._columns import _T
+
 if TYPE_CHECKING:
     from . import operations
-    from ._column_tag import _T
     from ._leaf import Leaf
 
 _U = TypeVar("_U", covariant=True)

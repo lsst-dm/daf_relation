@@ -28,13 +28,13 @@ from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
+from .._columns import _T, UniqueKey
 from .._engines import EngineTag, EngineTree
 from .._exceptions import EngineError, RelationalAlgebraError
 from .._join_condition import JoinCondition
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._column_tag import _T
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -65,8 +65,8 @@ class Join(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
-        current_keys: set[frozenset[_T]] = set()
+    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
+        current_keys: set[UniqueKey[_T]] = set()
         for relation in self.relations:
             current_keys = {
                 key1.union(key2) for key1, key2 in itertools.product(current_keys, relation.unique_keys)
@@ -84,50 +84,52 @@ class Join(Relation[_T]):
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_join(self)
 
-    def check(self, *, recursive: bool = True) -> None:
-        for relation in self.relations:
-            if recursive:
-                relation.check(recursive=True)
-            if relation.engine != self.engine:
-                raise EngineError(
-                    f"Join member {relation} has engine {relation.engine}, while join has {self.engine}."
-                )
+    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        relations_flat: list[Relation[_T]] = []
+        conditions_flat: set[JoinCondition[_T]] = set()
+        any_changes = False
         for condition in self.conditions:
             if self.engine not in condition.state:
                 raise EngineError(
                     f"Join condition {condition} supports engine(s) {set(condition.state.keys())}, "
                     f"while join has {self.engine}."
                 )
-        conditions_to_do = set(self.conditions)
-        for relation in self.relations:
-            columns_in_others = set(itertools.chain(r.columns for r in self.relations if r is not relation))
-            conditions_to_do.difference_update(
-                JoinCondition.find_matching(relation.columns, columns_in_others, conditions_to_do)
-            )
-        if conditions_to_do:
-            raise RelationalAlgebraError(f"No match for join condition(s) {conditions_to_do}.")
-
-    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        relations_flat: list[Relation[_T]] = []
-        conditions_flat: set[JoinCondition[_T]] = set()
-        any_changes = False
         for original in self.relations:
             if recursive:
-                simplified = original.simplified(recursive=True)
-                any_changes = any_changes or simplified is not original
+                relation = original.checked_and_simplified(recursive=True)
+                any_changes = any_changes or relation is not original
             else:
-                simplified = original
-            match simplified:
-                case Join(relations=relations, conditions=conditions):
-                    relations_flat.extend(relations)
-                    conditions_flat.update(conditions)
-                    any_changes = True
-                case simplified:
-                    relations_flat.append(simplified)
+                relation = original
+            if self.engine.tag.options.flatten_joins:
+                match relation:
+                    case Join(relations=relations, conditions=conditions):
+                        relations_flat.extend(relations)
+                        conditions_flat.update(conditions)
+                        any_changes = True
+                    case _:
+                        relations_flat.append(relation)
+            else:
+                relations_flat.append(relation)
+        conditions_to_match = set(conditions_flat)
+        for relation in relations_flat:
+            columns_in_others = set(itertools.chain(r.columns for r in self.relations if r is not relation))
+            conditions_to_match.difference_update(
+                JoinCondition.find_matching(relation.columns, columns_in_others, conditions_to_match)
+            )
+            if relation.engine.tag != self.engine.tag:
+                raise EngineError(
+                    f"Join member {relation} has engine {relation.engine.tag}, "
+                    f"while join has {self.engine.tag}."
+                )
+        if conditions_to_match:
+            raise RelationalAlgebraError(f"No join order matches join condition(s) {conditions_to_match}.")
         if len(relations_flat) == 1:
-            assert not conditions_flat, "Should be guaranteed by previous Check visitor."
+            assert not conditions_flat, "Should be guaranteed by previous check on matching conditions."
             return relations_flat[0]
-        elif not any_changes:
+        if self.engine.tag.options.pairwise_joins_only:
+            if len(relations_flat) > 2:
+                raise EngineError(f"Engine {self.engine.tag} requires pairwise joins only.")
+        if not any_changes:
             return self
         else:
             return Join(self.engine.tag, tuple(relations_flat), frozenset(conditions_flat))

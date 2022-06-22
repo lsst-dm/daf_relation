@@ -25,11 +25,11 @@ __all__ = ("Slice",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
-from .._exceptions import ColumnError, EngineError, RelationalAlgebraError
+from .._columns import _T, UniqueKey
+from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._column_tag import _T
     from .._engines import EngineTree
     from .._order_by_term import OrderByTerm
     from .._relation_visitor import _U, RelationVisitor
@@ -52,7 +52,7 @@ class Slice(Relation[_T]):
         return self.base.columns
 
     @property
-    def unique_keys(self) -> AbstractSet[frozenset[_T]]:
+    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
         return self.base.unique_keys
 
     @property
@@ -66,15 +66,20 @@ class Slice(Relation[_T]):
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         return visitor.visit_slice(self)
 
-    def check(self, *, recursive: bool = True) -> None:
+    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        base = self.base
         if recursive:
-            self.base.check(recursive=True)
-        if not self.order_by:
-            raise RelationalAlgebraError("Cannot slice an unordered relation.")
-        if not self.offset and self.limit is None:
-            raise RelationalAlgebraError(
-                "Cannot order a relation unless it is being sliced with nontrivial offset and/or limit."
-            )
+            base = base.checked_and_simplified(recursive=True)
+        if not self.order_by and not self.offset and self.limit is None:
+            return base
+        if self.engine.tag.options.sliced_sorts_only:
+            if not self.offset and self.limit is None:
+                raise EngineError(
+                    "Cannot order a relation unless it is being sliced with nontrivial offset and/or limit."
+                )
+        if self.engine.tag.options.sorted_slices_only:
+            if not self.order_by:
+                raise EngineError("Cannot slice an unordered relation.")
         for o in self.order_by:
             if self.engine not in o.state:
                 raise EngineError(
@@ -86,27 +91,7 @@ class Slice(Relation[_T]):
                     f"Order-by term {o} for base relation {self.base} needs "
                     f"columns {o.columns_required - self.base.columns}."
                 )
-
-    def simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        base = self.base
-        if recursive:
-            base = base.simplified(recursive=True)
-        match base:
-            case Slice(base=base, order_by=order_by, offset=offset, limit=limit):
-                order_by_list = list(order_by)
-                order_by_list.extend(self.order_by)
-                combined_offset = self.offset + offset
-                if limit is not None:
-                    combined_limit: int | None
-                    if self.limit is not None:
-                        original_stop = self.offset + self.limit
-                        new_stop = offset + limit
-                        combined_stop = min(original_stop, new_stop)
-                        combined_limit = max(combined_stop - offset, 0)
-                    else:
-                        combined_limit = self.limit
-                return Slice(base, tuple(order_by_list), combined_offset, combined_limit)
-            case _:
-                if base is self.base:
-                    return self
-                return Slice(base, self.order_by, self.offset, self.limit)
+        if base is self.base:
+            return self
+        else:
+            return Slice(base, self.order_by, self.offset, self.limit)

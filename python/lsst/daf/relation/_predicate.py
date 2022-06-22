@@ -26,8 +26,9 @@ __all__ = ("Predicate",)
 import dataclasses
 from typing import TYPE_CHECKING, Any, Generic
 
+from ._columns import _T
+
 if TYPE_CHECKING:
-    from ._column_tag import _T
     from ._engines import EngineTag
 
 

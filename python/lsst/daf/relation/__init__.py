@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from ._column_tag import *
+from ._columns import *
 from ._exceptions import *
 from ._join_condition import *
 from ._leaf import *
