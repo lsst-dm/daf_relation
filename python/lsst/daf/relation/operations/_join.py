@@ -30,11 +30,11 @@ from lsst.utils.classes import cached_getter
 
 from .._engines import EngineTag, EngineTree
 from .._exceptions import EngineError, RelationalAlgebraError
+from .._join_condition import JoinCondition
 from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._column_tag import _T
-    from .._join_condition import JoinCondition
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -98,8 +98,14 @@ class Join(Relation[_T]):
                     f"Join condition {condition} supports engine(s) {set(condition.state.keys())}, "
                     f"while join has {self.engine}."
                 )
-            if not condition.match(self.relations):
-                raise RelationalAlgebraError(f"No match for join condition {condition}.")
+        conditions_to_do = set(self.conditions)
+        for relation in self.relations:
+            columns_in_others = set(itertools.chain(r.columns for r in self.relations if r is not relation))
+            conditions_to_do.difference_update(
+                JoinCondition.find_matching(relation.columns, columns_in_others, conditions_to_do)
+            )
+        if conditions_to_do:
+            raise RelationalAlgebraError(f"No match for join condition(s) {conditions_to_do}.")
 
     def simplified(self, *, recursive: bool = True) -> Relation[_T]:
         relations_flat: list[Relation[_T]] = []

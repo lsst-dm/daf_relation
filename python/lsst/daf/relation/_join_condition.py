@@ -26,12 +26,11 @@ __all__ = ("JoinCondition",)
 
 import dataclasses
 import itertools
-from typing import TYPE_CHECKING, Any, Generic, Iterable
+from typing import TYPE_CHECKING, AbstractSet, Any, Generic, Iterable
 
 if TYPE_CHECKING:
     from ._column_tag import _T
     from ._engines import EngineTag
-    from ._relation import Relation
 
 
 @dataclasses.dataclass(frozen=True)
@@ -40,10 +39,15 @@ class JoinCondition(Generic[_T]):
     columns_required: tuple[frozenset[_T], frozenset[_T]]
     state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
 
-    def match(self, relations: Iterable[Relation[_T]]) -> list[tuple[int, int]]:
-        c0, c1 = self.columns_required
-        result: list[tuple[int, int]] = []
-        for (i0, r0), (i1, r1) in itertools.permutations(enumerate(relations), 2):
-            if c0 <= r0.columns and c1 <= r1.columns:
-                result.append((i0, i1))
-        return result
+    def flipped(self) -> JoinCondition[_T]:
+        return dataclasses.replace(self, columns_required=self.columns_required[::-1])
+
+    @staticmethod
+    def find_matching(
+        columns0: AbstractSet[_T], columns1: AbstractSet[_T], /, conditions: Iterable[JoinCondition[_T]]
+    ) -> set[JoinCondition[_T]]:
+        return {
+            jc
+            for jc in itertools.chain(conditions, (c.flipped() for c in conditions))
+            if columns0 >= jc.columns_required[0] and columns1 >= jc.columns_required[1]
+        }
