@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("ColumnTag", "UniqueKey")
 
 import itertools
-from typing import AbstractSet, FrozenSet, Hashable, Protocol, TypeVar
+from typing import AbstractSet, Hashable, Protocol, TypeVar
 
 _T = TypeVar("_T", bound="ColumnTag")
 
@@ -34,7 +34,10 @@ class ColumnTag(Hashable, Protocol):
         ...
 
 
-UniqueKey = FrozenSet[_T]
+UniqueKey = frozenset
+"""Type alias for an immutable set of columns representing a unique constraint
+(`type`).
+"""
 
 
 def is_unique_key_covered(key: UniqueKey, base_keys: AbstractSet[UniqueKey]):
