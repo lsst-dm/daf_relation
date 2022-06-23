@@ -193,17 +193,11 @@ class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
     def _to_executable(
         self,
-        relation: Relation[_T],
-        distinct: bool = False,
-        order_by: Sequence[OrderByTerm[_T]] = (),
-        offset: int = 0,
-        limit: int | None = None,
+        relation: Relation[_T]
     ) -> sqlalchemy.sql.expression.SelectBase:
-        from ._to_executable import to_executable
+        from .to_executable import ToExecutable
 
-        return to_executable(
-            relation, self.column_types, distinct=distinct, order_by=order_by, offset=offset, limit=limit
-        )
+        return relation.visit(ToExecutable(self.column_types))
 
     def _sorted_join_terms(
         self, relations: Sequence[Relation[_T]], conditions: AbstractSet[JoinCondition[_T]]

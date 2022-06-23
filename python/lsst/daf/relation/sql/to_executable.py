@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("to_executable", "to_from_clause")
+__all__ = ("ToExecutable",)
 
 import dataclasses
 from typing import TYPE_CHECKING, Generic, Sequence
@@ -41,27 +41,8 @@ if TYPE_CHECKING:
     from .._relation import Relation
 
 
-def to_executable(
-    relation: Relation[_T],
-    column_types: ColumnTypeInfo[_T, _L],
-    *,
-    distinct: bool = False,
-    order_by: Sequence[OrderByTerm[_T]] = (),
-    offset: int = 0,
-    limit: int | None = None,
-) -> sqlalchemy.sql.expression.SelectBase:
-    return relation.visit(_ToExecutable(column_types, distinct, order_by, offset, limit))
-
-
-def to_from_clause(relation: Relation[_T], column_types: ColumnTypeInfo[_T, _L]) -> sqlalchemy.sql.FromClause:
-    select_parts = SelectParts.from_relation(relation, column_types)
-    if not select_parts.where and select_parts.columns_available is None:
-        return select_parts.from_clause
-    return select_parts.to_executable(relation, column_types).subquery()
-
-
 @dataclasses.dataclass(eq=False, slots=True)
-class _ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Generic[_T, _L]):
+class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Generic[_T, _L]):
 
     column_types: ColumnTypeInfo[_T, _L]
     distinct: bool = False
