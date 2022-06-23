@@ -21,10 +21,15 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnTypeInfo",)
+__all__ = (
+    "ColumnTypeInfo",
+    "JoinConditionState",
+    "OrderByTermState",
+    "PredicateState",
+)
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, Mapping, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, Mapping, Protocol, Sequence, TypeVar, cast
 
 import sqlalchemy
 
@@ -38,6 +43,32 @@ if TYPE_CHECKING:
 
 
 _L = TypeVar("_L")
+
+_L_contra = TypeVar("_L_contra", contravariant=True)
+
+
+class PredicateState(Protocol[_T, _L_contra]):
+    def __call__(
+        self, logical_columns: Mapping[_T, _L_contra], columns_required: AbstractSet[_T]
+    ) -> sqlalchemy.sql.ColumnElement:
+        ...
+
+
+class OrderByTermState(Protocol[_T, _L_contra]):
+    def __call__(
+        self, logical_columns: Mapping[_T, _L_contra], columns_required: AbstractSet[_T], ascending: bool
+    ) -> sqlalchemy.sql.ColumnElement:
+        ...
+
+
+class JoinConditionState(Protocol[_T, _L_contra]):
+    def __call__(
+        self,
+        logical_columns: tuple[Mapping[_T, _L_contra], Mapping[_T, _L_contra]],
+        columns_required: tuple[AbstractSet[_T], AbstractSet[_T]],
+        was_flipped: bool,
+    ) -> sqlalchemy.sql.ColumnElement:
+        ...
 
 
 class ColumnTypeInfo(Generic[_T, _L]):
@@ -64,7 +95,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
     def convert_order_by(
         self, engine: EngineTag, order_by: OrderByTerm[_T], logical_columns: Mapping[_T, _L]
     ) -> sqlalchemy.sql.ColumnElement:
-        callable = order_by.state.get(engine)
+        callable: OrderByTermState[_T, _L] | None = order_by.state.get(engine)
         if callable is not None:
             return callable(logical_columns, order_by.columns_required, order_by.ascending)
         elif len(order_by.columns_required) == 1:
@@ -80,7 +111,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
     def convert_predicate(
         self, engine: EngineTag, predicate: Predicate[_T], logical_columns: Mapping[_T, _L]
     ) -> Sequence[sqlalchemy.sql.ColumnElement]:
-        callable = predicate.state.get(engine)
+        callable: PredicateState[_T, _L] | None = predicate.state.get(engine)
         if callable is not None:
             return callable(logical_columns, predicate.columns_required)
         else:
@@ -95,9 +126,9 @@ class ColumnTypeInfo(Generic[_T, _L]):
         condition: JoinCondition[_T],
         logical_columns: tuple[Mapping[_T, _L], Mapping[_T, _L]],
     ) -> Sequence[sqlalchemy.sql.ColumnElement]:
-        callable = condition.state.get(engine)
+        callable: JoinConditionState[_T, _L] | None = condition.state.get(engine)
         if callable is not None:
-            return callable(logical_columns, condition.columns_required)
+            return callable(logical_columns, condition.columns_required, condition.was_flipped)
         else:
             raise NotImplementedError(
                 f"No default SQL implementation for Predicate {condition} "
