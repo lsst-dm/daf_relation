@@ -18,3 +18,24 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+__all__ = ("ProjectionRowIterable",)
+
+from typing import TYPE_CHECKING, Iterator
+
+from .._columns import _T
+from ._row_iterable import RowIterable
+
+if TYPE_CHECKING:
+    from ._typing import Row
+
+
+class ProjectionRowIterable(RowIterable[_T]):
+    def __init__(self, base: RowIterable[_T], columns: tuple[_T, ...]):
+        self.base = base
+        self.columns = columns
+
+    def __iter__(self) -> Iterator[Row[_T]]:
+        return ({k: row[k] for k in self.columns} for row in self.base)
