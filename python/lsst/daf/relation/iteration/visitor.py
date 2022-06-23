@@ -60,7 +60,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         return make_join_row_iterable(base_rows, next_rows, base_relation, next_relation, visited.conditions)
 
     def visit_leaf(self, visited: Leaf[_T]) -> RowIterable[_T]:
-        return visited.state
+        return visited.engine_state
 
     def visit_projection(self, visited: operations.Projection[_T]) -> RowIterable[_T]:
         return ProjectionRowIterable(visited.base.visit(self), tuple(visited.columns))
@@ -69,13 +69,15 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         rows = visited.base.visit(self)
         rows, predicates_used = rows.try_selection(visited.engine.tag, visited.predicates)
         remaining_predicates = visited.predicates - predicates_used
-        return SelectionRowIterable(rows, tuple(p.state[visited.engine.tag] for p in remaining_predicates))
+        return SelectionRowIterable(
+            rows, tuple(p.engine_state[visited.engine.tag] for p in remaining_predicates)
+        )
 
     def visit_slice(self, visited: operations.Slice[_T]) -> RowIterable[_T]:
         base_rows = visited.base.visit(self)
         rows_list = list(base_rows)
         for order_by_term in visited.order_by[::-1]:
-            sort_key: OrderByTermState[_T] = order_by_term.state[visited.engine.tag]
+            sort_key: OrderByTermState[_T] = order_by_term.engine_state[visited.engine.tag]
             rows_list.sort(key=sort_key, reverse=not order_by_term.ascending)
         if visited.limit is not None:
             stop = visited.offset + visited.limit

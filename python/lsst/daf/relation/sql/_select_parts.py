@@ -138,7 +138,7 @@ class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         )
 
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
-        return visited.state
+        return visited.engine_state
 
     def visit_join(self, visited: operations.Join[_T]) -> SelectParts[_T, _L]:
         if not visited.relations:

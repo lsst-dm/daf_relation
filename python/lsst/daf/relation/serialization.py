@@ -21,10 +21,10 @@
 
 from __future__ import annotations
 
-__all__ = ("MappingReader", "ToDict")
+__all__ = ("MappingReader", "DictWriter")
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Any, Dict, Generic, Iterator
+from typing import TYPE_CHECKING, AbstractSet, Any, Dict, Generic, Iterator, cast
 
 from . import operations
 from ._columns import _T, UniqueKey
@@ -53,12 +53,14 @@ class MappingReader(Generic[_T]):
                 "engine": engine,
                 "columns": columns,
                 "unique_keys": unique_keys,
+                **general_state,
             }:
                 return self.read_leaf(
                     name,
                     engine=self.read_engine(engine),
                     columns=self.read_columns(columns),
                     unique_keys=self.read_unique_keys(unique_keys),
+                    general_state=cast(dict[str, Any], general_state),
                 ).checked_and_simplified(recursive=False)
             case {"type": "join", "engine": engine, "relations": relations, "conditions": conditions}:
                 return operations.Join(
@@ -140,7 +142,12 @@ class MappingReader(Generic[_T]):
 
     @abstractmethod
     def read_leaf(
-        self, name: str, engine: EngineTag, columns: AbstractSet[_T], unique_keys: AbstractSet[UniqueKey[_T]]
+        self,
+        name: str,
+        engine: EngineTag,
+        general_state: dict[str, Any],
+        columns: AbstractSet[_T],
+        unique_keys: AbstractSet[UniqueKey[_T]],
     ) -> Leaf[_T]:
         raise NotImplementedError()
 
@@ -151,26 +158,29 @@ class MappingReader(Generic[_T]):
         self,
         name: str,
         columns_required: tuple[frozenset[_T], frozenset[_T]],
+        general_state: dict[str, Any],
         engines: AbstractSet[EngineTag],
     ) -> JoinCondition[_T]:
-        return JoinCondition(name, columns_required, dict.fromkeys(engines))
+        return JoinCondition(name, columns_required, general_state, dict.fromkeys(engines))
 
     def read_predicate(
         self,
         name: str,
         columns_required: frozenset[_T],
+        general_state: dict[str, Any],
         engines: AbstractSet[EngineTag],
     ) -> Predicate[_T]:
-        return Predicate(name, columns_required, dict.fromkeys(engines))
+        return Predicate(name, columns_required, general_state, dict.fromkeys(engines))
 
     def read_order_by_term(
         self,
         name: str,
         columns_required: frozenset[_T],
         ascending: bool,
+        general_state: dict[str, Any],
         engines: AbstractSet[EngineTag],
     ) -> OrderByTerm[_T]:
-        return OrderByTerm(name, columns_required, ascending, dict.fromkeys(engines))
+        return OrderByTerm(name, columns_required, ascending, general_state, dict.fromkeys(engines))
 
     def _iter(self, raw: Any, message: str) -> Iterator[Any]:
         if isinstance(raw, str):
@@ -186,12 +196,14 @@ class MappingReader(Generic[_T]):
             raw, f"Expected an iterable of serialized JoinCondition mappings, got {raw!r}."
         ):
             match mapping:
-                case {"name": str(name), "columns_required": [cr0, cr1], "engines": engines}:
+                case {"name": str(name), "columns_required": [cr0, cr1], "engines": engines, **general_state}:
                     result.add(
                         self.read_join_condition(
-                            name, (frozenset(self.read_columns(cr0)), frozenset(self.read_columns(cr1)))
-                        ),
-                        {self.read_engine(e) for e in engines},
+                            name,
+                            (frozenset(self.read_columns(cr0)), frozenset(self.read_columns(cr1))),
+                            cast(Dict[str, Any], general_state),
+                            {self.read_engine(e) for e in engines},
+                        )
                     )
                 case _:
                     raise RelationSerializationError(
@@ -205,11 +217,17 @@ class MappingReader(Generic[_T]):
             raw, f"Expected an iterable of serialized Predicate mappings, got {raw!r}."
         ):
             match mapping:
-                case {"name": str(name), "columns_required": columns_required, "engines": engines}:
+                case {
+                    "name": str(name),
+                    "columns_required": columns_required,
+                    "engines": engines,
+                    **general_state,
+                }:
                     result.add(
                         self.read_predicate(
                             name,
                             frozenset(self.read_columns(columns_required)),
+                            cast(Dict[str, Any], general_state),
                             {self.read_engine(e) for e in engines},
                         )
                     )
@@ -230,12 +248,14 @@ class MappingReader(Generic[_T]):
                     "columns_required": columns_required,
                     "ascending": bool(ascending),
                     "engines": engines,
+                    **general_state,
                 }:
                     result.append(
                         self.read_order_by_term(
                             name,
                             frozenset(self.read_columns(columns_required)),
                             ascending,
+                            cast(Dict[str, Any], general_state),
                             {self.read_engine(e) for e in engines},
                         )
                     )
@@ -246,7 +266,7 @@ class MappingReader(Generic[_T]):
         return tuple(result)
 
 
-class ToDict(RelationVisitor[_T, Dict[str, Any]]):
+class DictWriter(RelationVisitor[_T, Dict[str, Any]]):
     def visit_distinct(self, visited: operations.Distinct[_T]) -> dict[str, Any]:
         return {
             "type": "distinct",
@@ -272,7 +292,8 @@ class ToDict(RelationVisitor[_T, Dict[str, Any]]):
                 {
                     "name": jc.name,
                     "columns_required": [self.write_columns(cr) for cr in jc.columns_required],
-                    "engines": sorted(self.write_engine(engine) for engine in jc.state),
+                    "engines": sorted(self.write_engine(engine) for engine in jc.engine_state),
+                    **jc.general_state,
                 }
                 for jc in visited.conditions
             ),
@@ -293,7 +314,8 @@ class ToDict(RelationVisitor[_T, Dict[str, Any]]):
                 {
                     "name": p.name,
                     "columns_required": self.write_columns(p.columns_required),
-                    "engines": sorted(self.write_engine(engine) for engine in p.state),
+                    "engines": sorted(self.write_engine(engine) for engine in p.engine_state),
+                    **p.general_state,
                 }
                 for p in visited.predicates
             ),
@@ -308,7 +330,8 @@ class ToDict(RelationVisitor[_T, Dict[str, Any]]):
                     "name": o.name,
                     "columns_required": self.write_columns(o.columns_required),
                     "ascending": o.ascending,
-                    "engines": sorted(self.write_engine(engine) for engine in o.state),
+                    "engines": sorted(self.write_engine(engine) for engine in o.engine_state),
+                    **o.general_state,
                 }
                 for o in visited.order_by
             ],

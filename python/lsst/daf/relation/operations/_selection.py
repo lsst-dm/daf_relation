@@ -63,9 +63,9 @@ class Selection(Relation[_T]):
         if not self.predicates:
             return base
         for p in self.predicates:
-            if self.engine not in p.state:
+            if self.engine not in p.engine_state:
                 raise EngineError(
-                    f"Predicate {p} supports engine(s) {set(p.state.keys())}, "
+                    f"Predicate {p} supports engine(s) {set(p.engine_state.keys())}, "
                     f"while relation has {self.engine}."
                 )
             if not p.columns_required <= self.base.columns:

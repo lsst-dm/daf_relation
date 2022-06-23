@@ -72,7 +72,7 @@ def finish_join_row_iterable(
 ) -> RowIterable[_T]:
     if not missing_conditions:
         return base
-    return SelectionRowIterable(base, tuple(c.state[engine] for c in missing_conditions))
+    return SelectionRowIterable(base, tuple(c.engine_state[engine] for c in missing_conditions))
 
 
 class UniqueIndexJoinRowIterable(RowIterable[_T]):

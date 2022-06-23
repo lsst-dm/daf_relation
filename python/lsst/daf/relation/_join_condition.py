@@ -38,18 +38,24 @@ if TYPE_CHECKING:
 class JoinCondition(Generic[_T]):
     name: str
     columns_required: tuple[frozenset[_T], frozenset[_T]]
-    state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, repr=False)
+    general_state: dict[str, Any] = dataclasses.field(default_factory=dict)
+    engine_state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, repr=False)
     was_flipped: bool = dataclasses.field(default=False, repr=False)
 
     def __eq__(self, other: Any) -> bool:
         if self.__class__ == other.__class__:
             return self.name == other.name and (
                 frozenset(self.columns_required) == frozenset(other.columns_required)
+                and self.general_state == other.general_state
             )
         else:
             return NotImplemented
 
     def __hash__(self) -> int:
+        # general_state is part of equality comparison, but is expected to
+        # rarely play a role there (as it'll usually be empty).  Including it
+        # in the hash would be a pain (dict is not hashable) and not obviously
+        # helpful, since unequal things are allowed to have the same hash.
         return hash((self.name, frozenset(self.columns_required)))
 
     def flipped(self) -> JoinCondition[_T]:

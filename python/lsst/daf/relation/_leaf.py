@@ -39,13 +39,15 @@ class Leaf(Relation[_T]):
         self,
         name: str,
         engine: EngineTag,
-        state: Any,
+        general_state: dict[str, Any],
+        engine_state: Any,
         columns: AbstractSet[_T],
         unique_keys: AbstractSet[UniqueKey[_T]],
     ):
         self.name = name
+        self.general_state = general_state
         self._engine = EngineTree.build(engine)
-        self.state = state
+        self.engine_state = engine_state
         self._columns = columns
         self._unique_keys = unique_keys
 
@@ -73,5 +75,7 @@ class Leaf(Relation[_T]):
         self._check_unique_keys_in_columns()
         unique_keys = drop_covered_internal_unique_keys(self.unique_keys)
         if unique_keys != self.unique_keys:
-            return Leaf(self.name, self.engine.tag, self.state, self.columns, unique_keys)
+            return Leaf(
+                self.name, self.engine.tag, self.general_state, self.engine_state, self.columns, unique_keys
+            )
         return self

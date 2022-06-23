@@ -81,9 +81,9 @@ class Slice(Relation[_T]):
             if not self.order_by:
                 raise EngineError("Cannot slice an unordered relation.")
         for o in self.order_by:
-            if self.engine not in o.state:
+            if self.engine not in o.engine_state:
                 raise EngineError(
-                    f"Order-by term {o} supports engine(s) {set(o.state.keys())}, "
+                    f"Order-by term {o} supports engine(s) {set(o.engine_state.keys())}, "
                     f"while relation has {self.engine}."
                 )
             if not o.columns_required <= self.base.columns:

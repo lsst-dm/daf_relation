@@ -89,9 +89,9 @@ class Join(Relation[_T]):
         conditions_flat: set[JoinCondition[_T]] = set()
         any_changes = False
         for condition in self.conditions:
-            if self.engine not in condition.state:
+            if self.engine not in condition.engine_state:
                 raise EngineError(
-                    f"Join condition {condition} supports engine(s) {set(condition.state.keys())}, "
+                    f"Join condition {condition} supports engine(s) {set(condition.engine_state.keys())}, "
                     f"while join has {self.engine}."
                 )
         for original in self.relations:

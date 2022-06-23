@@ -36,4 +36,5 @@ if TYPE_CHECKING:
 class Predicate(Generic[_T]):
     name: str
     columns_required: frozenset[_T]
-    state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
+    general_state: dict[str, Any] = dataclasses.field(default_factory=dict, compare=True, hash=False)
+    engine_state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)

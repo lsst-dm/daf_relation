@@ -37,7 +37,8 @@ class OrderByTerm(Generic[_T]):
     name: str
     columns_required: frozenset[_T]
     ascending: bool = True
-    state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
+    general_state: dict[str, Any] = dataclasses.field(default_factory=dict)
+    engine_state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
 
     def reversed(self) -> OrderByTerm[_T]:
         return dataclasses.replace(self, ascending=not self.ascending)
