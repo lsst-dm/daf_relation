@@ -40,5 +40,8 @@ class OrderByTerm(Generic[_T]):
     general_state: dict[str, Any] = dataclasses.field(default_factory=dict)
     engine_state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
 
+    def __str__(self) -> str:
+        return self.name
+
     def reversed(self) -> OrderByTerm[_T]:
         return dataclasses.replace(self, ascending=not self.ascending)

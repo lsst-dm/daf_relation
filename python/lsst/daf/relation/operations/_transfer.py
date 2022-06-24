@@ -41,6 +41,9 @@ class Transfer(Relation[_T]):
         self.base = base
         self._destination = destination
 
+    def __str__(self) -> str:
+        return f"{self.base!s} → {self._destination!s}"
+
     @property  # type: ignore
     @cached_getter
     def engine(self) -> EngineTree:

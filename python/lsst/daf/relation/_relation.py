@@ -25,6 +25,7 @@ __all__ = ("Relation",)
 
 from abc import abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, TypeVar
+import json
 
 from ._columns import _T, UniqueKey
 from ._exceptions import ColumnError
@@ -53,13 +54,17 @@ class Relation(Generic[_T]):
         columns: AbstractSet[_T],
         unique_keys: AbstractSet[UniqueKey[_T]] = frozenset(),
         doomed_by: AbstractSet[str] = frozenset(),
-        **kwargs: bool,
     ) -> Relation[_T]:
         from .operations import Union
 
         return Union(engine, columns, (), unique_keys, frozenset(doomed_by)).checked_and_simplified(
             recursive=False
         )
+
+    def __repr__(self) -> str:
+        from .serialization import DictWriter
+
+        return json.dumps(self.visit(DictWriter()), indent=2)
 
     @property
     @abstractmethod

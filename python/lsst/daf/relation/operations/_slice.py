@@ -43,6 +43,12 @@ class Slice(Relation[_T]):
         self.offset = offset
         self.limit = limit
 
+    def __str__(self) -> str:
+        return (
+            f"slice({self.base!s}, order_by={', '.join(str(o) for o in self.order_by)}], "
+            f"offset={self.offset}, limit={self.limit})"
+        )
+
     @property
     def engine(self) -> EngineTree:
         return self.base.engine

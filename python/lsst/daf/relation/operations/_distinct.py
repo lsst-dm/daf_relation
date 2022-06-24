@@ -40,6 +40,9 @@ class Distinct(Relation[_T]):
         self.base = base
         self._unique_keys = unique_keys
 
+    def __str__(self) -> str:
+        return f"distinct {self.base!s}"
+
     @property
     def engine(self) -> EngineTree:
         return self.base.engine

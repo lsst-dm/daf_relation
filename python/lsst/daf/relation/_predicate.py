@@ -38,3 +38,6 @@ class Predicate(Generic[_T]):
     columns_required: frozenset[_T]
     general_state: dict[str, Any] = dataclasses.field(default_factory=dict, compare=True, hash=False)
     engine_state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
+
+    def __str__(self) -> str:
+        return self.name

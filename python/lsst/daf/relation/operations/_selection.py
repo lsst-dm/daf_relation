@@ -41,6 +41,9 @@ class Selection(Relation[_T]):
         self.base = base
         self.predicates = predicates
 
+    def __str__(self) -> str:
+        return f"σ({self.base!s}, {{{', '.join(str(p) for p in self.predicates)}}})"
+
     @property
     def engine(self) -> EngineTree:
         return self.base.engine

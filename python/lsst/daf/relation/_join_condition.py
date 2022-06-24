@@ -42,6 +42,9 @@ class JoinCondition(Generic[_T]):
     engine_state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, repr=False)
     was_flipped: bool = dataclasses.field(default=False, repr=False)
 
+    def __str__(self) -> str:
+        return self.name
+
     def __eq__(self, other: Any) -> bool:
         if self.__class__ == other.__class__:
             return self.name == other.name and (

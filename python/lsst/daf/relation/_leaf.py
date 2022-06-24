@@ -51,6 +51,9 @@ class Leaf(Relation[_T]):
         self._columns = columns
         self._unique_keys = unique_keys
 
+    def __str__(self) -> str:
+        return f"{self.name}@{self.engine.tag!s}"
+
     @property
     def engine(self) -> EngineTree:
         return self._engine

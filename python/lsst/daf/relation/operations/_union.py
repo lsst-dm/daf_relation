@@ -52,6 +52,9 @@ class Union(Relation[_T]):
         self._unique_keys = unique_keys
         self.extra_doomed_by = extra_doomed_by
 
+    def __str__(self) -> str:
+        return f"({'∪ '.join(str(r) for r in self.relations)})"
+
     @property  # type: ignore
     @cached_getter
     def engine(self) -> EngineTree:

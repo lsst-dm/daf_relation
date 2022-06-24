@@ -42,6 +42,9 @@ class Projection(Relation[_T]):
         self.base = base
         self._columns = columns
 
+    def __str__(self) -> str:
+        return f"Π({self.base!s}, {{{', '.join(str(c) for c in self.columns)}}})"
+
     @property
     def engine(self) -> EngineTree:
         return self.base.engine

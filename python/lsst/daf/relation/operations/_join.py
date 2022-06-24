@@ -50,6 +50,9 @@ class Join(Relation[_T]):
         self.relations = relations
         self.conditions = conditions
 
+    def __str__(self) -> str:
+        return f"({'⋈ '.join(str(r) for r in self.relations)})"
+
     @property  # type: ignore
     @cached_getter
     def engine(self) -> EngineTree:
