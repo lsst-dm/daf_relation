@@ -25,6 +25,7 @@ __all__ = (
     "EngineError",
     "ColumnError",
     "RelationalAlgebraError",
+    "RelationSerializationError",
 )
 
 
