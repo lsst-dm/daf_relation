@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, ClassVar, final
 from lsst.utils.classes import Singleton
 
 from .._columns import _T
-from .._engines import CheckAndSimplifyOptions
+from .._engines import EngineOptions
 from .._exceptions import EngineError
 from ._row_iterable import RowIterable
 from .visitor import IterationVisitor
@@ -48,7 +48,7 @@ class Engine(metaclass=Singleton):
     def __repr__(self) -> str:
         return "lsst.daf.relation.iteration.engine"
 
-    options: ClassVar[CheckAndSimplifyOptions] = CheckAndSimplifyOptions(
+    options: ClassVar[EngineOptions] = EngineOptions(
         flatten_joins=False,
         flatten_unions=True,
         pairwise_joins_only=True,

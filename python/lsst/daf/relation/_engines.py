@@ -21,14 +21,14 @@
 
 from __future__ import annotations
 
-__all__ = ("EngineTag", "EngineTree", "CheckAndSimplifyOptions")
+__all__ = ("EngineTag", "EngineTree", "EngineOptions")
 
 import dataclasses
 from typing import AbstractSet, Hashable, Iterator, Protocol
 
 
 @dataclasses.dataclass(frozen=True)
-class CheckAndSimplifyOptions:
+class EngineOptions:
     flatten_joins: bool = True
     flatten_unions: bool = True
     pairwise_joins_only: bool = False
@@ -52,7 +52,7 @@ class EngineTag(Hashable, Protocol):
         ...
 
     @property
-    def options(self) -> CheckAndSimplifyOptions:
+    def options(self) -> EngineOptions:
         ...
 
 
@@ -69,19 +69,24 @@ class EngineTree:
                 return source
         return cls(tag, sources)
 
-    def backtrack_from(self, tag: EngineTag) -> Iterator[EngineTag]:
+    def iter_from(self, tag: EngineTag) -> Iterator[EngineTag]:
         if tag == self.tag:
             yield tag
         else:
             for source in self.sources:
-                yield from source.backtrack_from(tag)
+                yield from source.iter_from(tag)
 
     @property
     def depth(self) -> int:
-        return 1 + max(source.depth for source in self.sources)
+        return 1 + max((source.depth for source in self.sources), default=0)
 
     def __contains__(self, tag: EngineTag) -> bool:
         if tag == self.tag:
             return True
         else:
             return any(tag in source for source in self.sources)
+
+    def __iter__(self) -> Iterator[EngineTag]:
+        for source in self.sources:
+            yield from source
+        yield self.tag

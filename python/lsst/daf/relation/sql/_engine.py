@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, ClassVar, Sequence, final
 import sqlalchemy
 
 from .._columns import _T
-from .._engines import CheckAndSimplifyOptions
+from .._engines import EngineOptions
 from .._exceptions import EngineError
 from .to_executable import ToExecutable
 from ._select_parts import SelectParts
@@ -49,7 +49,7 @@ class Engine:
     def __repr__(self) -> str:
         return f"lsst.daf.relation.sql.Engine({self.database!r})"
 
-    options: ClassVar[CheckAndSimplifyOptions] = CheckAndSimplifyOptions(
+    options: ClassVar[EngineOptions] = EngineOptions(
         flatten_joins=True,
         flatten_unions=True,
         pairwise_joins_only=False,
