@@ -42,6 +42,67 @@ _S = TypeVar("_S", bound="Relation")
 
 
 class Relation(Generic[_T]):
+    """An abstract interface for conceptual sets of tuples.
+
+    Relation is generic over the type used to represent its columns; see
+    `ColumnTag` for more information.
+
+    Notes
+    -----
+    The `Relation` class represents the core concept of `relational algebra`_:
+    a conceptual table with a well-defined set of columns and unique rows.  It
+    is rare for a Relation instance to actually correspond to a concrete
+    in-memory table, however; most derived Relation types actually represent an
+    operation on some other "base" relation or relations, forming an expression
+    tree that can be traversed by visitor classes (see `RelationVisitor`.
+
+    `Relation` is an unusual abstract base class in that the set of derived
+    types is closed to the `Leaf` class and the types in the
+    `~lsst.daf.relation.operations` subpackage; while external derived classes
+    are not explicitly prohibited (there's no graceful way to do that in
+    Python), much of the functionality of this package relies on the set of
+    derived types enumerated in the `RelationVisitor` interface.  Essentially,
+    instead of the types of relations in a tree being extensible, this package
+    treats things one can *do* with a relation tree as its primary extension
+    interface.
+
+    Relations are associated with "engines": systems that hold the actual data
+    a relation (at least) conceptually represents and can perform operations on
+    them to obtain the derived data.  These are identified by `EngineTag`
+    instances held by relation objects themselves, and the `sql` and
+    `iteration` subpackages provide partial implementations of engines for
+    relations backed by SQL databases (via `SQLAlchemy`_) and native Python
+    iterables, respectively.
+
+    It is up to an engine how strictly its operations adhere to relational
+    algebra operation definition.  SQL is formally defined in terms of
+    operations on "bags" or "multisets" whose rows are not unique and sometimes
+    ordered, while formal relations are always unordered and unique.  The
+    `Relation` interface has more a more permissive view of uniqueness to
+    facilitate interaction with SQL: `Relation` *may* have non-unique rows, but
+    any duplicates are not meaningful, and hence most operations may remove or
+    propagate duplicates at their discretion, though engines may make stronger
+    guarantees and most relations cannot introduce duplication.  Relation
+    instances do track when their rows are guaranteed to be unique, however.
+    It is also up to engines to determine how much their operations maintain
+    ordering.
+
+    The `Relation` base class provides factory functions that should generally
+    be used to construct derived instances (instead of the class constructors).
+    These factories perform checking and simplifification that can't be always
+    be done in constructors, because they can change the type of the operation
+    returned.  In rare cases, the `checked_and_simplified` and
+    `assert_checked_and_simplified` methods can be used instead to ensure the
+    invariants of derived types are satisfied.
+
+    Relations define `repr` to provide a complete (deserializable via
+    `serialization.MappingReader`) string representation, and `str` to provide
+    a compact but lossy string representation.
+
+    .. _relational algebra: https://en.wikipedia.org/wiki/Relational_algebra
+    .. _SQLAlchemy: https://www.sqlalchemy.org/
+    """
+
     @staticmethod
     def make_unit(engine: EngineTag) -> Relation[_T]:
         from .operations import Join

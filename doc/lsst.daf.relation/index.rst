@@ -49,3 +49,10 @@ Python API reference
 .. automodapi:: lsst.daf.relation
    :no-main-docstr:
    :no-inheritance-diagram:
+   :include-all-objects:
+
+.. automodapi:: lsst.daf.relation.operations
+   :no-main-docstr:
+   :no-inheritance-diagram:
+   :include-all-objects:
+
