@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("MappingReader", "DictWriter")
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Any, Dict, Generic, Iterator, cast
+from typing import TYPE_CHECKING, AbstractSet, Any, Generic, Iterator, cast
 
 from . import operations
 from ._columns import _T, UniqueKey
@@ -201,7 +201,7 @@ class MappingReader(Generic[_T]):
                         self.read_join_condition(
                             name,
                             (frozenset(self.read_columns(cr0)), frozenset(self.read_columns(cr1))),
-                            cast(Dict[str, Any], general_state),
+                            cast(dict[str, Any], general_state),
                             {self.read_engine(e) for e in engines},
                         )
                     )
@@ -227,7 +227,7 @@ class MappingReader(Generic[_T]):
                         self.read_predicate(
                             name,
                             frozenset(self.read_columns(columns_required)),
-                            cast(Dict[str, Any], general_state),
+                            cast(dict[str, Any], general_state),
                             {self.read_engine(e) for e in engines},
                         )
                     )
@@ -255,7 +255,7 @@ class MappingReader(Generic[_T]):
                             name,
                             frozenset(self.read_columns(columns_required)),
                             ascending,
-                            cast(Dict[str, Any], general_state),
+                            cast(dict[str, Any], general_state),
                             {self.read_engine(e) for e in engines},
                         )
                     )
@@ -266,7 +266,7 @@ class MappingReader(Generic[_T]):
         return tuple(result)
 
 
-class DictWriter(RelationVisitor[_T, Dict[str, Any]]):
+class DictWriter(RelationVisitor[_T, dict[str, Any]]):
     def visit_distinct(self, visited: operations.Distinct[_T]) -> dict[str, Any]:
         return {
             "type": "distinct",

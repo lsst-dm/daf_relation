@@ -32,12 +32,12 @@ __all__ = (
     "UniqueIndex",
 )
 
-from typing import Any, Mapping, Protocol, Sequence, Tuple
+from typing import Any, Mapping, Protocol, Sequence
 
 from .._columns import _T
 
 Row = Mapping[_T, Any]
-IndexKey = Tuple[Any, ...]
+IndexKey = tuple[Any, ...]
 UniqueIndex = Mapping[IndexKey, Row[_T]]
 SequenceIndex = Mapping[IndexKey, Sequence[Row[_T]]]
 
