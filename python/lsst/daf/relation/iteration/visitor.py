@@ -49,7 +49,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
 
     def visit_join(self, visited: operations.Join[_T]) -> RowIterable[_T]:
         if len(visited.relations) == 0:
-            return RowContainer([])
+            return RowContainer([{}])
         if len(visited.relations) == 1:
             return visited.relations[0].visit(self)
         if len(visited.relations) > 2:

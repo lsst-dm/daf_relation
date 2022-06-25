@@ -20,5 +20,5 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from ._column_type_info import *
-from ._select_parts import *
 from ._engine import *
+from ._select_parts import *

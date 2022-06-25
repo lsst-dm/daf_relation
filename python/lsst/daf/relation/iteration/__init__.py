@@ -25,7 +25,6 @@ from ._row_container import *
 from ._row_iterable import *
 from ._typing import *
 
-
 engine = Engine()
 """Singleton engine instance that treats relations as iterables of mappings
 (`IterationEngineTag`).

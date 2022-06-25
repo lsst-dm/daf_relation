@@ -53,8 +53,7 @@ class Engine(metaclass=Singleton):
         flatten_unions=True,
         pairwise_joins_only=True,
         pairwise_unions_only=False,
-        sliced_sorts_only=False,
-        sorted_slices_only=False,
+        can_sort=True,
     )
 
     def execute(self, relation: Relation[_T]) -> RowIterable[_T]:

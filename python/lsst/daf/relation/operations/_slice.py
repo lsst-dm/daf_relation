@@ -78,16 +78,10 @@ class Slice(Relation[_T]):
             base = base.checked_and_simplified(recursive=True)
         if not self.order_by and not self.offset and self.limit is None:
             return base
-        if self.engine.tag.options.sliced_sorts_only:
-            if not self.offset and self.limit is None:
-                raise EngineError(
-                    "Cannot order a relation unless it is being sliced with nontrivial offset and/or limit."
-                )
-        if self.engine.tag.options.sorted_slices_only:
-            if not self.order_by:
-                raise EngineError("Cannot slice an unordered relation.")
+        if self.order_by and not self.engine.tag.options.can_sort:
+            raise EngineError(f"Engine {self.engine.tag} does not support sorting.")
         for o in self.order_by:
-            if self.engine not in o.engine_state:
+            if self.engine.tag not in o.engine_state:
                 raise EngineError(
                     f"Order-by term {o} supports engine(s) {set(o.engine_state.keys())}, "
                     f"while relation has {self.engine}."

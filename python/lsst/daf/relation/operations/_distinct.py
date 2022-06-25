@@ -25,7 +25,7 @@ __all__ = ("Distinct",)
 
 from typing import TYPE_CHECKING, AbstractSet, final
 
-from .._columns import _T, UniqueKey, drop_covered_internal_unique_keys
+from .._columns import _T, UniqueKey, check_unique_keys_in_columns, drop_covered_internal_unique_keys
 from .._engines import EngineTree
 from .._exceptions import RelationalAlgebraError
 from .._relation import Relation
@@ -77,7 +77,7 @@ class Distinct(Relation[_T]):
                     f"Base relation {base} is already unique on keys {base.unique_keys}, "
                     f"but distinct operation declares it to be unique on {self.unique_keys}."
                 )
-        self._check_unique_keys_in_columns()
+        check_unique_keys_in_columns(self)
         if unique_keys == self.unique_keys and base is self.base:
             return self
         else:

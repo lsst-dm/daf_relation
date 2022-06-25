@@ -25,7 +25,7 @@ __all__ = ("Leaf",)
 
 from typing import TYPE_CHECKING, AbstractSet, Any, final
 
-from ._columns import _T, UniqueKey, drop_covered_internal_unique_keys
+from ._columns import _T, UniqueKey, check_unique_keys_in_columns, drop_covered_internal_unique_keys
 from ._engines import EngineTag, EngineTree
 from ._relation import Relation
 
@@ -75,7 +75,7 @@ class Leaf(Relation[_T]):
         recursive: bool = True,
         **kwargs: bool,
     ) -> Relation[_T]:
-        self._check_unique_keys_in_columns()
+        check_unique_keys_in_columns(self)
         unique_keys = drop_covered_internal_unique_keys(self.unique_keys)
         if unique_keys != self.unique_keys:
             return Leaf(

@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+"""Concrete `~lsst.daf.relation.Relation` derived types that represent
+relational algebra operations."""
+
 from ._distinct import *
 from ._join import *
 from ._projection import *

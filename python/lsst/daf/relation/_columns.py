@@ -21,12 +21,23 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnTag", "UniqueKey")
+__all__ = (
+    "ColumnTag",
+    "UniqueKey",
+    "check_unique_keys_in_columns",
+    "is_unique_key_covered",
+    "drop_covered_internal_unique_keys",
+)
 
 import itertools
-from typing import AbstractSet, Hashable, Protocol, TypeVar
+from typing import TYPE_CHECKING, AbstractSet, Hashable, Protocol, TypeVar
+
+from ._exceptions import ColumnError
 
 _T = TypeVar("_T", bound="ColumnTag")
+
+if TYPE_CHECKING:
+    from ._relation import Relation
 
 
 class ColumnTag(Hashable, Protocol):
@@ -38,6 +49,32 @@ UniqueKey = frozenset
 """Type alias for an immutable set of columns representing a unique constraint
 (`type`).
 """
+
+
+def check_unique_keys_in_columns(relation: Relation[_T]) -> None:
+    """Check that all unique key sets in a relation include only columns that
+    are actually in the relation.
+
+    This is a utility function for implementations of
+    `Relation.checked_and_simplified`; it should not be necessary for other
+    code to call it directly.
+
+    Parameters
+    ----------
+    relation : `Relation`
+        Relation to check.
+
+    Raises
+    ------
+    ColumnError
+        Raised if one or more columns in a unique key is not in the relation.
+    """
+    for k in relation.unique_keys:
+        if not k.issubset(relation.columns):
+            raise ColumnError(
+                f"Unique key {k} for relation {relation!r} involves columns "
+                f"{set(k - relation.columns)} not in the relation."
+            )
 
 
 def is_unique_key_covered(key: UniqueKey, base_keys: AbstractSet[UniqueKey]):

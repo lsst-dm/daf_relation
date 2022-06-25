@@ -100,19 +100,20 @@ class Join(Relation[_T]):
         for original in self.relations:
             if recursive:
                 relation = original.checked_and_simplified(recursive=True)
-                any_changes = any_changes or relation is not original
+                if relation is not original:
+                    any_changes = True
             else:
                 relation = original
-            if self.engine.tag.options.flatten_joins:
-                match relation:
-                    case Join(relations=relations, conditions=conditions):
-                        relations_flat.extend(relations)
-                        conditions_flat.update(conditions)
+            match relation:
+                case Join(relations=nested_relations, conditions=nested_conditions):
+                    if not nested_relations:
                         any_changes = True
-                    case _:
+                    elif self.engine.tag.options.flatten_joins:
+                        relations_flat.extend(nested_relations)
+                        conditions_flat.update(nested_conditions)
+                        any_changes = True
+                    else:
                         relations_flat.append(relation)
-            else:
-                relations_flat.append(relation)
         conditions_to_match = set(conditions_flat)
         for relation in relations_flat:
             columns_in_others = set(itertools.chain(r.columns for r in self.relations if r is not relation))

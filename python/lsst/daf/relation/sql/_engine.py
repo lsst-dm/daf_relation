@@ -31,13 +31,13 @@ import sqlalchemy
 from .._columns import _T
 from .._engines import EngineOptions
 from .._exceptions import EngineError
-from .to_executable import ToExecutable
 from ._select_parts import SelectParts
+from .to_executable import ToExecutable
 
 if TYPE_CHECKING:
-    from .._relation import Relation
     from .._order_by_term import OrderByTerm
-    from ._column_type_info import ColumnTypeInfo, _L
+    from .._relation import Relation
+    from ._column_type_info import _L, ColumnTypeInfo
 
 
 @final
@@ -54,8 +54,7 @@ class Engine:
         flatten_unions=True,
         pairwise_joins_only=False,
         pairwise_unions_only=False,
-        sliced_sorts_only=False,
-        sorted_slices_only=False,
+        can_sort=True,
     )
 
     def to_executable(

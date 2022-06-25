@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, AbstractSet, final
 
 from lsst.utils.classes import cached_getter
 
-from .._columns import _T, UniqueKey, is_unique_key_covered
+from .._columns import _T, UniqueKey, check_unique_keys_in_columns, is_unique_key_covered
 from .._engines import EngineTag, EngineTree
 from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
@@ -107,7 +107,7 @@ class Union(Relation[_T]):
         if self.engine.tag.options.pairwise_unions_only:
             if len(relations_flat) > 2:
                 raise EngineError(f"Engine {self.engine.tag} requires pairwise unions only.")
-        self._check_unique_keys_in_columns()
+        check_unique_keys_in_columns(self)
         for relation in relations_flat:
             for key in self.unique_keys:
                 if not is_unique_key_covered(key, relation.unique_keys):

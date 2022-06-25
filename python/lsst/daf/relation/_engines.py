@@ -33,8 +33,7 @@ class EngineOptions:
     flatten_unions: bool = True
     pairwise_joins_only: bool = False
     pairwise_unions_only: bool = False
-    sliced_sorts_only: bool = False
-    sorted_slices_only: bool = False
+    can_sort: bool = True
 
     def __post_init__(self) -> None:
         if self.pairwise_joins_only and self.flatten_joins:

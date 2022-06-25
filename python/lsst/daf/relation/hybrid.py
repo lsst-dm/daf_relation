@@ -23,18 +23,17 @@ from __future__ import annotations
 
 __all__ = ()
 
-from typing import Mapping, Protocol, TYPE_CHECKING
+from typing import TYPE_CHECKING, Mapping, Protocol
 
-
-from ._columns import _T
 from . import operations
-from ._relation_visitor import RelationVisitor
+from ._columns import _T
 from ._exceptions import EngineError
+from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
-    from ._relation import Relation
     from ._engines import EngineTag
     from ._leaf import Leaf
+    from ._relation import Relation
 
 
 class TransferFunction(Protocol[_T]):
