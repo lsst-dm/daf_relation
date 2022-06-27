@@ -58,7 +58,7 @@ class Union(Relation[_T]):
     @property  # type: ignore
     @cached_getter
     def engine(self) -> EngineTree:
-        return EngineTree.build(self._engine, {r.engine for r in self.relations})
+        return EngineTree.build_if_needed(self._engine, {r.engine for r in self.relations})
 
     @property
     def columns(self) -> AbstractSet[_T]:

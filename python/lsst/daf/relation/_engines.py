@@ -24,16 +24,50 @@ from __future__ import annotations
 __all__ = ("EngineTag", "EngineTree", "EngineOptions")
 
 import dataclasses
-from typing import AbstractSet, Hashable, Iterator, Protocol
+from collections.abc import Hashable, Iterator, Set
+from typing import Protocol
 
 
 @dataclasses.dataclass(frozen=True)
 class EngineOptions:
+    """A struct containing the options that engines can customize to control
+    form of the relations they accept.
+    """
+
     flatten_joins: bool = True
+    """Whether relation simplification should flatten all adjacent joins in a
+    tree into a single `operations.Join` instance (`bool`).
+    """
+
     flatten_unions: bool = True
+    """Whether relation simplification should flatten all adjacent unions in a
+    tree into a single `operations.Union` instance (`bool`).
+    """
+
     pairwise_joins_only: bool = False
+    """Whether relation checks should require that joins have exactly zero or
+    two elements (`bool`).
+
+    Zero-element joins are used to represent the unit relation (see
+    `Relation.make_unit`), and single-element joins are always simplified away.
+
+    Setting this to `True` requires `flatten_joins` to be `False`.
+    """
+
     pairwise_unions_only: bool = False
+    """Whether relation checks should require that unions have exactly zero or
+    two elements (`bool`).
+
+    Zero-element unions are used to represent the zero relations (see
+    `Relation.make_zero`), and single-element unions are always simplified
+    away.
+
+    Setting this to `True` requires `flatten_unions` to be `False`.
+    """
+
     can_sort: bool = True
+    """Whether this engine supports sorting (`bool`).
+    """
 
     def __post_init__(self) -> None:
         if self.pairwise_joins_only and self.flatten_joins:
@@ -47,36 +81,78 @@ class EngineOptions:
 
 
 class EngineTag(Hashable, Protocol):
+    """An interface for objects that serve as identifiers for engines.
+
+    Notes
+    -----
+    The "engines" used to evaluate relation trees do not have a common
+    interface, because they all do different things.  This class defines what
+    they must have in common: a hashable, equality-comparable class (preferably
+    lightweight with a concise `str` representation) used to identify the
+    engine in relations and the various helper objects that are also part of a
+    relation tree (`Predicate`, `JoinCondition`, `OrderByTerm`).
+
+    It is recommended that an engine's tag class also serve as the primary
+    entry point for its most important operations.
+    """
+
     def __str__(self) -> str:
         ...
 
     @property
     def options(self) -> EngineOptions:
+        """The options that specialize how this engine's relations are checked
+        and simplified (`EngineOptions`).
+        """
         ...
 
 
 @dataclasses.dataclass(frozen=True)
 class EngineTree:
+    """A simple tree class that summarizes the engines present in a relation
+    tree.
+
+    Iteration over an `EngineTree` is depth-first.
+    """
+
     tag: EngineTag
-    sources: AbstractSet[EngineTree]
+    """Tag for the engine of the relation this tree is directly attached to
+    (`EngineTag`).
+    """
+
+    sources: Set[EngineTree]
+    """Set of engine trees whose relations are connected to this one (generally
+    indirectly) via transfer operations (`~collections.abc.Set`
+    [ `EngineTree` ]).
+    """
 
     @classmethod
-    def build(cls, tag: EngineTag, sources: AbstractSet[EngineTree] = frozenset()) -> EngineTree:
+    def build_if_needed(cls, tag: EngineTag, sources: Set[EngineTree] = frozenset()) -> EngineTree:
+        """Construct a new tree or return an existing one.
+
+        Parameters
+        ----------
+        tag : `EngineTag`
+            Tag to serve as the root of the tree.
+        sources : `~collections.abc.Set` [ `EngineTree` ], optional
+            Set of source engine trees.  If this has only one element whose
+            root is already ``tag``, this element will be returned instead of
+            creating a new one.
+
+        Returns
+        -------
+        tree : `EngineTree`
+            Tree with ``tag`` as its root.
+        """
         if len(sources) == 1:
             (source,) = sources
             if source.tag == tag:
                 return source
         return cls(tag, sources)
 
-    def iter_from(self, tag: EngineTag) -> Iterator[EngineTag]:
-        if tag == self.tag:
-            yield tag
-        else:
-            for source in self.sources:
-                yield from source.iter_from(tag)
-
     @property
     def depth(self) -> int:
+        """The number of levels in the tree (`int`)."""
         return 1 + max((source.depth for source in self.sources), default=0)
 
     def __contains__(self, tag: EngineTag) -> bool:

@@ -56,14 +56,14 @@ class Relation(Generic[_T]):
     operation on some other "base" relation or relations, forming an expression
     tree that can be traversed by visitor classes (see `RelationVisitor`.
 
-    `Relation` is an unusual abstract base class in that the set of derived
-    types is closed to the `Leaf` class and the types in the `operations`
-    subpackage; while external derived classes are not explicitly prohibited
-    (there's no graceful way to do that in Python), much of the functionality
-    of this package relies on the set of derived types enumerated in the
-    `RelationVisitor` interface.  Essentially, instead of the types of
-    relations in a tree being extensible, this package treats things one can
-    *do* with a relation tree as its primary extension interface.
+    `Relation` is an unusual abstract base class in that inheritance from it is
+    closed to the `Leaf` class (and its subclasses) and the types in the
+    `operations` subpackage; while other external derived classes are not
+    explicitly prohibited (there's no graceful way to do that in Python), much
+    of the functionality of this package relies on the set of derived types
+    enumerated in the `RelationVisitor` interface.  Essentially, instead of the
+    types of relations in a tree being extensible, this package treats things
+    one can *do* with a relation tree as its primary extension interface.
 
     **Engines and operation definitions**
 
@@ -100,6 +100,8 @@ class Relation(Generic[_T]):
     factory methods on the `Relation` base class do not check and simplify
     recursively; they assume any given operations are already checked and
     simplified.
+
+    Relations should never be modified after construction.
 
     **String formatting**
 
@@ -303,7 +305,8 @@ class Relation(Generic[_T]):
             engine.
         RelationalAlgebraError
             Raised if a join condition's required columns cannot be satisfied
-            by any possible ordering of the join.
+            by any possible ordering of the join, or if any join condition has
+            `~JoinCondition.was_flipped` set to `True`.
 
         See Also
         --------

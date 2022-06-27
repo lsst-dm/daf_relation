@@ -21,12 +21,13 @@
 
 from __future__ import annotations
 
-__all__ = ()
+__all__ = ("RowContainer", "RowContainerLeaf")
 
-from typing import TYPE_CHECKING, Any, Collection, Iterator
+from typing import TYPE_CHECKING, Any, Collection
+from collections.abc import Iterator, Mapping
 
 from .._columns import _T, UniqueKey
-from ._row_iterable import UniqueIndexedRowIterable
+from ._row_iterable import RowIterableLeaf, UniqueIndexedRowIterable
 
 if TYPE_CHECKING:
     from ._typing import Row, UniqueIndex
@@ -58,3 +59,11 @@ class RowContainer(UniqueIndexedRowIterable[_T]):
         else:
             self._build_unique_index(key_columns, new_index)
             return new_index
+
+
+class RowContainerLeaf(RowIterableLeaf[_T]):
+    def __init__(self, *args: Any, rows: RowContainer[_T]):
+        super().__init__(*args, rows=rows)
+
+    def write_extra_to_mapping(self) -> Mapping[str, Any]:
+        return {"rows": [dict(row) for row in self.rows]}

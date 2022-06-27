@@ -23,13 +23,13 @@ from __future__ import annotations
 
 __all__ = ("IterationVisitor",)
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from .._columns import _T
 from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
 from ._row_container import RowContainer
-from ._row_iterable import RowIterable
+from ._row_iterable import RowIterable, RowIterableLeaf
 from .chain import ChainRowIterable
 from .joins import make_join_row_iterable
 from .projection import ProjectionRowIterable
@@ -60,7 +60,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         return make_join_row_iterable(base_rows, next_rows, base_relation, next_relation, visited.conditions)
 
     def visit_leaf(self, visited: Leaf[_T]) -> RowIterable[_T]:
-        return visited.engine_state
+        return cast(RowIterableLeaf[_T], visited).rows
 
     def visit_projection(self, visited: operations.Projection[_T]) -> RowIterable[_T]:
         return ProjectionRowIterable(visited.base.visit(self), tuple(visited.columns))

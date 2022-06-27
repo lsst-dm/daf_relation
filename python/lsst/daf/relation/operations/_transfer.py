@@ -47,7 +47,7 @@ class Transfer(Relation[_T]):
     @property  # type: ignore
     @cached_getter
     def engine(self) -> EngineTree:
-        return EngineTree.build(self._destination, {self.base.engine})
+        return EngineTree.build_if_needed(self._destination, {self.base.engine})
 
     @property
     def columns(self) -> AbstractSet[_T]:

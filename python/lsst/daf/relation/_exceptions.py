@@ -30,16 +30,24 @@ __all__ = (
 
 
 class RelationalAlgebraError(RuntimeError):
-    pass
+    """Exception type raised to indicate problems in the definition of a
+    relation tree.
+    """
 
 
 class EngineError(RelationalAlgebraError):
-    pass
+    """Exception type raised to indicate that a relation tree is incompatible
+    with an engine, or has inconsistent engines.
+    """
 
 
 class ColumnError(RelationalAlgebraError):
-    pass
+    """Exception type raiseed to indicate problems in a relation's columns
+    and/or unique keys.
+    """
 
 
 class RelationSerializationError(IOError):
-    pass
+    """Exception type raised to indicate problems serializing or deserializing
+    relations.
+    """

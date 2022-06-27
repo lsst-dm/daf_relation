@@ -21,11 +21,11 @@
 
 from __future__ import annotations
 
-__all__ = ("SelectParts",)
+__all__ = ("SelectParts", "SelectPartsLeaf")
 
 import dataclasses
 from collections import deque
-from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, Iterator, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, AbstractSet, Any, Generic, Iterable, Iterator, Mapping, Sequence, cast
 
 import sqlalchemy
 
@@ -126,6 +126,12 @@ class SelectParts(Generic[_T, _L]):
         return SelectParts(from_clause, where, columns_available)
 
 
+class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
+    def __init__(self, *args: Any, select_parts: SelectParts[_T, _L]):
+        super().__init__(*args)
+        self.select_parts = select_parts
+
+
 @dataclasses.dataclass(eq=False, slots=True)
 class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     column_types: ColumnTypeInfo[_T, _L]
@@ -138,7 +144,7 @@ class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         )
 
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
-        return visited.engine_state
+        return cast(SelectPartsLeaf[_T, _L], visited).select_parts
 
     def visit_join(self, visited: operations.Join[_T]) -> SelectParts[_T, _L]:
         if not visited.relations:
@@ -191,10 +197,7 @@ class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             None,
         )
 
-    def _to_executable(
-        self,
-        relation: Relation[_T]
-    ) -> sqlalchemy.sql.expression.SelectBase:
+    def _to_executable(self, relation: Relation[_T]) -> sqlalchemy.sql.expression.SelectBase:
         from .to_executable import ToExecutable
 
         return relation.visit(ToExecutable(self.column_types))

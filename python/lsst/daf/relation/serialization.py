@@ -19,12 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+"""Classes that transform `Relation` trees to and from nested mappings that are
+suitable for serialization via JSON or YAML.
+"""
+
 from __future__ import annotations
 
 __all__ = ("MappingReader", "DictWriter")
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Any, Generic, Iterator, cast
+from collections.abc import Set, Iterator
+from typing import TYPE_CHECKING, Any, Generic, cast
 
 from . import operations
 from ._columns import _T, UniqueKey
@@ -41,7 +46,58 @@ if TYPE_CHECKING:
 
 
 class MappingReader(Generic[_T]):
+    """An abstract base class for deserializing `Relation` trees from nested
+    mappings of builtin types.
+
+    Notes
+    -----
+    This base class provides a complete implementation of the main entry point
+    for deserialization, `read_relation`.  That delegates to two abstract
+    methods that must be implemented by derived classes:
+
+    - `read_columns`
+    - `read_engine`
+
+    and four non-abstract methods that will frequently be extended, by
+    overriding and delegating to `super` before modifying the result:
+
+    - `read_leaf`
+    - `read_predicate`
+    - `read_join_condition`
+    - `read_order_by_term`
+
+    These are responsible for handling the deserialization of `ColumnTag` and
+    `EngineTag` instances and for adding engine-specific state that is not
+    serialized to `Leaf`, `Predicate`, `JoinCondition`, and `OrderByTerm`
+    instances, respectively.
+
+    See Also
+    --------
+    DictWriter
+    """
+
     def read_relation(self, mapping: Any) -> Relation[_T]:
+        """Read a relation that has been serialized as a mapping.
+
+        Parameters
+        ----------
+        mapping : `Mapping`
+            A mapping with string keys that corresponds to a serialized
+            relation, typically produced by a `DictWriter` instance (and often
+            converted to/from JSON or YAML).  This is annotated as `typing.Any`
+            because this method takes responsibility for checking that it is
+            a mapping (with recognized keys).
+
+        Returns
+        -------
+        relation : `Relation`
+            Deserialized relation.
+
+        Raises
+        ------
+        RelationSerializationError
+            Raised if the given mapping is not a correctly serialized relation.
+        """
         match mapping:
             case {"type": "distinct", "base": base, "unique_keys": unique_keys}:
                 return operations.Distinct(
@@ -53,14 +109,14 @@ class MappingReader(Generic[_T]):
                 "engine": engine,
                 "columns": columns,
                 "unique_keys": unique_keys,
-                **general_state,
+                **extra,
             }:
                 return self.read_leaf(
                     name,
                     engine=self.read_engine(engine),
                     columns=self.read_columns(columns),
                     unique_keys=self.read_unique_keys(unique_keys),
-                    general_state=cast(dict[str, Any], general_state),
+                    extra=cast(dict[str, Any], extra),
                 ).checked_and_simplified(recursive=False)
             case {"type": "join", "engine": engine, "relations": relations, "conditions": conditions}:
                 return operations.Join(
@@ -133,34 +189,138 @@ class MappingReader(Generic[_T]):
                 )
 
     @abstractmethod
-    def read_columns(self, serialized: Any) -> AbstractSet[_T]:
+    def read_columns(self, serialized: Any) -> Set[_T]:
+        """Read a set of column tags.
+
+        Parameters
+        ----------
+        serialized
+            Serialized form of a set of columns.  The default `DictWriter`
+            implementation writes this as a `list` of `str`, but custom
+            reader/writers pairs are free to use any type compatible with
+            their serialization format.
+
+        Returns
+        -------
+        columns : `~collections.abc.Set` [ `ColumnTag` ]
+            Set of column tag objects.
+        """
         raise NotImplementedError()
 
     @abstractmethod
     def read_engine(self, serialized: Any) -> EngineTag:
+        """Read an engine tag.
+
+        Parameters
+        ----------
+        serialized
+            Serialized form of an engine tag.  The default `DictWriter`
+            implementation writes this as a `str`, but custom reader/writers
+            pairs are free to use any type compatible with their serialization
+            format.
+
+        Returns
+        -------
+        engine : `EngineTag`
+            Set of column tag objects.
+        """
         raise NotImplementedError()
 
-    @abstractmethod
+    def read_unique_keys(self, serialized: Any) -> Set[UniqueKey[_T]]:
+        """Read a relation's unique keys.
+
+        Parameters
+        ----------
+        serialized
+            Serialized form of a unique constraint.  The default `DictWriter`
+            implementation writes this as a `list`, with each element the type
+            it uses for a set of columns (by default a `list` of `str`).
+            Custom reader/writers pairs are free to use any type compatible
+            with their serialization format.
+
+        Returns
+        -------
+        columns : `~collections.abc.Set` [ `UniqueKey` ]
+            Set of unique keys.
+
+        Notes
+        -----
+        This method delegates to `read_columns` and should rarely need to be
+        overridden itself.
+        """
+        return {UniqueKey(self.read_columns(k)) for k in serialized}
+
     def read_leaf(
         self,
         name: str,
         engine: EngineTag,
-        general_state: dict[str, Any],
-        columns: AbstractSet[_T],
-        unique_keys: AbstractSet[UniqueKey[_T]],
+        columns: Set[_T],
+        unique_keys: Set[UniqueKey[_T]],
+        extra: dict[str, Any],
     ) -> Leaf[_T]:
-        raise NotImplementedError()
+        """Read a leaf relation.
 
-    def read_unique_keys(self, serialized: Any) -> AbstractSet[UniqueKey[_T]]:
-        return {frozenset(self.read_columns(k)) for k in serialized}
+        Parameters
+        ----------
+        name : `str`
+            Name of the leaf relation.
+        engine : `EngineTag`
+            Engine tag for the relation.  Implementations may change this as
+            long as the resulting relation tree still has consistent engines
+            throughout.
+        columns : `~collections.abc.Set` [ `ColumnTag` ]
+            Set of columns for the relation.
+        unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
+            Set of sets representing unique constraints.
+        extra : `dict`
+            Dictionary of extra engine-dependent state.
+
+        Returns
+        -------
+        leaf : `Leaf`
+            Leaf relation.  Derived classes will typically override and invoke
+            the appropriate `Leaf` subclass's `from_extra_mapping` based on the
+            engine.  The default implementation calls that method on the base
+            class, after first checking that ``extra`` is empty.
+        """
+        if extra:
+            raise RelationSerializationError(
+                f"Leaf relation {name!r} is safed with extra state {extra}, "
+                "but reader has not been specialized to support it."
+            )
+        return Leaf.from_extra_mapping(name, engine, columns, unique_keys, extra)
 
     def read_join_condition(
         self,
         name: str,
         columns_required: tuple[frozenset[_T], frozenset[_T]],
         general_state: dict[str, Any],
-        engines: AbstractSet[EngineTag],
+        engines: Set[EngineTag],
     ) -> JoinCondition[_T]:
+        """Read a join condition.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the join condition.
+        columns_required : `tuple`
+            A 2-element `tuple` of column sets, indicating the columns this
+            condition joins.
+        general_state : `dict`
+            Dictionary of engine-independent state.
+        engines : `~collections.abc.Set` [ `EngineTag` ]
+            Set of engines this condition is expected to support.
+            Implementations may drop or otherwise modify the supported engines
+            as long as the resulting relation tree still has consistent engines
+            throughout.
+
+        Returns
+        -------
+        condition : `JoinCondition`
+            Join condition with `~JoinCondition.engine_state` set to an empty
+            `dict`.  Derived classes will typically delegate to `super`, update
+            the engine-specific state themselves, and return the result.
+        """
         return JoinCondition(name, columns_required, general_state, dict.fromkeys(engines))
 
     def read_predicate(
@@ -168,8 +328,31 @@ class MappingReader(Generic[_T]):
         name: str,
         columns_required: frozenset[_T],
         general_state: dict[str, Any],
-        engines: AbstractSet[EngineTag],
+        engines: Set[EngineTag],
     ) -> Predicate[_T]:
+        """Read a predicate.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the predicate.
+        columns_required : `~collections.abc.Set` [ `ColumnTag` ]
+            Set of columns required to evaluate the predicate.
+        general_state : `dict`
+            Dictionary of engine-independent state.
+        engines : `~collections.abc.Set` [ `EngineTag` ]
+            Set of engines this predicate is expected to support.
+            Implementations may drop or otherwise modify the supported engines
+            as long as the resulting relation tree still has consistent engines
+            throughout.
+
+        Returns
+        -------
+        predicate : `Predicate`
+            Predicate with `~Predicate.engine_state` set to an empty `dict`.
+            Derived classes will typically delegate to `super`, update the
+            engine-specific state themselves, and return the result.
+        """
         return Predicate(name, columns_required, general_state, dict.fromkeys(engines))
 
     def read_order_by_term(
@@ -178,11 +361,57 @@ class MappingReader(Generic[_T]):
         columns_required: frozenset[_T],
         ascending: bool,
         general_state: dict[str, Any],
-        engines: AbstractSet[EngineTag],
+        engines: Set[EngineTag],
     ) -> OrderByTerm[_T]:
+        """Read an order-by term.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the order by term.
+        columns_required : `~collections.abc.Set` [ `ColumnTag` ]
+            Set of columns required to evaluate the order-by term.
+        ascending : `bool`
+            Whether the term should be sorted in ascending order.
+        general_state : `dict`
+            Dictionary of engine-independent state.
+        engines : `~collections.abc.Set` [ `EngineTag` ]
+            Set of engines this order-by term is expected to support.
+            Implementations may drop or otherwise modify the supported engines
+            as long as the resulting relation tree still has consistent engines
+            throughout.
+
+        Returns
+        -------
+        order_by_term : `OrderByTerm`
+            Order-by term with `~Predicate.engine_state` set to an empty
+            `dict`.  Derived classes will typically delegate to `super`, update
+            the engine-specific state themselves, and return the result.
+        """
         return OrderByTerm(name, columns_required, ascending, general_state, dict.fromkeys(engines))
 
     def _iter(self, raw: Any, message: str) -> Iterator[Any]:
+        """Attempt to iterate over the given non-`str` object, handling any
+        errors that occur.
+
+        Parameters
+        ----------
+        raw
+            Object to attempt to iterate over.
+        message : `str`
+            Message to use in the exception raised if it is a `str` or is not
+            iterable.
+
+        Returns
+        -------
+        iterator : `Iterator`
+            An iterator over ``raw``.
+
+        Raises
+        ------
+        RelationSerializationError
+            Raised if ``raw`` is a ``str`` instance or if it is not iterable.
+        """
         if isinstance(raw, str):
             raise RelationSerializationError(message)
         try:
@@ -191,6 +420,21 @@ class MappingReader(Generic[_T]):
             raise RelationSerializationError(message) from None
 
     def _read_raw_join_conditions(self, raw: Any) -> frozenset[JoinCondition[_T]]:
+        """Read a set of `JoinCondition` instances.
+
+        This method delegates to `read_join_condition` and should not be
+        overridden or even called by derived classes.
+
+        Parameters
+        ----------
+        raw
+            Iterable expected to contain serialized `JoinCondition` objects.
+
+        Returns
+        -------
+        conditions : `frozenset` [ `JoinCondition` ]
+            Set of `JoinCondition`objects.
+        """
         result: set[JoinCondition[_T]] = set()
         for mapping in self._iter(
             raw, f"Expected an iterable of serialized JoinCondition mappings, got {raw!r}."
@@ -212,6 +456,21 @@ class MappingReader(Generic[_T]):
         return frozenset(result)
 
     def _read_raw_predicates(self, raw: Any) -> frozenset[Predicate[_T]]:
+        """Read a set of `Predicate` instances.
+
+        This method delegates to `read_predicate` and should not be
+        overridden or even called by derived classes.
+
+        Parameters
+        ----------
+        raw
+            Iterable expected to contain serialized `Predicate` objects.
+
+        Returns
+        -------
+        predicates : `frozenset` [ `Predicate` ]
+            Set of `Predicate`objects.
+        """
         result: set[Predicate[_T]] = set()
         for mapping in self._iter(
             raw, f"Expected an iterable of serialized Predicate mappings, got {raw!r}."
@@ -238,6 +497,21 @@ class MappingReader(Generic[_T]):
         return frozenset(result)
 
     def _read_raw_order_by(self, raw: Any) -> tuple[OrderByTerm[_T], ...]:
+        """Read a set of `OrderByTerm` instances.
+
+        This method delegates to `read_order_by_term` and should not be
+        overridden or even called by derived classes.
+
+        Parameters
+        ----------
+        raw
+            Iterable expected to contain serialized `OrderByTerm` objects.
+
+        Returns
+        -------
+        order_by : `tuple` [ `OrderByTerm`, ... ]
+            Tuple of `OrderByTerm`objects.
+        """
         result: list[OrderByTerm[_T]] = []
         for mapping in self._iter(
             raw, f"Expected an iterable of serialized OrderByTerm mappings, got {raw!r}."
@@ -267,7 +541,33 @@ class MappingReader(Generic[_T]):
 
 
 class DictWriter(RelationVisitor[_T, dict[str, Any]]):
+    """A visitor class that transforms a relation tree into a nested dictionary
+    suitable for serialization via JSON, YAML, or similar formats.
+
+    Notes
+    -----
+    Unlike its reading counterpart `MappingReader`, `DictWriter` is a concrete
+    class that often won't need to be subclassed, because it can delegate more
+    work to the extension types it is serializing:
+
+    - Engine-specific `Leaf` types are handled by calling
+      `Leaf.write_extra_to_mapping`;
+    - `ColumnTag` and `EngineTag` instances are formatted with `str` (which can
+      be overridden by reimplementing `write_columns` and `write_engine`).
+
+    `DictWriter` sorts all iterables of `ColumnTag`, `Relation`,
+    `JoinCondition`, `OrderByTerm`, and `Predicate` as it saves them to make
+    the serialized form more deterministic, but it does not descend into
+    dictionaries (e.g. `Predicate.general_state`) to sort iterables within
+    them.
+
+    See Also
+    --------
+    MappingReader
+    """
+
     def visit_distinct(self, visited: operations.Distinct[_T]) -> dict[str, Any]:
+        # Docstring inherited.
         return {
             "type": "distinct",
             "base": visited.base.visit(self),
@@ -275,15 +575,18 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         }
 
     def visit_leaf(self, visited: Leaf[_T]) -> dict[str, Any]:
+        # Docstring inherited.
         return {
             "type": "leaf",
             "name": visited.name,
             "engine": self.write_engine(visited.engine.tag),
             "columns": self.write_columns(visited.columns),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
+            **visited.write_extra_to_mapping(),
         }
 
     def visit_join(self, visited: operations.Join[_T]) -> dict[str, Any]:
+        # Docstring inherited.
         return {
             "type": "join",
             "engine": self.write_engine(visited.engine.tag),
@@ -300,6 +603,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         }
 
     def visit_projection(self, visited: operations.Projection[_T]) -> dict[str, Any]:
+        # Docstring inherited.
         return {
             "type": "projection",
             "base": visited.base.visit(self),
@@ -307,6 +611,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         }
 
     def visit_selection(self, visited: operations.Selection[_T]) -> dict[str, Any]:
+        # Docstring inherited.
         return {
             "type": "selection",
             "base": visited.base.visit(self),
@@ -322,6 +627,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         }
 
     def visit_slice(self, visited: operations.Slice[_T]) -> dict[str, Any]:
+        # Docstring inherited.
         return {
             "type": "slice",
             "base": visited.base.visit(self),
@@ -340,6 +646,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         }
 
     def visit_transfer(self, visited: operations.Transfer) -> dict[str, Any]:
+        # Docstring inherited.
         return {
             "type": "transfer",
             "base": visited.base.visit(self),
@@ -347,6 +654,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         }
 
     def visit_union(self, visited: operations.Union[_T]) -> dict[str, Any]:
+        # Docstring inherited.
         return {
             "type": "union",
             "engine": self.write_engine(visited.engine.tag),
@@ -356,11 +664,53 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "extra_doomed_by": sorted(visited.extra_doomed_by),
         }
 
-    def write_columns(self, columns: AbstractSet[_T]) -> Any:
+    def write_columns(self, columns: Set[_T]) -> Any:
+        """Convert a set of column tags to a serializable type.
+
+        Parameters
+        ----------
+        columns : `~collections.abc.Set` [ `ColumnTag` ]
+            Set of column tags to save.
+
+        Returns
+        -------
+        serialization
+            Serializable object (`list`, `dict`, `str`, etc.) representing the
+            columns.  The default implementation returns a sorted `list` of
+            the `str` representation of each column tag.
+        """
         return sorted(str(t) for t in columns)
 
     def write_engine(self, engine: EngineTag) -> Any:
+        """Convert an engine tag to a serializable type.
+
+        Parameters
+        ----------
+        engine : `EngineTag`
+            Engine tag to save.
+
+        Returns
+        -------
+        serialization
+            Serializable object (`list`, `dict`, `str`, etc.) representing the
+            engine tag.  The default implementation returns the `str`
+            representation.
+        """
         return str(engine)
 
-    def write_unique_keys(self, unique_keys: AbstractSet[UniqueKey[_T]]) -> Any:
+    def write_unique_keys(self, unique_keys: Set[UniqueKey[_T]]) -> Any:
+        """Convert set of unique keys to a serializable type.
+
+        Parameters
+        ----------
+        unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
+            Set of unique keys to save.
+
+        Returns
+        -------
+        serialization
+            Serializable object (`list`, `dict`, `str`, etc.) representing the
+            set of keys.  The default implementation calls `write_columns` on
+            each key and returns a sorted list of the results.
+        """
         return sorted(self.write_columns(key) for key in unique_keys)

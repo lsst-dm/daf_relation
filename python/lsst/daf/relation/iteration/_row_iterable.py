@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = (
     "RowIterable",
+    "RowIterableLeaf",
     "UniqueIndexedRowIterable",
 )
 
@@ -34,6 +35,7 @@ from .._engines import EngineTag
 from .._join_condition import JoinCondition
 from .._predicate import Predicate
 from .._relation import Relation
+from .._leaf import Leaf
 
 if TYPE_CHECKING:
     from ._typing import Row, UniqueIndex
@@ -77,3 +79,9 @@ class UniqueIndexedRowIterable(RowIterable[_T]):
     @abstractmethod
     def get_unique_index(self, key_columns: UniqueKey[_T]) -> UniqueIndex[_T]:
         raise NotImplementedError()
+
+
+class RowIterableLeaf(Leaf[_T]):
+    def __init__(self, *args: Any, rows: RowIterable):
+        super().__init__(*args)
+        self.rows = rows

@@ -55,3 +55,7 @@ Python API reference
    :no-inheritance-diagram:
    :include-all-objects:
 
+.. automodapi:: lsst.daf.relation.serialization
+   :no-inheritance-diagram:
+   :include-all-objects:
+

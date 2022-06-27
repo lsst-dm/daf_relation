@@ -34,14 +34,60 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True)
 class OrderByTerm(Generic[_T]):
+    """A helper struct for relation trees that represents a a sorting
+    expression.
+
+    Notes
+    -----
+    Like other relation helpers (`Predicate`, `JoinCondition`), a single
+    `OrderByTerm` instance can support multiple engines, and store custom
+    state for each of these.
+    """
+
     name: str
+    """Name of the join condition (`str`).
+
+    This is used as the `str` representation, and is included in both equality
+    comparison and serialization.
+    """
+
     columns_required: frozenset[_T]
+    """The columns required to compute this expression (`frozenset`).
+    """
+
     ascending: bool = True
+    """Whether the expression should be sorted ascending (`True`) or descending
+    (`False`).
+    """
+
     general_state: dict[str, Any] = dataclasses.field(default_factory=dict)
+    """State for the order by term that is independent of any engine (`dict`).
+
+    This state is included in equality comparison and serialization.  To
+    support serialization via nested dictionary formats like JSON or YAML, this
+    must (recursively) contain only types supported by that format.
+    """
+
     engine_state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
+    """State for the order by term that is engine-dependent.
+
+    This state is not included in equality comparison or serialization.
+    Instead, concrete implementations of `serialization.MappingReader` are
+    expected to reconstruct any needed per-engine state from `name`,
+    `columns_required`, and `general_state`.
+
+    Values are frequently callables with engine-specific signatures.
+    """
 
     def __str__(self) -> str:
         return self.name
 
     def reversed(self) -> OrderByTerm[_T]:
+        """Return a copy of this order by term with `ascending` inverted.
+
+        Returns
+        -------
+        reversed : `OrderByTerm`
+            A copy with `ascending` inverted.
+        """
         return dataclasses.replace(self, ascending=not self.ascending)

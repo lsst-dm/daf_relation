@@ -56,7 +56,7 @@ class Join(Relation[_T]):
     @property  # type: ignore
     @cached_getter
     def engine(self) -> EngineTree:
-        return EngineTree.build(self._engine, {r.engine for r in self.relations})
+        return EngineTree.build_if_needed(self._engine, {r.engine for r in self.relations})
 
     @property  # type: ignore
     @cached_getter
@@ -92,6 +92,11 @@ class Join(Relation[_T]):
         conditions_flat: set[JoinCondition[_T]] = set()
         any_changes = False
         for condition in self.conditions:
+            if condition.was_flipped:
+                raise RelationalAlgebraError(
+                    f"Join condition {condition} was flipped; only unflipped "
+                    "conditions should be added to relations."
+                )
             if self.engine not in condition.engine_state:
                 raise EngineError(
                     f"Join condition {condition} supports engine(s) {set(condition.engine_state.keys())}, "
