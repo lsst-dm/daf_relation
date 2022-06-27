@@ -23,9 +23,10 @@ from __future__ import annotations
 
 __all__ = ("Union",)
 
-from typing import TYPE_CHECKING, AbstractSet, final
+from collections.abc import Set
+from typing import TYPE_CHECKING, final
 
-from lsst.utils.classes import cached_getter
+from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey, check_unique_keys_in_columns, is_unique_key_covered
 from .._engines import EngineTag, EngineTree
@@ -37,13 +38,61 @@ if TYPE_CHECKING:
 
 
 @final
+@immutable
 class Union(Relation[_T]):
+    """An operation `Relation` that combines the rows of its input relations.
+
+    Parameters
+    ----------
+    engine : `EngineTag`
+        Engine the join is performed in.  This must be the same as the engine
+        of all input relations.
+    columns : `~collections.abc.Set` [ `ColumnTag` ]
+        Set of columns for this relation; all input relations must have the
+        same columns already.
+    relations : `tuple` [ `Relation` , ... ]
+        Input relations to combine.
+    unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
+        Set of sets that represent multi-column unique constraints that will be
+        *naturally* satisfied by this union, even if the engine does not take
+        any extra action to remove duplicates.  If not provided or empty, the
+        returned relation does not guarantee uniqueness.
+    extra_doomed_by : `frozenset` [ `str` ]
+        Diagnostic messages that can be used to report why the relation
+        has no rows when that is the case.  This should generally be provided
+        when there are no relations.  When there are other relations, it is
+        only used as (part of) the `doomed_by` property when those relations
+        also yield no rows.
+
+    Notes
+    -----
+    Like other operations, `Union` objects should only be constructed directly
+    by code that can easily guarantee their `checked_and_simplify` invariants;
+    in all other contexts, the `Relation.union` factory should be used instead.
+
+    Union objects with no relations are permitted (with no conditions, either),
+    and are used to represent the "unit relation" (see `Relation.make_zero`),
+    though these are often simplified out after they are added to larger
+    relation trees.  Union objects with one relation are not permitted; these
+    should always be simplified out as a no-op.  Some relations may prohibit
+    unions with more than two relations (see
+    `EngineOptions.pairwise_unions_only`).
+
+    This union operation corresponds SQL's ``UNION ALL``, because it does not
+    force unique rows in the result (at most it can be told when unique rows
+    naturally occur).  Use ``union(...).distinct(...)`` for an operation that
+    maps to SQL's ``UNION``.
+
+    See `Relation.union` for the `checked_and_simplified` behavior for this
+    class.
+    """
+
     def __init__(
         self,
         engine: EngineTag,
-        columns: AbstractSet[_T],
+        columns: Set[_T],
         relations: tuple[Relation[_T], ...] = (),
-        unique_keys: AbstractSet[UniqueKey[_T]] = UniqueKey(),
+        unique_keys: Set[UniqueKey[_T]] = UniqueKey(),
         extra_doomed_by: frozenset[str] = frozenset(),
     ):
         self._engine = engine
@@ -55,22 +104,37 @@ class Union(Relation[_T]):
     def __str__(self) -> str:
         return f"({'∪ '.join(str(r) for r in self.relations)})"
 
+    relations: tuple[Relation[_T], ...]
+    """Input relations for the union (`tuple` [ `Relation`, ... ])."""
+
+    extra_doomed_by: frozenset[str]
+    """Diagnostic messages that can be used to report why the relation
+    has no rows, when that is the case (`~collections.abc.Set` [ `str` ]).
+
+    This is included in `doomed_by` only when there are no input relations or
+    all input relations also have no rows.
+    """
+
     @property  # type: ignore
     @cached_getter
     def engine(self) -> EngineTree:
+        # Docstring inherited.
         return EngineTree.build_if_needed(self._engine, {r.engine for r in self.relations})
 
     @property
-    def columns(self) -> AbstractSet[_T]:
+    def columns(self) -> Set[_T]:
+        # Docstring inherited.
         return self._columns
 
     @property
-    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
+    def unique_keys(self) -> Set[UniqueKey[_T]]:
+        # Docstring inherited.
         return self._unique_keys
 
     @property  # type: ignore
     @cached_getter
-    def doomed_by(self) -> AbstractSet[str]:
+    def doomed_by(self) -> Set[str]:
+        # Docstring inherited.
         result = set(self.extra_doomed_by)
         for related in self.relations:
             if not related.doomed_by:
@@ -79,9 +143,11 @@ class Union(Relation[_T]):
         return result
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
+        # Docstring inherited.
         return visitor.visit_union(self)
 
     def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        # Docstring inherited.
         relations_flat: list[Relation[_T]] = []
         extra_doomed_by_flat: set[str] = set()
         any_changes = False

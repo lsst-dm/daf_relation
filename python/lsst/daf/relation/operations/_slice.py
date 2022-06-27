@@ -23,7 +23,10 @@ from __future__ import annotations
 
 __all__ = ("Slice",)
 
-from typing import TYPE_CHECKING, AbstractSet, final
+from collections.abc import Set
+from typing import TYPE_CHECKING, final
+
+from lsst.utils.classes import immutable
 
 from .._columns import _T, UniqueKey
 from .._exceptions import ColumnError, EngineError
@@ -36,12 +39,51 @@ if TYPE_CHECKING:
 
 
 @final
+@immutable
 class Slice(Relation[_T]):
+    """An operation `Relation` that sorts and/or filters rows positionally.
+
+    Parameters
+    ----------
+    base : `Relation`
+        Relation this operation acts upon.
+    order_by : `tuple` [ `OrderByTerm`, ... ]
+        Criteria for sorting rows.
+    offset : `int`
+        Starting index (from 0) for the rows included.
+    limit : `int` or `None`
+        Maximum number of rows returned, or `None` for no limit.
+
+    Notes
+    -----
+    Like other operations, `Slice` objects should only be constructed directly
+    by code that can easily guarantee their `checked_and_simplify` invariants;
+    in all other contexts, the `Relation.slice` factory should be used
+    instead.
+
+    See `Relation.slice` for the `checked_and_simplified` behavior for this
+    class.
+    """
+
     def __init__(self, base: Relation, order_by: tuple[OrderByTerm[_T], ...], offset: int, limit: int | None):
         self.base = base
         self.order_by = order_by
         self.offset = offset
         self.limit = limit
+
+    base: Relation[_T]
+    """Relation this operation acts upon (`Relation`).
+    """
+
+    order_by: tuple[OrderByTerm[_T], ...]
+    """Criteria for sorting rows (`tuple` [ `OrderByTerm`, ... ])."""
+
+    offset: int
+    """Starting index (from 0) for the rows included (`int`)."""
+
+    limit: int | None
+    """Maximum number of rows returned, or `None` for no limit (`int` or `
+    None`)."""
 
     def __str__(self) -> str:
         return (
@@ -51,18 +93,22 @@ class Slice(Relation[_T]):
 
     @property
     def engine(self) -> EngineTree:
+        # Docstring inherited.
         return self.base.engine
 
     @property
-    def columns(self) -> AbstractSet[_T]:
+    def columns(self) -> Set[_T]:
+        # Docstring inherited.
         return self.base.columns
 
     @property
-    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
+    def unique_keys(self) -> Set[UniqueKey[_T]]:
+        # Docstring inherited.
         return self.base.unique_keys
 
     @property
-    def doomed_by(self) -> AbstractSet[str]:
+    def doomed_by(self) -> Set[str]:
+        # Docstring inherited.
         result = self.base.doomed_by
         if self.limit == 0:
             result = set(result)
@@ -70,9 +116,11 @@ class Slice(Relation[_T]):
         return result
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
+        # Docstring inherited.
         return visitor.visit_slice(self)
 
     def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        # Docstring inherited.
         base = self.base
         if recursive:
             base = base.checked_and_simplified(recursive=True)

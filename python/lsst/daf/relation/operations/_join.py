@@ -24,9 +24,10 @@ from __future__ import annotations
 __all__ = ("Join",)
 
 import itertools
-from typing import TYPE_CHECKING, AbstractSet, final
+from collections.abc import Set
+from typing import TYPE_CHECKING, final
 
-from lsst.utils.classes import cached_getter
+from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey
 from .._engines import EngineTag, EngineTree
@@ -39,7 +40,43 @@ if TYPE_CHECKING:
 
 
 @final
+@immutable
 class Join(Relation[_T]):
+    """An operation `Relation` that performs a natural join.
+
+    A natural join includes all columns from all input relations while keeping
+    only rows where all input relations have the same values for any common
+    columns.
+
+    Parameters
+    ----------
+    engine : `EngineTag`
+        Engine the join is performed in.  This must be the same as the engine
+        of all input relations.
+    relations : `tuple` [ `Relation` , ... ]
+        Input relations for the join.
+    conditions : `frozenset` [ `JoinCondition` ]
+        Custom (generally non-equality) conditions on which to join pairs of
+        relations.
+
+    Notes
+    -----
+    Like other operations, `Join` objects should only be constructed directly
+    by code that can easily guarantee their `checked_and_simplify` invariants;
+    in all other contexts, the `Relation.join` factory should be used instead.
+
+    Join objects with no relations are permitted (with no conditions, either),
+    and are used to represent the "unit relation" (see `Relation.make_unit`),
+    though these are often simplified out after they are added to larger
+    relation trees.  Join objects with one relation are not permitted; these
+    should always be simplified out as a no-op.  Some relations may prohibit
+    joins with more than two relations (see
+    `EngineOptions.pairwise_joins_only`).
+
+    See `Relation.join` for the `checked_and_simplified` behavior for this
+    class.
+    """
+
     def __init__(
         self,
         engine: EngineTag,
@@ -50,17 +87,27 @@ class Join(Relation[_T]):
         self.relations = relations
         self.conditions = conditions
 
+    relations: tuple[Relation[_T], ...]
+    """Input relations for the join (`tuple` [ `Relation`, ... ])."""
+
+    conditions: frozenset[JoinCondition[_T]]
+    """Custom (generally non-equality) conditions on which to join pairs of
+    relations (`frozenset` [ `JoinCondition` ]).
+    """
+
     def __str__(self) -> str:
         return f"({'⋈ '.join(str(r) for r in self.relations)})"
 
     @property  # type: ignore
     @cached_getter
     def engine(self) -> EngineTree:
+        # Docstring inherited.
         return EngineTree.build_if_needed(self._engine, {r.engine for r in self.relations})
 
     @property  # type: ignore
     @cached_getter
-    def columns(self) -> AbstractSet[_T]:
+    def columns(self) -> Set[_T]:
+        # Docstring inherited.
         result: set[_T] = set()
         for relation in self.relations:
             result.update(relation.columns)
@@ -68,7 +115,8 @@ class Join(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
+    def unique_keys(self) -> Set[UniqueKey[_T]]:
+        # Docstring inherited.
         current_keys: set[UniqueKey[_T]] = set()
         for relation in self.relations:
             current_keys = {
@@ -78,16 +126,19 @@ class Join(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def doomed_by(self) -> AbstractSet[str]:
+    def doomed_by(self) -> Set[str]:
+        # Docstring inherited.
         result: set[str] = set()
         for relation in self.relations:
             result.update(relation.doomed_by)
         return result
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
+        # Docstring inherited.
         return visitor.visit_join(self)
 
     def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        # Docstring inherited.
         relations_flat: list[Relation[_T]] = []
         conditions_flat: set[JoinCondition[_T]] = set()
         any_changes = False

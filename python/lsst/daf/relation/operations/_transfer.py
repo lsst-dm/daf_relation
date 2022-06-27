@@ -23,9 +23,10 @@ from __future__ import annotations
 
 __all__ = ("Transfer",)
 
-from typing import TYPE_CHECKING, AbstractSet, final
+from collections.abc import Set
+from typing import TYPE_CHECKING, final
 
-from lsst.utils.classes import cached_getter
+from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey
 from .._engines import EngineTag, EngineTree
@@ -36,10 +37,36 @@ if TYPE_CHECKING:
 
 
 @final
+@immutable
 class Transfer(Relation[_T]):
+    """An operation `Relation` that indicates a transfer from one engine to
+    another.
+
+    Parameters
+    ----------
+    base : `Relation`
+        Relation this operation acts upon, in the source engine.
+    destination : `EngineTag`
+        Engine to transfer the relation to.
+
+    Notes
+    -----
+    Like other operations, `Transfer` objects should only be constructed
+    directly by code that can easily guarantee their `checked_and_simplify`
+    invariants; in all other contexts, the `Relation.transfer` factory should
+    be used instead.
+
+    See `Relation.transfer` for the `checked_and_simplified` behavior for this
+    class.
+    """
+
     def __init__(self, base: Relation[_T], destination: EngineTag):
         self.base = base
         self._destination = destination
+
+    base: Relation[_T]
+    """Relation this operation acts upon, in the source engine (`Relation`).
+    """
 
     def __str__(self) -> str:
         return f"{self.base!s} → {self._destination!s}"
@@ -47,24 +74,30 @@ class Transfer(Relation[_T]):
     @property  # type: ignore
     @cached_getter
     def engine(self) -> EngineTree:
+        # Docstring inherited.
         return EngineTree.build_if_needed(self._destination, {self.base.engine})
 
     @property
-    def columns(self) -> AbstractSet[_T]:
+    def columns(self) -> Set[_T]:
+        # Docstring inherited.
         return self.base.columns
 
     @property
-    def unique_keys(self) -> AbstractSet[UniqueKey[_T]]:
+    def unique_keys(self) -> Set[UniqueKey[_T]]:
+        # Docstring inherited.
         return self.base.unique_keys
 
     @property
-    def doomed_by(self) -> AbstractSet[str]:
+    def doomed_by(self) -> Set[str]:
+        # Docstring inherited.
         return self.base.doomed_by
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
+        # Docstring inherited.
         return visitor.visit_transfer(self)
 
     def checked_and_simplified(self, recursive: bool = True) -> Relation[_T]:
+        # Docstring inherited.
         base = self.base
         if recursive:
             base = base.checked_and_simplified(recursive=True)
