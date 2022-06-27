@@ -28,7 +28,7 @@ from __future__ import annotations
 __all__ = ("MappingReader", "DictWriter")
 
 from abc import abstractmethod
-from collections.abc import Set, Iterator
+from collections.abc import Iterator, Set
 from typing import TYPE_CHECKING, Any, Generic, cast
 
 from . import operations

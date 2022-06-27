@@ -42,48 +42,40 @@ class RelationVisitor(Generic[_T, _U]):
 
     @abstractmethod
     def visit_distinct(self, visited: operations.Distinct[_T]) -> _U:
-        """Hook for processing `~operations.Distinct` operations.
-        """
+        """Hook for processing `~operations.Distinct` operations."""
         raise NotImplementedError()
 
     @abstractmethod
     def visit_leaf(self, visited: Leaf[_T]) -> _U:
-        """Hook for processing `Leaf` relations.
-        """
+        """Hook for processing `Leaf` relations."""
         raise NotImplementedError()
 
     @abstractmethod
     def visit_join(self, visited: operations.Join[_T]) -> _U:
-        """Hook for processing `~operations.Join` operations.
-        """
+        """Hook for processing `~operations.Join` operations."""
         raise NotImplementedError()
 
     @abstractmethod
     def visit_projection(self, visited: operations.Projection[_T]) -> _U:
-        """Hook for processing `~operations.Projection` operations.
-        """
+        """Hook for processing `~operations.Projection` operations."""
         raise NotImplementedError()
 
     @abstractmethod
     def visit_selection(self, visited: operations.Selection[_T]) -> _U:
-        """Hook for processing `~operations.Selection` operations.
-        """
+        """Hook for processing `~operations.Selection` operations."""
         raise NotImplementedError()
 
     @abstractmethod
     def visit_slice(self, visited: operations.Slice[_T]) -> _U:
-        """Hook for processing `~operations.Slice` operations.
-        """
+        """Hook for processing `~operations.Slice` operations."""
         raise NotImplementedError()
 
     @abstractmethod
     def visit_transfer(self, visited: operations.Transfer) -> _U:
-        """Hook for processing `~operations.Transfer` operations.
-        """
+        """Hook for processing `~operations.Transfer` operations."""
         raise NotImplementedError()
 
     @abstractmethod
     def visit_union(self, visited: operations.Union[_T]) -> _U:
-        """Hook for processing `~operations.Union` operations.
-        """
+        """Hook for processing `~operations.Union` operations."""
         raise NotImplementedError()

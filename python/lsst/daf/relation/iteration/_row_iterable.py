@@ -33,9 +33,9 @@ from typing import TYPE_CHECKING, AbstractSet, Any, Generic, Iterator
 from .._columns import _T, UniqueKey
 from .._engines import EngineTag
 from .._join_condition import JoinCondition
+from .._leaf import Leaf
 from .._predicate import Predicate
 from .._relation import Relation
-from .._leaf import Leaf
 
 if TYPE_CHECKING:
     from ._typing import Row, UniqueIndex

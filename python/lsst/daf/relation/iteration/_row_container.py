@@ -23,8 +23,8 @@ from __future__ import annotations
 
 __all__ = ("RowContainer", "RowContainerLeaf")
 
-from typing import TYPE_CHECKING, Any, Collection
 from collections.abc import Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Collection
 
 from .._columns import _T, UniqueKey
 from ._row_iterable import RowIterableLeaf, UniqueIndexedRowIterable
