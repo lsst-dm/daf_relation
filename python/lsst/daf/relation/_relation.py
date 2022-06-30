@@ -49,13 +49,6 @@ class Relation(Generic[_T]):
 
     Notes
     -----
-    The `Relation` class represents the core concept of `relational algebra`_:
-    a conceptual table with a well-defined set of columns and unique rows.  It
-    is rare for a Relation instance to actually correspond to a concrete
-    in-memory table, however; most derived Relation types actually represent an
-    operation on some other "base" relation or relations, forming an expression
-    tree that can be traversed by visitor classes (see `RelationVisitor`.
-
     `Relation` is an unusual abstract base class in that inheritance from it is
     closed to the `Leaf` class (and its subclasses) and the types in the
     `operations` subpackage; while other external derived classes are not
@@ -64,29 +57,6 @@ class Relation(Generic[_T]):
     enumerated in the `RelationVisitor` interface.  Essentially, instead of the
     types of relations in a tree being extensible, this package treats things
     one can *do* with a relation tree as its primary extension interface.
-
-    **Engines and operation definitions**
-
-    Relations are associated with "engines": systems that hold the actual data
-    a relation (at least) conceptually represents and can perform operations on
-    them to obtain the derived data.  These are identified by `EngineTag`
-    instances held by relation objects themselves, and the `sql` and
-    `iteration` subpackages provide partial implementations of engines for
-    relations backed by SQL databases (via `SQLAlchemy`_) and native Python
-    iterables, respectively.
-
-    It is up to an engine how strictly its operations adhere to relational
-    algebra operation definition.  SQL is formally defined in terms of
-    operations on "bags" or "multisets" whose rows are not unique and sometimes
-    ordered, while formal relations are always unordered and unique.  The
-    `Relation` interface has more a more permissive view of uniqueness to
-    facilitate interaction with SQL: `Relation` *may* have non-unique rows, but
-    any duplicates are not meaningful, and hence most operations may remove or
-    propagate duplicates at their discretion, though engines may make stronger
-    guarantees and most relations cannot introduce duplication.  Relation
-    instances do track when their rows are guaranteed to be unique, however.
-    It is also up to engines to determine how much their operations maintain
-    ordering.
 
     **Relation construction**
 
@@ -110,8 +80,6 @@ class Relation(Generic[_T]):
     a compact but lossy string representation.  The latter should always be
     used in error messages.
 
-    .. _relational algebra: https://en.wikipedia.org/wiki/Relational_algebra
-    .. _SQLAlchemy: https://www.sqlalchemy.org/
     """
 
     @staticmethod
@@ -180,7 +148,7 @@ class Relation(Generic[_T]):
         )
 
     def __repr__(self) -> str:
-        from .serialization import DictWriter
+        from ._serialization import DictWriter
 
         return json.dumps(self.visit(DictWriter()), indent=2)
 

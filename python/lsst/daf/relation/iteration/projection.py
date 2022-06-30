@@ -29,11 +29,21 @@ from .._columns import _T
 from ._row_iterable import RowIterable
 
 if TYPE_CHECKING:
-    from ._typing import Row
+    from .typing import Row
 
 
 class ProjectionRowIterable(RowIterable[_T]):
-    def __init__(self, base: RowIterable[_T], columns: tuple[_T, ...]):
+    """A `RowIterable` implementation that implements a projection operation.
+
+    Parameters
+    ----------
+    base : `RowIterable`
+        Original iterable to take a column subset from.
+    columns : `frozenset`
+        Columns to include in the new iterable.
+    """
+
+    def __init__(self, base: RowIterable[_T], columns: frozenset[_T]):
         self.base = base
         self.columns = columns
 

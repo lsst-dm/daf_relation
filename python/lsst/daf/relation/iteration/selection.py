@@ -29,10 +29,21 @@ from .._columns import _T
 from ._row_iterable import RowIterable
 
 if TYPE_CHECKING:
-    from ._typing import PredicateState, Row
+    from .typing import Row
+    from ._engine import PredicateState
 
 
 class SelectionRowIterable(RowIterable[_T]):
+    """A `RowIterable` implementation that implements a selection operation.
+
+    Parameters
+    ----------
+    base : `RowIterable`
+        Original iterable to filter rows from.
+    predicates : `tuple` [ `PredicateState` ]
+        Tuple of callables with the `PredicateState` signature.
+    """
+
     def __init__(self, base: RowIterable[_T], predicates: tuple[PredicateState[_T], ...]):
         self.base = base
         self.predicates = predicates

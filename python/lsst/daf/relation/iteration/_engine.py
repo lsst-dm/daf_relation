@@ -21,9 +21,14 @@
 
 from __future__ import annotations
 
-__all__ = ("Engine",)
+__all__ = (
+    "Engine",
+    "JoinConditionState",
+    "OrderByTermState",
+    "PredicateState",
+)
 
-from typing import TYPE_CHECKING, ClassVar, final
+from typing import TYPE_CHECKING, ClassVar, Protocol, final
 
 from lsst.utils.classes import Singleton
 
@@ -31,14 +36,18 @@ from .._columns import _T
 from .._engines import EngineOptions
 from .._exceptions import EngineError
 from ._row_iterable import RowIterable
-from .visitor import IterationVisitor
+from ._visitor import IterationVisitor
 
 if TYPE_CHECKING:
     from .._relation import Relation
+    from .typing import Row, Sortable
 
 
 @final
 class Engine(metaclass=Singleton):
+    """Singleton engine instance that treats relations as iterables of
+    mappings.
+    """
 
     __slots__ = ()
 
@@ -57,6 +66,31 @@ class Engine(metaclass=Singleton):
     )
 
     def execute(self, relation: Relation[_T]) -> RowIterable[_T]:
+        """Execute a native iteration relation, returning a Python iterable.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Relation to execute.
+
+        Returns
+        -------
+        rows : `RowIterable`
+            Iterable over rows, with each row a mapping keyed by `ColumnTag`.
+        """
         if relation.engine.tag != self:
             raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine.tag}.")
         return relation.visit(IterationVisitor())
+
+
+class PredicateState(Protocol[_T]):
+    def __call__(self, row: Row[_T]) -> bool:
+        ...
+
+
+class OrderByTermState(Protocol[_T]):
+    def __call__(self, row: Row[_T]) -> Sortable:
+        ...
+
+
+JoinConditionState = PredicateState

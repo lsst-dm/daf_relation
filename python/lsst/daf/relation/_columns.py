@@ -43,35 +43,6 @@ if TYPE_CHECKING:
 
 class ColumnTag(Hashable, Protocol):
     """An interface for objects that represent columns in a relation.
-
-    Notes
-    -----
-    Relations intentionally do not support column renaming, and instead expect
-    to be used along with a `ColumnTag` class (or set of classes) whose
-    instances can represent all columns in all tables in an absolute sense: if
-    a column in one table is equal to a column in some other table, they are
-    expected to mean the same thing in several ways:
-
-    - equal values for that columns is automatically included as as constraint
-      when those relations are joined, and which of those columns is "used" as
-      the join's own column with that tag is unspecified and unimportant;
-    - relations may only be unioned together if they have the same columns;
-    - `Predicate`, `OrderByTerm`, and `JoinCondition` objects depend only on
-      sets of columns, and do not care which relations actually provide those
-      columns.
-
-    It is not required that any particular engine use a `ColumnTag` or its
-    `str` form as its own internal name, though this often convenient.  For
-    example, the provided `sql` engine allows `Leaf` relations (which are
-    usually tables) to have arbitrary column names, but it uses the `ColumnTag`
-    `str` form for names in all SELECT queries that represent operations on
-    those tables.
-
-    Hashable builtins such as `str` or `tuple` may be used directly as column
-    tags in simple cases, but it is expected that in most scenarios custom
-    named tuples or frozen dataclasses will be used instead, and some engines
-    or extension operations may require more of the column tag type than is
-    defined here.
     """
 
     def __str__(self) -> str:

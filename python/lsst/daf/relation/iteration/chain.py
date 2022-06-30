@@ -30,10 +30,18 @@ from .._columns import _T
 from ._row_iterable import RowIterable
 
 if TYPE_CHECKING:
-    from ._typing import Row
+    from .typing import Row
 
 
 class ChainRowIterable(RowIterable[_T]):
+    """A `RowIterable` implementation that wraps `itertools.chain`.
+
+    Parameters
+    ----------
+    chain : `Sequence` [ `RowIterable` ]
+        Sequence of iterables to chain together.
+    """
+
     def __init__(self, chain: Sequence[RowIterable[_T]]):
         self.chain = chain
 

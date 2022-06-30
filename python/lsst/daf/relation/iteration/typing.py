@@ -22,12 +22,9 @@
 from __future__ import annotations
 
 __all__ = (
+    "GeneralIndex",
     "IndexKey",
-    "JoinConditionState",
-    "OrderByTermState",
-    "PredicateState",
     "Row",
-    "SequenceIndex",
     "Sortable",
     "UniqueIndex",
 )
@@ -37,24 +34,20 @@ from typing import Any, Mapping, Protocol, Sequence
 from .._columns import _T
 
 Row = Mapping[_T, Any]
+"""Generic type alias for a single row."""
+
 IndexKey = tuple[Any, ...]
+"""Generic alias for the key type in a mapping that serves as an index."""
+
 UniqueIndex = Mapping[IndexKey, Row[_T]]
-SequenceIndex = Mapping[IndexKey, Sequence[Row[_T]]]
+"""A mapping that serves as a unique index for a relation."""
+
+GeneralIndex = Mapping[IndexKey, Sequence[Row[_T]]]
+"""A mapping that serves as a non-unique index."""
 
 
 class Sortable(Protocol):
+    """A protocol for types that can be sorted."""
+
     def __lt__(self, other: Any) -> bool:
         ...
-
-
-class PredicateState(Protocol[_T]):
-    def __call__(self, row: Row[_T]) -> bool:
-        ...
-
-
-class OrderByTermState(Protocol[_T]):
-    def __call__(self, row: Row[_T]) -> Sortable:
-        ...
-
-
-JoinConditionState = PredicateState

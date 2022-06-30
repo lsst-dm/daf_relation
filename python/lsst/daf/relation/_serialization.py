@@ -19,10 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Classes that transform `Relation` trees to and from nested mappings that are
-suitable for serialization via JSON or YAML.
-"""
-
 from __future__ import annotations
 
 __all__ = ("MappingReader", "DictWriter")
