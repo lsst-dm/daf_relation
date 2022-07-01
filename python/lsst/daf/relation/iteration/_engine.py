@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 @final
 class Engine(metaclass=Singleton):
-    """Singleton engine class that treats relations as iterables of mappings."""
+    """Singleton engine class that for relations as iterables of mappings."""
 
     __slots__ = ()
 
@@ -68,13 +68,13 @@ class Engine(metaclass=Singleton):
 
         Parameters
         ----------
-        relation : `Relation`
+        relation : `.Relation`
             Relation to execute.
 
         Returns
         -------
         rows : `RowIterable`
-            Iterable over rows, with each row a mapping keyed by `ColumnTag`.
+            Iterable over rows, with each row a mapping keyed by `.ColumnTag`.
         """
         if relation.engine.tag != self:
             raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine.tag}.")
@@ -82,13 +82,13 @@ class Engine(metaclass=Singleton):
 
 
 class PredicateState(Protocol[_T]):
-    """Callable protocol for the values of `Predicate.engine_state` for this
+    """Callable protocol for the values of `.Predicate.engine_state` for this
     engine.
 
-    This is also used as the type for `JoinConditionState`, as join conditions
-    are applied as predicates after performing natural joins on any common
-    columns.  A join condition's state for this engine may also be `None` if
-    and only if the second `RowIterable` in the join implements
+    This is also used as the type for `.JoinCondition` state, as join
+    conditions are applied as predicates after performing natural joins on any
+    common columns.  A join condition's state for this engine may also be
+    `None` if and only if the second `RowIterable` in the join implements
     `RowIterable.try_join` to handle it.
     """
 
@@ -98,7 +98,7 @@ class PredicateState(Protocol[_T]):
         Parameters
         ----------
         row : `Mapping`
-            Mapping from `ColumnTag` to actual column values, representing a
+            Mapping from `.ColumnTag` to actual column values, representing a
             row in the relation.
 
         Returns
@@ -110,7 +110,7 @@ class PredicateState(Protocol[_T]):
 
 
 class OrderByTermState(Protocol[_T]):
-    """Callable protocol for the values of `OrderByTerm.engine_state` for this
+    """Callable protocol for the values of `.OrderByTerm.engine_state` for this
     engine.
     """
 
@@ -120,7 +120,7 @@ class OrderByTermState(Protocol[_T]):
         Parameters
         ----------
         row : `Mapping`
-            Mapping from `ColumnTag` to actual column values, representing a
+            Mapping from `.ColumnTag` to actual column values, representing a
             row in the relation.
 
         Returns

@@ -39,24 +39,24 @@ if TYPE_CHECKING:
 @final
 @immutable
 class Transfer(Relation[_T]):
-    """An operation `Relation` that indicates a transfer from one engine to
+    """An operation `.Relation` that indicates a transfer from one engine to
     another.
 
     Parameters
     ----------
-    base : `Relation`
+    base : `.Relation`
         Relation this operation acts upon, in the source engine.
-    destination : `EngineTag`
+    destination : `.EngineTag`
         Engine to transfer the relation to.
 
     Notes
     -----
     Like other operations, `Transfer` objects should only be constructed
-    directly by code that can easily guarantee their `checked_and_simplify`
-    invariants; in all other contexts, the `Relation.transfer` factory should
+    directly by code that can easily guarantee their `checked_and_simplified`
+    invariants; in all other contexts, the `.Relation.transfer` factory should
     be used instead.
 
-    See `Relation.transfer` for the `checked_and_simplified` behavior for this
+    See `.Relation.transfer` for the `checked_and_simplified` behavior for this
     class.
     """
 
@@ -65,7 +65,7 @@ class Transfer(Relation[_T]):
         self._destination = destination
 
     base: Relation[_T]
-    """Relation this operation acts upon, in the source engine (`Relation`).
+    """Relation this operation acts upon, in the source engine (`.Relation`).
     """
 
     def __str__(self) -> str:

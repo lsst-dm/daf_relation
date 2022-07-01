@@ -40,38 +40,39 @@ if TYPE_CHECKING:
 @final
 @immutable
 class Union(Relation[_T]):
-    """An operation `Relation` that combines the rows of its input relations.
+    """An operation `.Relation` that combines the rows of its input relations.
 
     Parameters
     ----------
-    engine : `EngineTag`
+    engine : `.EngineTag`
         Engine the join is performed in.  This must be the same as the engine
         of all input relations.
-    columns : `~collections.abc.Set` [ `ColumnTag` ]
+    columns : `~collections.abc.Set` [ `.ColumnTag` ]
         Set of columns for this relation; all input relations must have the
         same columns already.
-    relations : `tuple` [ `Relation` , ... ]
+    relations : `tuple` [ `.Relation` , ... ]
         Input relations to combine.
-    unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
+    unique_keys : `~collections.abc.Set` [ `.UniqueKey` ]
         Set of sets that represent multi-column unique constraints that will be
         *naturally* satisfied by this union, even if the engine does not take
         any extra action to remove duplicates.  If not provided or empty, the
         returned relation does not guarantee uniqueness.
     extra_doomed_by : `frozenset` [ `str` ]
-        Diagnostic messages that can be used to report why the relation
-        has no rows when that is the case.  This should generally be provided
-        when there are no relations.  When there are other relations, it is
-        only used as (part of) the `doomed_by` property when those relations
-        also yield no rows.
+        Diagnostic messages that can be used to report why the relation has no
+        rows when that is the case.  This should generally be provided when
+        there are no relations.  When there are other relations, it is only
+        used as (part of) the `doomed_by` property when those relations also
+        yield no rows.
 
     Notes
     -----
     Like other operations, `Union` objects should only be constructed directly
-    by code that can easily guarantee their `checked_and_simplify` invariants;
-    in all other contexts, the `Relation.union` factory should be used instead.
+    by code that can easily guarantee their `checked_and_simplified`
+    invariants; in all other contexts, the `.Relation.union` factory should be
+    used instead.
 
     Union objects with no relations are permitted (with no conditions, either),
-    and are used to represent the "unit relation" (see `Relation.make_zero`),
+    and are used to represent the "unit relation" (see `.Relation.make_zero`),
     though these are often simplified out after they are added to larger
     relation trees.  Union objects with one relation are not permitted; these
     should always be simplified out as a no-op.  Some relations may prohibit
@@ -83,7 +84,7 @@ class Union(Relation[_T]):
     naturally occur).  Use ``union(...).distinct(...)`` for an operation that
     maps to SQL's ``UNION``.
 
-    See `Relation.union` for the `checked_and_simplified` behavior for this
+    See `.Relation.union` for the `checked_and_simplified` behavior for this
     class.
     """
 
@@ -105,7 +106,7 @@ class Union(Relation[_T]):
         return f"({'∪ '.join(str(r) for r in self.relations)})"
 
     relations: tuple[Relation[_T], ...]
-    """Input relations for the union (`tuple` [ `Relation`, ... ])."""
+    """Input relations for the union (`tuple` [ `.Relation`, ... ])."""
 
     extra_doomed_by: frozenset[str]
     """Diagnostic messages that can be used to report why the relation

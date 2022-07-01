@@ -62,7 +62,7 @@ class MappingReader(Generic[_T]):
     - `read_join_condition`
     - `read_order_by_term`
 
-    These are responsible for handling the deserialization of `ColumnTag` and
+    These are responsible for handling the deserialization of `.ColumnTag` and
     `EngineTag` instances and for adding engine-specific state that is not
     serialized to `Leaf`, `Predicate`, `JoinCondition`, and `OrderByTerm`
     instances, respectively.
@@ -198,7 +198,7 @@ class MappingReader(Generic[_T]):
 
         Returns
         -------
-        columns : `~collections.abc.Set` [ `ColumnTag` ]
+        columns : `~collections.abc.Set` [ `.ColumnTag` ]
             Set of column tag objects.
         """
         raise NotImplementedError()
@@ -264,7 +264,7 @@ class MappingReader(Generic[_T]):
             Engine tag for the relation.  Implementations may change this as
             long as the resulting relation tree still has consistent engines
             throughout.
-        columns : `~collections.abc.Set` [ `ColumnTag` ]
+        columns : `~collections.abc.Set` [ `.ColumnTag` ]
             Set of columns for the relation.
         unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
             Set of sets representing unique constraints.
@@ -332,7 +332,7 @@ class MappingReader(Generic[_T]):
         ----------
         name : `str`
             Name of the predicate.
-        columns_required : `~collections.abc.Set` [ `ColumnTag` ]
+        columns_required : `~collections.abc.Set` [ `.ColumnTag` ]
             Set of columns required to evaluate the predicate.
         general_state : `dict`
             Dictionary of engine-independent state.
@@ -365,7 +365,7 @@ class MappingReader(Generic[_T]):
         ----------
         name : `str`
             Name of the order by term.
-        columns_required : `~collections.abc.Set` [ `ColumnTag` ]
+        columns_required : `~collections.abc.Set` [ `.ColumnTag` ]
             Set of columns required to evaluate the order-by term.
         ascending : `bool`
             Whether the term should be sorted in ascending order.
@@ -548,10 +548,10 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
 
     - Engine-specific `Leaf` types are handled by calling
       `Leaf.write_extra_to_mapping`;
-    - `ColumnTag` and `EngineTag` instances are formatted with `str` (which can
-      be overridden by reimplementing `write_columns` and `write_engine`).
+    - `.ColumnTag` and `EngineTag` instances are formatted with `str` (which
+      can be overridden by reimplementing `write_columns` and `write_engine`).
 
-    `DictWriter` sorts all iterables of `ColumnTag`, `Relation`,
+    `DictWriter` sorts all iterables of `.ColumnTag`, `Relation`,
     `JoinCondition`, `OrderByTerm`, and `Predicate` as it saves them to make
     the serialized form more deterministic, but it does not descend into
     dictionaries (e.g. `Predicate.general_state`) to sort iterables within
@@ -665,7 +665,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
 
         Parameters
         ----------
-        columns : `~collections.abc.Set` [ `ColumnTag` ]
+        columns : `~collections.abc.Set` [ `.ColumnTag` ]
             Set of column tags to save.
 
         Returns

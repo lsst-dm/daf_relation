@@ -63,11 +63,11 @@ def make_join_row_iterable(
         container in order to construct an index mapping to perform a
         hash join.  It is given an opportunity to specialize the join behavior
         first via a call to `RowIterable.try_join`.
-    base_relation : `Relation`
+    base_relation : `.Relation`
         Relation corresponding to ``base_rows``.
-    next_relation : `Relation`
+    next_relation : `.Relation`
         Relation corresponding to ``next_rows``.
-    conditions : `~collections.abc.Set` [ `JoinCondition` ]
+    conditions : `~collections.abc.Set` [ `.JoinCondition` ]
         Special join conditions to apply.  Any not handled by
         `RowIterable.try_join` will be applied as if they were predicates, i.e.
         by filtering rows after they have already been joined on any common
@@ -120,16 +120,17 @@ def _finish_join_row_iterable(
 
     Parameters
     ----------
-    engine : `EngineTag`
+    engine : `.EngineTag`
         Engine tag for the join.  This must always be the native iteration
         engine, but it's easier to pass it into this (private) function from
         the relation than import the singleton directly, since that would
         involve import cycles.
     base : `RowIterable`
-        Row iterable that implements the join, but does not necessarily
-        utilize all matching join conditions.
-    missing_conditions : `~collections.abc.Set` [ `JoinCondition` ]
-        `JoinCondition` objects that match this join but have not been applied.
+        Row iterable that implements the join, but does not necessarily utilize
+        all matching join conditions.
+    missing_conditions : `~collections.abc.Set` [ `.JoinCondition` ]
+        `.JoinCondition` objects that match this join but have not been
+        applied.
 
     Returns
     -------
@@ -152,7 +153,7 @@ class UniqueIndexJoinRowIterable(RowIterable[_T]):
         Row iterable for the first operand in a join.
     next_index : `UniqueIndex`
         Mapping with `tuple` keys and `Row` values.
-    on_key : `frozenset` [ `ColumnTag` ]
+    on_key : `frozenset` [ `.ColumnTag` ]
         Columns present in both iterables that they should be joined on.  Must
         be ordered the same as the keys of ``next_index``.
     """
@@ -179,7 +180,7 @@ class GeneralJoinRowIterable(RowIterable[_T]):
         Row iterable for the first operand in a join.
     next_index : `GeneralIndex`
         Mapping with `tuple` keys and `Sequence` of `Row` values.
-    on_key : `frozenset` [ `ColumnTag` ]
+    on_key : `frozenset` [ `.ColumnTag` ]
         Columns present in both iterables that they should be joined on.  Must
         be ordered the same as the keys of ``next_index``.
     """

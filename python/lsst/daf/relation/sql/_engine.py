@@ -76,14 +76,14 @@ class Engine:
 
         Parameters
         ----------
-        relation : `Relation`
+        relation : `.Relation`
             Root of the relation tree to convert.
         column_types : `ColumnTypeInfo`
             Object that relates column tags to logical columns.
         distinct : `bool`
             Whether to generate an expression whose rows are forced to be
             unique.
-        order_by : `Iterable` [ `OrderByTerm` ]
+        order_by : `Iterable` [ `.OrderByTerm` ]
             Iterable of objects that specify a sort order.
         offset : `int`, optional
             Starting index for returned rows, with ``0`` as the first row.

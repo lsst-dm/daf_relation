@@ -18,16 +18,16 @@ That can include:
 The engine tag for iteration is the singleton `Engine` class, which is a singleton available as `lsst.daf.relation.iteration.engine`.
 Its `~Engine.execute` method is the main entry point for evaluating trees of relations that are purely in this engine.
 
-The iteration engine requires `pairwise joins <EngineOptions.pairwise_joins_only>`, as it doesn't have a solver for otherwise determining the best order in which to join multiple relations.
+The iteration engine requires `pairwise joins <.EngineOptions.pairwise_joins_only>`, as it doesn't have a solver for otherwise determining the best order in which to join multiple relations.
 But it also guarantees that joins will preserve row order, with the first relation's ordering taking precedence over the second for common columns.
 All other operations preserve row order as well.
 
 It also attempts to use lazy evaluation by performing operations row-by-row via generators, but this is not always possible.
 In particular:
 
-- `~Relation.distinct` operations build a `dict` containing all rows.
-- `~Relation.join` operations need a similar `dict` containing all rows in the second operand in the join (unless specialized; see `RowIterable.try_join`), and will build one if needed.
-- `~Relation.slice` operations build a `list` and sort it (and the full list is sorted before any slicing is performed).
+- `~.Relation.distinct` operations build a `dict` containing all rows.
+- `~.Relation.join` operations need a similar `dict` containing all rows in the second operand in the join (unless specialized; see `RowIterable.try_join`), and will build one if needed.
+- `~.Relation.slice` operations build a `list` and sort it (and the full list is sorted before any slicing is performed).
 
 Execution of a relation tree takes care to only ever iterate once, *unless* the iteration target is already an in-memory collection.
 In other words, we always first build an in-memory collection from general iterables (which are assumed to be slower or higher-overhead) whenever we need to iterate over the rows more than once.
@@ -39,10 +39,10 @@ The iteration engine has two leaf relation types: `RowIterableLeaf` and its subc
 These differ only in whether the rows are included when written to a nested dict for serialization.
 Both need to be constructed with a `RowIterable`, which may be a custom subclass of that ABC or a concrete `RowCollection` instance backed by an in-memory collection.
 
-`JoinCondition` or `Predicate` per-engine state is typically a callable that accepts a mapping containing at least all of the required columns (keyed by `ColumnTag`) and returns `bool`, indicating whether the row should be preserved.
+`.JoinCondition` or `.Predicate` per-engine state is typically a callable that accepts a mapping containing at least all of the required columns (keyed by `.ColumnTag`) and returns `bool`, indicating whether the row should be preserved.
 The `PredicateState` and `JoinConditionState` protocols provide a formal definition for these callables.
 
-Similarly, `OrderByTerm` per-engine state is typically a callable (`OrderByTermState`) that accepts the same kind of mapping and returns a sortable object (note that `operator.itemgetter` can thus be used to create a trivial order-by term that sorts by a single column).
+Similarly, `.OrderByTerm` per-engine state is typically a callable (`OrderByTermState`) that accepts the same kind of mapping and returns a sortable object (note that `operator.itemgetter` can thus be used to create a trivial order-by term that sorts by a single column).
 The ascending/descending flip is handled outside the callable.
 
 Extension points

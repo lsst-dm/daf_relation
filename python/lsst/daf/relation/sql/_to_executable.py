@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(eq=False, slots=True)
 class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Generic[_T, _L]):
-    """A `RelationVisitor` implemention that converts a `Relation` tree into
+    """A `.RelationVisitor` implemention that converts a `.Relation` tree into
     a SQLAlchemy (possibly-compound) SELECT query that can be directly
     executed.
 
@@ -65,7 +65,7 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
 
     order_by: Sequence[OrderByTerm[_T]] = ()
     """Terms to sort the rows of the final SQL executable
-    (`Sequence` [ `OrderByTerm` )."""
+    (`Sequence` [ `.OrderByTerm` )."""
 
     offset: int = 0
     """Offset of the first row returned from the query, starting from zero
@@ -154,7 +154,7 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
 
         Parameters
         ----------
-        relation : `Relation`
+        relation : `.Relation`
             Relation to process.
 
         Returns

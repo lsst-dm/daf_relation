@@ -40,13 +40,13 @@ if TYPE_CHECKING:
 @final
 @immutable
 class Distinct(Relation[_T]):
-    """An operation `Relation` that guarantees unique rows.
+    """An operation `.Relation` that guarantees unique rows.
 
     Parameters
     ----------
-    base : `Relation`
+    base : `.Relation`
         Relation this operation acts upon.
-    unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
+    unique_keys : `~collections.abc.Set` [ `.UniqueKey` ]
         Sets of columns that are sufficient to guarantee unique rows;
         projecting this relation to a superset of any of these sets of
         columns will preserving uniqueness.
@@ -54,11 +54,11 @@ class Distinct(Relation[_T]):
     Notes
     -----
     Like other operations, `Distinct` objects should only be constructed
-    directly by code that can easily guarantee their `checked_and_simplify`
-    invariants; in all other contexts, the `Relation.distinct` factory should
+    directly by code that can easily guarantee their `checked_and_simplified`
+    invariants; in all other contexts, the `.Relation.distinct` factory should
     be used instead.
 
-    See `Relation.distinct` for the `checked_and_simplified` behavior for this
+    See `.Relation.distinct` for the `checked_and_simplified` behavior for this
     class.
     """
 
@@ -67,7 +67,7 @@ class Distinct(Relation[_T]):
         self._unique_keys = unique_keys
 
     base: Relation[_T]
-    """Relation this operation acts upon (`Relation`).
+    """Relation this operation acts upon (`.Relation`).
     """
 
     def __str__(self) -> str:

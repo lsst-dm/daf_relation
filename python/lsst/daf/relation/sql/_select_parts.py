@@ -58,7 +58,7 @@ class SelectParts(Generic[_T, _L]):
     """
 
     columns_available: Mapping[_T, _L] | None
-    """Mapping from `ColumnTag` to logical column for the columns available
+    """Mapping from `.ColumnTag` to logical column for the columns available
     from the FROM clause (`Mapping` or `None`).
 
     If `None`, the columns available are just the columns provided by the
@@ -101,7 +101,7 @@ class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
 
 @dataclasses.dataclass(eq=False, slots=True)
 class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
-    """A `RelationVisitor` implemention that converts a `Relation` tree into
+    """A `.RelationVisitor` implemention that converts a `.Relation` tree into
     a `SelectParts` struct.
 
     This visitor directly handles `Leaf`, `operations.Join`,
@@ -189,7 +189,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
         Parameters
         ----------
-        relation : `Relation`
+        relation : `.Relation`
             Relation to process.
 
         Returns
@@ -210,16 +210,16 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
         Parameters
         ----------
-        relations : `Sequence` [ `Relation` ]
+        relations : `Sequence` [ `.Relation` ]
             Relations to sort.
-        conditions : `~collections.abc.Set` [ `JoinCondition` ]
+        conditions : `~collections.abc.Set` [ `.JoinCondition` ]
             Special join conditions to associate with pairs of relations.
 
         Yields
         ------
-        relation : `Relation`
+        relation : `.Relation`
             A relation to join to all of those previously yielded.
-        matching_conditions : `set` [ `JoinCondition` ]
+        matching_conditions : `set` [ `.JoinCondition` ]
             Join conditions to apply when joining in this relation.
         """
         # We want to join terms into the SQL query in an order such that each
@@ -297,9 +297,9 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         base_parts : `SelectParts`
             Simple SELECT statement parts for the first operand.  Must not have
             `SelectParts.columns_available` set to `None`.
-        next_relation : `Relation`
-            `Relation` for the other operand.
-        conditions : `Iterable` [ `JoinCondition` ]
+        next_relation : `.Relation`
+            `.Relation` for the other operand.
+        conditions : `Iterable` [ `.JoinCondition` ]
             Join conditions that match this paticular join.
 
         Returns

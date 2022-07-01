@@ -40,23 +40,24 @@ if TYPE_CHECKING:
 @final
 @immutable
 class Projection(Relation[_T]):
-    """An operation `Relation` that propagates a subset of its input's columns.
+    """An operation `.Relation` that propagates a subset of its input's
+    columns.
 
     Parameters
     ----------
-    base : `Relation`
+    base : `.Relation`
         Relation this operation acts upon.
-    columns : `frozenset` [ `ColumnTag` ]
+    columns : `frozenset` [ `.ColumnTag` ]
         Columns to propagate.
 
     Notes
     -----
     Like other operations, `Projection` objects should only be constructed
-    directly by code that can easily guarantee their `checked_and_simplify`
-    invariants; in all other contexts, the `Relation.projection` factory should
-    be used instead.
+    directly by code that can easily guarantee their `checked_and_simplified`
+    invariants; in all other contexts, the `.Relation.projection` factory
+    should be used instead.
 
-    See `Relation.projection` for the `checked_and_simplified` behavior for
+    See `.Relation.projection` for the `checked_and_simplified` behavior for
     this class.
     """
 
@@ -65,7 +66,7 @@ class Projection(Relation[_T]):
         self._columns = columns
 
     base: Relation[_T]
-    """Relation this operation acts upon (`Relation`).
+    """Relation this operation acts upon (`.Relation`).
     """
 
     def __str__(self) -> str:

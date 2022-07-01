@@ -60,7 +60,7 @@ class PredicateState(Protocol[_T, _L_con]):
         Parameters
         ----------
         logical_columns : `Mapping`
-            Mapping from `ColumnTag` to logical column, containing all columns
+            Mapping from `.ColumnTag` to logical column, containing all columns
             available to the predicate.  This will typically involve columns
             beyond those in ``columns_required``.
         columns_required : `~collections.abc.Set`
@@ -88,7 +88,7 @@ class OrderByTermState(Protocol[_T, _L_con]):
         Parameters
         ----------
         logical_columns : `Mapping`
-            Mapping from `ColumnTag` to logical column, containing all columns
+            Mapping from `.ColumnTag` to logical column, containing all columns
             available to the order-by-term.  This will typically involve
             columns beyond those in ``columns_required``.
         columns_required : `~collections.abc.Set`
@@ -121,7 +121,7 @@ class JoinConditionState(Protocol[_T, _L_con]):
         Parameters
         ----------
         logical_columns : `tuple` [ `Mapping`, `Mapping` ]
-            Tuple of mappings from `ColumnTag` to logical column, containing
+            Tuple of mappings from `.ColumnTag` to logical column, containing
             all columns available to the condition from each relation.  This
             will typically involve columns beyond those in
             ``columns_required``.
@@ -145,9 +145,9 @@ class ColumnTypeInfo(Generic[_T, _L]):
     """A helper object that provides information about column types to the SQL
     engine.
 
-    ColumnTypeInfo is generic, with the first parameter a `ColumnTag` class and
-    the second what we call the "logical column" type: the Python type used to
-    represent columns in a SQL query.  This can be any type as long as it is
+    ColumnTypeInfo is generic, with the first parameter a `.ColumnTag` class
+    and the second what we call the "logical column" type: the Python type used
+    to represent columns in a SQL query.  This can be any type as long as it is
     used consistently by all `ColumnTypeInfo` methods.
 
     Notes
@@ -159,19 +159,19 @@ class ColumnTypeInfo(Generic[_T, _L]):
 
     While reimplementations can change this, too (in particular by
     reimplementing `select_items`), `ColumnTypeInfo` uses the `str`
-    representation of the `ColumnTag` for the names of columns in SQLAlchemy,
+    representation of the `.ColumnTag` for the names of columns in SQLAlchemy,
     and hence those strings are the keys that should be used to access those
     columns on result rows when a query is actually executed.
     """
 
     def extract_mapping(self, tags: Set[_T], sql_columns: sqlalchemy.sql.ColumnCollection) -> Mapping[_T, _L]:
-        """Extract a mapping with `ColumnTag` keys and logical column values
+        """Extract a mapping with `.ColumnTag` keys and logical column values
         from a SQLAlchemy column collection.
 
         Parameters
         ----------
         tags : `~collections.abc.Set`
-            Set of `ColumnTag` objects whose logical columns should be
+            Set of `.ColumnTag` objects whose logical columns should be
             extracted.
         sql_columns : `sqlalchemy.sql.ColumnCollection`
             SQLAlchemy collection of columns, such as
@@ -180,7 +180,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
         Returns
         -------
         logical_columns : `Mapping`
-            Mapping from `ColumnTag` to logical column type.
+            Mapping from `.ColumnTag` to logical column type.
         """
         return {tag: cast(_L, sql_columns[str(tag)]) for tag in tags}
 
@@ -192,9 +192,9 @@ class ColumnTypeInfo(Generic[_T, _L]):
         Parameters
         ----------
         items : `Iterable` [ `tuple` ]
-            Iterable of (`ColumnTag`, logical column) pairs.  This is typically
-            the ``items()`` of a mapping returned by `extract_mapping` or
-            obtained from `SelectParts.columns_available`.
+            Iterable of (`.ColumnTag`, logical column) pairs.  This is
+            typically the ``items()`` of a mapping returned by
+            `extract_mapping` or obtained from `SelectParts.columns_available`.
         sql_from : `sqlalchemy.sql.FromClause`
             SQLAlchemy representation of a FROM clause, such as a single table,
             aliased subquery, or join expression.  Must provide all columns
@@ -252,7 +252,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
         -----
         SQL SELECT queries and similar queries are not permitted to actually
         have no columns, but we can add a literal column that isn't associated
-        with any `ColumnTag`, making it appear to the relation system as if
+        with any `.ColumnTag`, making it appear to the relation system as if
         there are no columns.  The default implementation does this by
         delegating to `handle_empty_columns`.
         """
@@ -280,13 +280,13 @@ class ColumnTypeInfo(Generic[_T, _L]):
         condition: JoinCondition[_T],
         logical_columns: tuple[Mapping[_T, _L], Mapping[_T, _L]],
     ) -> Sequence[sqlalchemy.sql.ColumnElement]:
-        """Convert a `JoinCondition` instance into a SQLAlchemy expression.
+        """Convert a `.JoinCondition` instance into a SQLAlchemy expression.
 
         Parameters
         ----------
-        engine : `EngineTag`
+        engine : `.EngineTag`
             Identifier for the engine the relation belongs to.
-        condition : `JoinCondition`
+        condition : `.JoinCondition`
             Join condition to convert.
         logical_columns : `tuple` [ `Mapping`, `Mapping` ]
             Pair of mapping from column tag to logical column, with all columns
@@ -316,13 +316,13 @@ class ColumnTypeInfo(Generic[_T, _L]):
     def convert_order_by_term(
         self, engine: EngineTag, order_by: OrderByTerm[_T], logical_columns: Mapping[_T, _L]
     ) -> sqlalchemy.sql.ColumnElement:
-        """Convert an `OrderByTerm` instance into a SQLAlchemy expression.
+        """Convert an `.OrderByTerm` instance into a SQLAlchemy expression.
 
         Parameters
         ----------
-        engine : `EngineTag`
+        engine : `.EngineTag`
             Identifier for the engine the relation belongs to.
-        order_by : `OrderByTerm`
+        order_by : `.OrderByTerm`
             Order-by term to convert.
         logical_columns : `Mapping`
             Mapping from column tag to logical column, with all columns
@@ -359,13 +359,13 @@ class ColumnTypeInfo(Generic[_T, _L]):
     def convert_predicate(
         self, engine: EngineTag, predicate: Predicate[_T], logical_columns: Mapping[_T, _L]
     ) -> Sequence[sqlalchemy.sql.ColumnElement]:
-        """Convert a `Predicate` instance into a SQLAlchemy expression.
+        """Convert a `.Predicate` instance into a SQLAlchemy expression.
 
         Parameters
         ----------
-        engine : `EngineTag`
+        engine : `.EngineTag`
             Identifier for the engine the relation belongs to.
-        predicate : `Predicate`
+        predicate : `.Predicate`
             Predicate to convert.
         logical_columns : `tuple` [ `Mapping`, `Mapping` ]
             Mapping from column tag to logical column, with all columns

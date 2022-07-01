@@ -41,13 +41,13 @@ if TYPE_CHECKING:
 @final
 @immutable
 class Slice(Relation[_T]):
-    """An operation `Relation` that sorts and/or filters rows positionally.
+    """An operation `.Relation` that sorts and/or filters rows positionally.
 
     Parameters
     ----------
-    base : `Relation`
+    base : `.Relation`
         Relation this operation acts upon.
-    order_by : `tuple` [ `OrderByTerm`, ... ]
+    order_by : `tuple` [ `.OrderByTerm`, ... ]
         Criteria for sorting rows.
     offset : `int`
         Starting index (from 0) for the rows included.
@@ -57,11 +57,11 @@ class Slice(Relation[_T]):
     Notes
     -----
     Like other operations, `Slice` objects should only be constructed directly
-    by code that can easily guarantee their `checked_and_simplify` invariants;
-    in all other contexts, the `Relation.slice` factory should be used
-    instead.
+    by code that can easily guarantee their `checked_and_simplified`
+    invariants; in all other contexts, the `.Relation.slice` factory should be
+    used instead.
 
-    See `Relation.slice` for the `checked_and_simplified` behavior for this
+    See `.Relation.slice` for the `checked_and_simplified` behavior for this
     class.
     """
 
@@ -72,11 +72,11 @@ class Slice(Relation[_T]):
         self.limit = limit
 
     base: Relation[_T]
-    """Relation this operation acts upon (`Relation`).
+    """Relation this operation acts upon (`.Relation`).
     """
 
     order_by: tuple[OrderByTerm[_T], ...]
-    """Criteria for sorting rows (`tuple` [ `OrderByTerm`, ... ])."""
+    """Criteria for sorting rows (`tuple` [ `.OrderByTerm`, ... ])."""
 
     offset: int
     """Starting index (from 0) for the rows included (`int`)."""

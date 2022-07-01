@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 
 class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
-    """The `RelationVisitor` implementation for `Engine.execute`.
+    """The `.RelationVisitor` implementation for `Engine.execute`.
 
     This class should at most rarely need to be used directly, but it may be
     useful as a base class when specialized execution of native iteration is

@@ -99,7 +99,7 @@ class RowIterable(Generic[_T]):
 
         Parameters
         ----------
-        index_columns : `UniqueKey`
+        index_columns : `.UniqueKey`
             Set of columns with unique values across all rows.
 
         Returns
@@ -131,14 +131,14 @@ class RowIterable(Generic[_T]):
 
         Parameters
         ----------
-        self_relation : `Relation`
+        self_relation : `.Relation`
             The relation associated with this set of rows.  This is always the
             *second* member in a join operation's two relations.
         base : `RowIterable`
             The row iterable this object is being joined to.
-        base_relation : `Relation`
+        base_relation : `.Relation`
             The relation associated with `base`.
-        conditions : `~collections.abc.Set` [ `JoinCondition` ]
+        conditions : `~collections.abc.Set` [ `.JoinCondition` ]
             Custom join conditions for which ``required_columns[0]`` is a
             subset of ``base_relation.columns`` and `required_columns[1]`` is a
             subset of ``self_relation.columns``.
@@ -148,7 +148,7 @@ class RowIterable(Generic[_T]):
         join_rows : `RowIterable` or `None`
             A `RowIterable` that implements this join, or `None` if there is no
             special handling for this join.
-        matched_conditions : `~collections.abc.Set` [ `JoinCondition` ]
+        matched_conditions : `~collections.abc.Set` [ `.JoinCondition` ]
             Join conditions included in ``join_rows``.  Any that remain will
             be applied by assuming they have `JoinCondition.engine_state` for
             this engine set to a callable with the  `JoinConditionState`
@@ -166,7 +166,7 @@ class RowIterable(Generic[_T]):
 
         Parameters
         ----------
-        predicates : `~collections.abc.Set` [ `Predicate` ]
+        predicates : `~collections.abc.Set` [ `.Predicate` ]
             Predicates to attempt to apply.
 
         Returns
@@ -174,7 +174,7 @@ class RowIterable(Generic[_T]):
         rows : `RowIterable`
             Rows that may have some predicates already applied.  Should be
             ``self`` if no predicates are applied.
-        matching_predicates : `~collections.abc.Set` [ `Predicate` ]
+        matching_predicates : `~collections.abc.Set` [ `.Predicate` ]
             Set of predicates actually included in ``rows``.  Any that remain
             will be applied by assuming they have `Predicate.engine_state`
             for this engine set to a callable with the `PredicateState`
@@ -189,7 +189,7 @@ class RowIterable(Generic[_T]):
 
         Parameters
         ----------
-        order_by : `~collections.abc.Sequence` [ `OrderByTerm` ]
+        order_by : `~collections.abc.Sequence` [ `.OrderByTerm` ]
             Sequence of order-by terms to apply.
         offset : `int`
             Index (from 0) of the first row to include in the result.
@@ -234,7 +234,7 @@ class RowIterable(Generic[_T]):
         ----------
         rows : `Iterable` [ `Row` ]
             Input rows to process.
-        index_columns : `UniqueKey`
+        index_columns : `.UniqueKey`
             Set of columns that are unique over all rows (or, if duplicates
             occur, they are fully-row duplicates that may be discarded).
         new_index : `dict` [ `IndexKey`, `Row` ]
@@ -308,8 +308,8 @@ class RowCollection(IndexedRowIterable[_T]):
     Parameters
     ----------
     rows : `Collection` [ `Row` ]
-        Collection for rows, with each row a mapping keyed by `ColumnTag`.
-    unique_indexes : `dict` [ `UniqueKey`, `UniqueIndex` ]
+        Collection for rows, with each row a mapping keyed by `.ColumnTag`.
+    unique_indexes : `dict` [ `.UniqueKey`, `UniqueIndex` ]
         Nested mapping of unique indexes.  Outermost keys are sets of column
         tags, and each value is itself a mapping whose keys are a tuple of
         column values (in the same order as the set of column tags), with the
@@ -341,7 +341,7 @@ class RowCollection(IndexedRowIterable[_T]):
         ----------
         rows : `Iterable` [ `Row` ]
             Iterable to build the index and collection from.
-        index_columns : `UniqueKey`
+        index_columns : `.UniqueKey`
             Columns to index on.
 
         Returns
@@ -372,7 +372,7 @@ class RowCollection(IndexedRowIterable[_T]):
 
         Parameters
         ----------
-        index_columns : `UniqueKey`
+        index_columns : `.UniqueKey`
             Set of columns that are unique over all rows (or, if duplicates
             occur, they are fully-row duplicates that may be discarded).
 

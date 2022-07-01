@@ -30,7 +30,7 @@ It is also up to engines to determine how much their operations maintain orderin
 Column Tags
 -----------
 
-Relation classes and most other types in this package are generic over a type parameter whose instances satisfy the `ColumnTag` protocol, which is just a  hashable identifier with a `str` representation.
+Relation classes and most other types in this package are generic over a type parameter whose instances satisfy the `.ColumnTag` protocol, which is just a  hashable identifier with a `str` representation.
 This may be a single final type, a union of types, or a hierarchy.
 
 Relations intentionally do not support column renaming, and instead expect column tags to represent all columns in all tables in an absolute sense: if a column tag in one table is equal to a column tag in some other table, they are expected to mean the same thing in several ways:
@@ -39,9 +39,9 @@ Relations intentionally do not support column renaming, and instead expect colum
 - relations may only be unioned together if they have the same columns;
 - `Predicate`, `OrderByTerm`, and `JoinCondition` objects depend only on sets of columns, and do not care which relations actually provide those columns.
 
-It is not required that any particular engine use a `ColumnTag` or its `str` form as its own internal identifier, though this often convenient.
+It is not required that any particular engine use a `.ColumnTag` or its `str` form as its own internal identifier, though this often convenient.
 For example, the provided `sql` engine allows `Leaf` relations (which are
-usually tables) to have arbitrary column names, but it uses the `ColumnTag` `str` form for names in all SELECT queries that represent operations on those tables.
+usually tables) to have arbitrary column names, but it uses the `.ColumnTag` `str` form for names in all SELECT queries that represent operations on those tables.
 
 Hashable builtins such as `str` or `tuple` may be used directly as column tags in simple cases, but it is expected that in most scenarios custom named tuples or frozen dataclasses will be used instead, and some engines or extension operations may require more of the column tag type than is defined here.
 

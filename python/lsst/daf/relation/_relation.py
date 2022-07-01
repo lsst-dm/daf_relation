@@ -45,7 +45,7 @@ class Relation(Generic[_T]):
     """An abstract interface for conceptual sets of tuples.
 
     Relation is generic over the type used to represent its columns; see
-    `ColumnTag` for more information.
+    `.ColumnTag` for more information.
 
     Notes
     -----
@@ -122,7 +122,7 @@ class Relation(Generic[_T]):
         ----------
         engine : `EngineTag`
             Identifier for the engine this relation belongs to.
-        columns : `~collections.abc.Set` [ `ColumnTag` ]
+        columns : `~collections.abc.Set` [ `.ColumnTag` ]
             Set of columns for this relation.
         doomed_by : `~collections.abc.Set` [ `str` ]
             Diagnostic messages that can be used to report why the relation
@@ -166,7 +166,7 @@ class Relation(Generic[_T]):
     @abstractmethod
     def columns(self) -> Set[_T]:
         """The set of columns for this relation
-        (`~collections.abc.Set` [ `ColumnTag` ])."""
+        (`~collections.abc.Set` [ `.ColumnTag` ])."""
         raise NotImplementedError()
 
     @property
@@ -294,7 +294,7 @@ class Relation(Generic[_T]):
 
         Parameters
         ----------
-        columns : `~collections.abc.Set` [ `ColumnTag` ]
+        columns : `~collections.abc.Set` [ `.ColumnTag` ]
             Columns for the new relation.
 
         Returns

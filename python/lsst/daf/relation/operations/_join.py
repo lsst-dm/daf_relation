@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 @final
 @immutable
 class Join(Relation[_T]):
-    """An operation `Relation` that performs a natural join.
+    """An operation `.Relation` that performs a natural join.
 
     A natural join includes all columns from all input relations while keeping
     only rows where all input relations have the same values for any common
@@ -50,30 +50,31 @@ class Join(Relation[_T]):
 
     Parameters
     ----------
-    engine : `EngineTag`
+    engine : `.EngineTag`
         Engine the join is performed in.  This must be the same as the engine
         of all input relations.
-    relations : `tuple` [ `Relation` , ... ]
+    relations : `tuple` [ `.Relation` , ... ]
         Input relations for the join.
-    conditions : `frozenset` [ `JoinCondition` ]
+    conditions : `frozenset` [ `.JoinCondition` ]
         Custom (generally non-equality) conditions on which to join pairs of
         relations.
 
     Notes
     -----
     Like other operations, `Join` objects should only be constructed directly
-    by code that can easily guarantee their `checked_and_simplify` invariants;
-    in all other contexts, the `Relation.join` factory should be used instead.
+    by code that can easily guarantee their `checked_and_simplified`
+    invariants; in all other contexts, the `.Relation.join` factory should be
+    used instead.
 
     Join objects with no relations are permitted (with no conditions, either),
-    and are used to represent the "unit relation" (see `Relation.make_unit`),
+    and are used to represent the "unit relation" (see `.Relation.make_unit`),
     though these are often simplified out after they are added to larger
     relation trees.  Join objects with one relation are not permitted; these
     should always be simplified out as a no-op.  Some relations may prohibit
     joins with more than two relations (see
     `EngineOptions.pairwise_joins_only`).
 
-    See `Relation.join` for the `checked_and_simplified` behavior for this
+    See `.Relation.join` for the `checked_and_simplified` behavior for this
     class.
     """
 
@@ -88,11 +89,11 @@ class Join(Relation[_T]):
         self.conditions = conditions
 
     relations: tuple[Relation[_T], ...]
-    """Input relations for the join (`tuple` [ `Relation`, ... ])."""
+    """Input relations for the join (`tuple` [ `.Relation`, ... ])."""
 
     conditions: frozenset[JoinCondition[_T]]
     """Custom (generally non-equality) conditions on which to join pairs of
-    relations (`frozenset` [ `JoinCondition` ]).
+    relations (`frozenset` [ `.JoinCondition` ]).
     """
 
     def __str__(self) -> str:

@@ -41,24 +41,24 @@ if TYPE_CHECKING:
 @final
 @immutable
 class Selection(Relation[_T]):
-    """An operation `Relation` that filters rows via `Predicate` objects.
+    """An operation `.Relation` that filters rows via `.Predicate` objects.
 
     Parameters
     ----------
-    base : `Relation`
+    base : `.Relation`
         Relation this operation acts upon.
-    predicates : `frozenset` [ `Predicate` ]
+    predicates : `frozenset` [ `.Predicate` ]
         Predicates to apply.
 
     Notes
     -----
     Like other operations, `Selection` objects should only be constructed
-    directly by code that can easily guarantee their `checked_and_simplify`
-    invariants; in all other contexts, the `Relation.selection` factory should
+    directly by code that can easily guarantee their `checked_and_simplified`
+    invariants; in all other contexts, the `.Relation.selection` factory should
     be used instead.
 
-    See `Relation.selection` for the `checked_and_simplified` behavior for this
-    class.
+    See `.Relation.selection` for the `checked_and_simplified` behavior for
+    this class.
     """
 
     def __init__(self, base: Relation[_T], predicates: frozenset[Predicate[_T]]):
@@ -66,11 +66,11 @@ class Selection(Relation[_T]):
         self.predicates = predicates
 
     base: Relation[_T]
-    """Relation this operation acts upon (`Relation`).
+    """Relation this operation acts upon (`.Relation`).
     """
 
     predicates: frozenset[Predicate[_T]]
-    """Predicates to apply (`frozenset` [ `Predicate` ])."""
+    """Predicates to apply (`frozenset` [ `.Predicate` ])."""
 
     def __str__(self) -> str:
         return f"σ({self.base!s}, {{{', '.join(str(p) for p in self.predicates)}}})"
