@@ -26,10 +26,10 @@ generators and built-in collection types used to implement various operations
 on them.
 """
 
+from . import typing
 from ._engine import *
 from ._row_iterable import *
 from ._visitor import *
-from . import typing
 
 engine = Engine()
 """Singleton engine instance that treats relations as iterables of mappings

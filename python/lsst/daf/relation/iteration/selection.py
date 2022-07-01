@@ -29,8 +29,8 @@ from .._columns import _T
 from ._row_iterable import RowIterable
 
 if TYPE_CHECKING:
-    from .typing import Row
     from ._engine import PredicateState
+    from .typing import Row
 
 
 class SelectionRowIterable(RowIterable[_T]):

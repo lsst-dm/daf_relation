@@ -24,7 +24,8 @@ from __future__ import annotations
 __all__ = ("ToExecutable",)
 
 import dataclasses
-from typing import TYPE_CHECKING, Generic, Sequence
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Generic, cast
 
 import sqlalchemy
 
@@ -33,7 +34,7 @@ from .._columns import _T
 from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
 from ._column_type_info import _L, ColumnTypeInfo
-from ._select_parts import SelectParts
+from ._select_parts import ToSelectParts
 
 if TYPE_CHECKING:
     from .._leaf import Leaf
@@ -43,34 +44,65 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(eq=False, slots=True)
 class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Generic[_T, _L]):
+    """A `RelationVisitor` implemention that converts a `Relation` tree into
+    a SQLAlchemy (possibly-compound) SELECT query that can be directly
+    executed.
+
+    This visitor directly handles `operations.Slice`, `operations.Union`, and
+    `operations.Distinct` relations, and delegates the others to
+    `ToSelectParts`.  It does not handle transfers at all.
+    """
 
     column_types: ColumnTypeInfo[_T, _L]
+    """Object that relates column tags to logical columns for this visitor
+    (`ColumnTypeInfo`).
+    """
+
     distinct: bool = False
+    """Whether to force the rows of the final SQL executable returned to be
+    unique, via SELECT DISTINCT or UNION (`bool`).
+    """
+
     order_by: Sequence[OrderByTerm[_T]] = ()
+    """Terms to sort the rows of the final SQL executable
+    (`Sequence` [ `OrderByTerm` )."""
+
     offset: int = 0
+    """Offset of the first row returned from the query, starting from zero
+    (`int`).
+    """
+
     limit: int | None = None
+    """Maximum number of rows returned by the query (`int` or `None`).
+    """
 
     def visit_distinct(self, visited: operations.Distinct[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
         return visited.base.visit(dataclasses.replace(self, distinct=True))
 
     def visit_leaf(self, visited: Leaf[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
         return self._use_select_parts(visited)
 
     def visit_join(self, visited: operations.Join[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
         return self._use_select_parts(visited)
 
     def visit_projection(self, visited: operations.Projection[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
         return self._use_select_parts(visited)
 
     def visit_selection(self, visited: operations.Selection[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
         return self._use_select_parts(visited)
 
     def visit_slice(self, visited: operations.Slice[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
         if self.order_by or self.offset or self.limit is not None:
             # This visitor wants to impose its own slice operations on the
-            # final result.  Delegate to SelectParts, which will delegate back
-            # here using a visitor without any slice operations, and then wrap
-            # that in a subquery.
+            # final result.  Delegate to _use_select_parts, which will delegate
+            # back here using a visitor without any slice operations, and then
+            # wrap that in a subquery.
             return self._use_select_parts(visited)
         else:
             # This visitor doesn't apply any slice operations, so we can use a
@@ -86,9 +118,11 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
             )
 
     def visit_transfer(self, visited: operations.Transfer) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
         raise EngineError("SQL conversion only works on relation trees with no transfers.")
 
     def visit_union(self, visited: operations.Union[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
         if not visited.relations:
             return self.column_types.make_zero_select(visited.columns)
         nested_visitor = dataclasses.replace(self, distinct=False, order_by=False, offset=0, limit=None)
@@ -105,7 +139,7 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
             )
             executable = executable.order_by(
                 *[
-                    self.column_types.convert_order_by(visited.engine.tag, t, columns_available)
+                    self.column_types.convert_order_by_term(visited.engine.tag, t, columns_available)
                     for t in self.order_by
                 ]
             )
@@ -116,12 +150,45 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
         return executable
 
     def _use_select_parts(self, relation: Relation[_T]) -> sqlalchemy.sql.Select:
-        select_parts = SelectParts.from_relation(relation, self.column_types)
-        return select_parts.to_executable(
-            relation,
-            self.column_types,
-            distinct=self.distinct,
-            order_by=self.order_by,
-            offset=self.offset,
-            limit=self.limit,
-        )
+        """Delegate to `ToSelectParts` to implement visitation for a relation.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Relation to process.
+
+        Returns
+        -------
+        select : `sqlalchemy.sql.Select`
+            SQL SELECT statement.
+        """
+        select_parts = relation.visit(ToSelectParts(self.column_types))
+        if select_parts.columns_available is None:
+            columns_available = self.column_types.extract_mapping(
+                relation.columns, select_parts.from_clause.columns
+            )
+            columns_projected = columns_available
+        else:
+            columns_available = select_parts.columns_available
+            columns_projected = {tag: columns_available[tag] for tag in relation.columns}
+        select = self.column_types.select_items(columns_projected.items(), select_parts.from_clause)
+        if len(select_parts.where) == 1:
+            select = select.where(select_parts.where[0])
+        elif select_parts.where:
+            select = select.where(sqlalchemy.sql.and_(*select_parts.where))
+        if self.distinct:
+            select = select.distinct()
+        if self.order_by:
+            select = select.order_by(
+                *[
+                    self.column_types.convert_order_by_term(
+                        relation.engine.tag, t, cast(Mapping[_T, _L], select_parts.columns_available)
+                    )
+                    for t in self.order_by
+                ]
+            )
+        if self.offset:
+            select = select.offset(self.offset)
+        if self.limit is not None:
+            select = select.limit(self.limit)
+        return select

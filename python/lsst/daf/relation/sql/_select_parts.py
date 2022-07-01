@@ -21,11 +21,12 @@
 
 from __future__ import annotations
 
-__all__ = ("SelectParts", "SelectPartsLeaf")
+__all__ = ("SelectParts", "SelectPartsLeaf", "ToSelectParts")
 
 import dataclasses
 from collections import deque
-from typing import TYPE_CHECKING, AbstractSet, Any, Generic, Iterable, Iterator, Mapping, Sequence, cast
+from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
+from typing import TYPE_CHECKING, Any, Generic, cast
 
 import sqlalchemy
 
@@ -38,115 +39,96 @@ from ._column_type_info import _L, ColumnTypeInfo
 
 if TYPE_CHECKING:
     from .._join_condition import JoinCondition
-    from .._order_by_term import OrderByTerm
     from .._relation import Relation
 
 
 @dataclasses.dataclass(slots=True, eq=False)
 class SelectParts(Generic[_T, _L]):
+    """A struct that represents a simple SELECT query's parts."""
+
     from_clause: sqlalchemy.sql.FromClause
+    """SQLAlchemy representation of the FROM clause
+    (`sqlalchemy.sql.FromClause`).
+    """
+
     where: Sequence[sqlalchemy.sql.ColumnElement]
+    """SQLAlchemy representation of the WHERE clause, as a sequence of
+    boolean expressions to be combined with ``AND``
+    (`Sequence` [ `sqlalchemy.sql.ColumnElement` ]).
+    """
+
     columns_available: Mapping[_T, _L] | None
+    """Mapping from `ColumnTag` to logical column for the columns available
+    from the FROM clause (`Mapping` or `None`).
 
-    @classmethod
-    def from_relation(
-        cls, relation: Relation[_T], column_types: ColumnTypeInfo[_T, _L]
-    ) -> SelectParts[_T, _L]:
-        return relation.visit(_ToSelectParts(column_types))
-
-    def to_executable(
-        self,
-        relation: Relation[_T],
-        column_types: ColumnTypeInfo[_T, _L],
-        *,
-        distinct: bool = False,
-        order_by: Iterable[OrderByTerm[_T]] = (),
-        offset: int = 0,
-        limit: int | None = None,
-    ) -> sqlalchemy.sql.Select:
-        if self.columns_available is None:
-            columns_available = column_types.extract_mapping(relation.columns, self.from_clause.columns)
-            columns_projected = columns_available
-        else:
-            columns_available = self.columns_available
-            columns_projected = {tag: columns_available[tag] for tag in relation.columns}
-        select = column_types.select_items(columns_projected.items(), self.from_clause)
-        if len(self.where) == 1:
-            select = select.where(self.where[0])
-        elif self.where:
-            select = select.where(sqlalchemy.sql.and_(*self.where))
-        if distinct:
-            select = select.distinct()
-        if order_by:
-            select = select.order_by(
-                *[
-                    column_types.convert_order_by(
-                        relation.engine.tag, t, cast(Mapping[_T, _L], self.columns_available)
-                    )
-                    for t in order_by
-                ]
-            )
-        if offset:
-            select = select.offset(offset)
-        if limit is not None:
-            select = select.limit(limit)
-        return select
-
-    def join(
-        self,
-        relation: Relation[_T],
-        column_types: ColumnTypeInfo[_T, _L],
-        conditions: Iterable[JoinCondition[_T]],
-    ) -> SelectParts[_T, _L]:
-        assert self.columns_available is not None
-        relation_parts = relation.visit(_ToSelectParts(column_types))
-        if relation_parts.columns_available is None:
-            relation_parts.columns_available = column_types.extract_mapping(
-                relation.columns, relation_parts.from_clause.columns
-            )
-        on_terms: list[sqlalchemy.sql.ColumnElement] = []
-        for tag in self.columns_available.keys() & relation_parts.columns_available.keys():
-            on_terms.append(self.columns_available[tag] == relation_parts.columns_available[tag])
-        for condition in conditions:
-            on_terms.extend(
-                column_types.convert_join_condition(
-                    relation.engine.tag, condition, (self.columns_available, relation_parts.columns_available)
-                )
-            )
-        on_clause: sqlalchemy.sql.ColumnElement
-        if not on_terms:
-            on_clause = sqlalchemy.sql.literal(True)
-        elif len(on_terms) == 1:
-            on_clause = on_terms[0]
-        else:
-            on_clause = sqlalchemy.sql.and_(*on_terms)
-        from_clause = self.from_clause.join(relation_parts.from_clause, onclause=on_clause)
-        where = tuple(self.where) + tuple(relation_parts.where)
-        columns_available = {**self.columns_available, **relation_parts.columns_available}
-        return SelectParts(from_clause, where, columns_available)
+    If `None`, the columns available are just the columns provided by the
+    relation these parts represent, and they can be obtained as needed by
+    calling `ColumnTypeInfo.extract_mapping` on `from_clause`.  This is an
+    optimization that avoids calls to `ColumnTypeInfo.extract_mapping` when
+    `columns_available` isn't actually needed.
+    """
 
 
 class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
-    def __init__(self, *args: Any, select_parts: SelectParts[_T, _L]):
+    """The leaf relation type for the SQL engine.
+
+    Parameters
+    ----------
+    *args
+        Positional arguments forwarded to the `Leaf` constructor.
+    select_parts : `SelectParts`
+        The `SelectParts` struct that backs this relation.
+    extra : `Mapping`
+        Extra information to serialize with this relation.
+
+    Notes
+    -----
+    This class never attempts to serialize its `SelectParts` state, and cannot
+    be fully deserialized without a custom implementation of `MappingReader`
+    (which by default will deserialize a `SelectPartsLeaf` as a base `Leaf`
+    instance, or raise if `extra` is not empty).
+    """
+
+    def __init__(self, *args: Any, select_parts: SelectParts[_T, _L], extra: Mapping[str, Any]):
         super().__init__(*args)
         self.select_parts = select_parts
+        self.extra = extra
+
+    def write_extra_to_mapping(self) -> Mapping[str, Any]:
+        # Docstring inherited.
+        return self.extra
 
 
 @dataclasses.dataclass(eq=False, slots=True)
-class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
+class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
+    """A `RelationVisitor` implemention that converts a `Relation` tree into
+    a `SelectParts` struct.
+
+    This visitor directly handles `Leaf`, `operations.Join`,
+    `operations.Projection`, and `operations.Selection` relations, and
+    delegates the others to `ToExecutable`.  It does not handle transfers at
+    all.
+    """
+
     column_types: ColumnTypeInfo[_T, _L]
+    """Object that relates column tags to logical columns for this visitor
+    (`ColumnTypeInfo`).
+    """
 
     def visit_distinct(self, visited: operations.Distinct[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
         return SelectParts(
-            self._to_executable(visited).subquery(),
+            self._use_executable(visited),
             [],
             None,
         )
 
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
         return cast(SelectPartsLeaf[_T, _L], visited).select_parts
 
     def visit_join(self, visited: operations.Join[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
         if not visited.relations:
             return SelectParts(self.column_types.make_unit_subquery(), (), {})
         first_term, *other_terms = self._sorted_join_terms(visited.relations, visited.conditions)
@@ -158,16 +140,18 @@ class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
                 first_relation.columns, join_parts.from_clause.columns
             )
         for term_relation, term_conditions in other_terms:
-            join_parts = join_parts.join(term_relation, self.column_types, term_conditions)
+            join_parts = self._join_select_parts(join_parts, term_relation, term_conditions)
         return join_parts
 
     def visit_projection(self, visited: operations.Projection[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
         # We can just delegate to base because projection only affects
         # to_executable, and the default implementation for that already only
         # selects the relation's own columns.
         return visited.base.visit(self)
 
     def visit_selection(self, visited: operations.Selection[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
         base_parts = visited.base.visit(self)
         if base_parts.columns_available is None:
             base_parts.columns_available = self.column_types.extract_mapping(
@@ -181,30 +165,63 @@ class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         return dataclasses.replace(base_parts, where=full_where)
 
     def visit_slice(self, visited: operations.Slice[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
         return SelectParts(
-            self._to_executable(visited).subquery(),
+            self._use_executable(visited),
             [],
             None,
         )
 
     def visit_transfer(self, visited: operations.Transfer) -> SelectParts[_T, _L]:
+        # Docstring inherited.
         raise EngineError("SQL conversion only works on relation trees with no transfers.")
 
     def visit_union(self, visited: operations.Union[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
         return SelectParts(
-            self._to_executable(visited).subquery(),
+            self._use_executable(visited),
             [],
             None,
         )
 
-    def _to_executable(self, relation: Relation[_T]) -> sqlalchemy.sql.expression.SelectBase:
-        from .to_executable import ToExecutable
+    def _use_executable(self, relation: Relation[_T]) -> sqlalchemy.sql.FromClause:
+        """Delegate to `ToExecutable` to implement visitation for a relation.
 
-        return relation.visit(ToExecutable(self.column_types))
+        Parameters
+        ----------
+        relation : `Relation`
+            Relation to process.
+
+        Returns
+        -------
+        select : `sqlalchemy.sql.FromClause`
+            SQL FROM clause.
+        """
+        from ._to_executable import ToExecutable
+
+        return relation.visit(ToExecutable(self.column_types)).subquery()
 
     def _sorted_join_terms(
-        self, relations: Sequence[Relation[_T]], conditions: AbstractSet[JoinCondition[_T]]
+        self, relations: Sequence[Relation[_T]], conditions: Set[JoinCondition[_T]]
     ) -> Iterator[tuple[Relation[_T], set[JoinCondition[_T]]]]:
+        """Sort the relations in a join operation to avoid Cartesian products
+        (empty JOIN ON expressions) and associate join conditions with pairs
+        of relations.
+
+        Parameters
+        ----------
+        relations : `Sequence` [ `Relation` ]
+            Relations to sort.
+        conditions : `~collections.abc.Set` [ `JoinCondition` ]
+            Special join conditions to associate with pairs of relations.
+
+        Yields
+        ------
+        relation : `Relation`
+            A relation to join to all of those previously yielded.
+        matching_conditions : `set` [ `JoinCondition` ]
+            Join conditions to apply when joining in this relation.
+        """
         # We want to join terms into the SQL query in an order such that each
         # join's ON clause has something in common with the ones that preceded
         # it, and to find out if that's impossible and hence a Cartesian join
@@ -266,3 +283,55 @@ class _ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
                 # to_do deque.
                 relations_to_do.extend(relations_rejected)
                 relations_rejected.clear()
+
+    def _join_select_parts(
+        self,
+        base_parts: SelectParts[_T, _L],
+        next_relation: Relation[_T],
+        conditions: Iterable[JoinCondition[_T]],
+    ) -> SelectParts[_T, _L]:
+        """Join two relations via their `SelectParts` representation.
+
+        Parameters
+        ----------
+        base_parts : `SelectParts`
+            Simple SELECT statement parts for the first operand.  Must not have
+            `SelectParts.columns_available` set to `None`.
+        next_relation : `Relation`
+            `Relation` for the other operand.
+        conditions : `Iterable` [ `JoinCondition` ]
+            Join conditions that match this paticular join.
+
+        Returns
+        -------
+        join_parts : `SelectParts`
+            Simple SELECT statementparts representing the join.
+        """
+        assert base_parts.columns_available is not None
+        next_parts = next_relation.visit(self)
+        if next_parts.columns_available is None:
+            next_parts.columns_available = self.column_types.extract_mapping(
+                next_relation.columns, next_parts.from_clause.columns
+            )
+        on_terms: list[sqlalchemy.sql.ColumnElement] = []
+        for tag in base_parts.columns_available.keys() & next_parts.columns_available.keys():
+            on_terms.append(base_parts.columns_available[tag] == next_parts.columns_available[tag])
+        for condition in conditions:
+            on_terms.extend(
+                self.column_types.convert_join_condition(
+                    next_relation.engine.tag,
+                    condition,
+                    (base_parts.columns_available, next_parts.columns_available),
+                )
+            )
+        on_clause: sqlalchemy.sql.ColumnElement
+        if not on_terms:
+            on_clause = sqlalchemy.sql.literal(True)
+        elif len(on_terms) == 1:
+            on_clause = on_terms[0]
+        else:
+            on_clause = sqlalchemy.sql.and_(*on_terms)
+        from_clause = base_parts.from_clause.join(next_parts.from_clause, onclause=on_clause)
+        where = tuple(base_parts.where) + tuple(next_parts.where)
+        columns_available = {**base_parts.columns_available, **next_parts.columns_available}
+        return SelectParts(from_clause, where, columns_available)

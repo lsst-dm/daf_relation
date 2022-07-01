@@ -58,6 +58,7 @@ Provided Engines
    :maxdepth: 1
 
    iteration.rst
+   sql.rst
 
 Contributing
 ============

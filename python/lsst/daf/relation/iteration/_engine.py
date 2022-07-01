@@ -45,9 +45,7 @@ if TYPE_CHECKING:
 
 @final
 class Engine(metaclass=Singleton):
-    """Singleton engine instance that treats relations as iterables of
-    mappings.
-    """
+    """Singleton engine class that treats relations as iterables of mappings."""
 
     __slots__ = ()
 
@@ -84,12 +82,53 @@ class Engine(metaclass=Singleton):
 
 
 class PredicateState(Protocol[_T]):
+    """Callable protocol for the values of `Predicate.engine_state` for this
+    engine.
+
+    This is also used as the type for `JoinConditionState`, as join conditions
+    are applied as predicates after performing natural joins on any common
+    columns.  A join condition's state for this engine may also be `None` if
+    and only if the second `RowIterable` in the join implements
+    `RowIterable.try_join` to handle it.
+    """
+
     def __call__(self, row: Row[_T]) -> bool:
+        """Evaluate the predicate.
+
+        Parameters
+        ----------
+        row : `Mapping`
+            Mapping from `ColumnTag` to actual column values, representing a
+            row in the relation.
+
+        Returns
+        -------
+        keep : `bool`
+            Whether to include this row in the new relation.
+        """
         ...
 
 
 class OrderByTermState(Protocol[_T]):
+    """Callable protocol for the values of `OrderByTerm.engine_state` for this
+    engine.
+    """
+
     def __call__(self, row: Row[_T]) -> Sortable:
+        """Evaluate the order-by term.
+
+        Parameters
+        ----------
+        row : `Mapping`
+            Mapping from `ColumnTag` to actual column values, representing a
+            row in the relation.
+
+        Returns
+        -------
+        sortable
+            Arbitrary Python object that implements at least less-than
+            comparison.
+        """
         ...
 
 

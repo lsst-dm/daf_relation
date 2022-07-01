@@ -38,13 +38,13 @@ from typing import TYPE_CHECKING, Any, Generic
 from .._columns import _T, UniqueKey
 from .._join_condition import JoinCondition
 from .._leaf import Leaf
-from .._predicate import Predicate
 from .._order_by_term import OrderByTerm
+from .._predicate import Predicate
 from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._engines import EngineTag
-    from .typing import GeneralIndex, Row, UniqueIndex, IndexKey
+    from .typing import GeneralIndex, IndexKey, Row, UniqueIndex
 
 
 class RowIterable(Generic[_T]):
@@ -200,7 +200,7 @@ class RowIterable(Generic[_T]):
         Returns
         -------
         rows : `RowIterable` or `None`
-            Rows with sorting and slicing applied, or `None for no special
+            Rows with sorting and slicing applied, or `None` for no special
             handling.
         """
         return None

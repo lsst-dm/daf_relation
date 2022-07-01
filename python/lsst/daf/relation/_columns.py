@@ -42,8 +42,7 @@ if TYPE_CHECKING:
 
 
 class ColumnTag(Hashable, Protocol):
-    """An interface for objects that represent columns in a relation.
-    """
+    """An interface for objects that represent columns in a relation."""
 
     def __str__(self) -> str:
         ...

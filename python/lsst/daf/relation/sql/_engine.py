@@ -24,15 +24,15 @@ from __future__ import annotations
 __all__ = ("Engine",)
 
 import dataclasses
-from typing import TYPE_CHECKING, ClassVar, Sequence, final
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, ClassVar, final
 
 import sqlalchemy
 
 from .._columns import _T
 from .._engines import EngineOptions
 from .._exceptions import EngineError
-from ._select_parts import SelectParts
-from .to_executable import ToExecutable
+from ._to_executable import ToExecutable
 
 if TYPE_CHECKING:
     from .._order_by_term import OrderByTerm
@@ -43,11 +43,16 @@ if TYPE_CHECKING:
 @final
 @dataclasses.dataclass(frozen=True, slots=True)
 class Engine:
+    """Engine tag class for converting relation trees to SQLAlchemy
+    executables.
+    """
 
-    database: str
+    name: str
+    """Name that identifies this engine relative to others of the same type.
+    """
 
     def __repr__(self) -> str:
-        return f"lsst.daf.relation.sql.Engine({self.database!r})"
+        return f"lsst.daf.relation.sql.Engine({self.name!r})"
 
     options: ClassVar[EngineOptions] = EngineOptions(
         flatten_joins=True,
@@ -67,16 +72,35 @@ class Engine:
         offset: int = 0,
         limit: int | None = None,
     ) -> sqlalchemy.sql.expression.SelectBase:
+        """Convert a relation tree to an executable SQLAlchemy expression.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Root of the relation tree to convert.
+        column_types : `ColumnTypeInfo`
+            Object that relates column tags to logical columns.
+        distinct : `bool`
+            Whether to generate an expression whose rows are forced to be
+            unique.
+        order_by : `Iterable` [ `OrderByTerm` ]
+            Iterable of objects that specify a sort order.
+        offset : `int`, optional
+            Starting index for returned rows, with ``0`` as the first row.
+        limit : `int` or `None`, optional
+            Maximum number of rows returned, or `None` (default) for no limit.
+
+        Returns
+        -------
+        select : `sqlalchemy.sql.expression.SelectBase`
+            A SQLAlchemy SELECT or compound SELECT query.
+
+        Raises
+        ------
+        EngineError
+            Raised if the relation's engine is not the same as ``self``, or if
+            the tree contains any transfers.
+        """
         if relation.engine.tag != self:
             raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine.tag}.")
         return relation.visit(ToExecutable(column_types, distinct, order_by, offset, limit))
-
-    def to_from_clause(
-        self, relation: Relation[_T], column_types: ColumnTypeInfo[_T, _L]
-    ) -> sqlalchemy.sql.FromClause:
-        if relation.engine.tag != self:
-            raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine.tag}.")
-        select_parts = SelectParts.from_relation(relation, column_types)
-        if not select_parts.where and select_parts.columns_available is None:
-            return select_parts.from_clause
-        return select_parts.to_executable(relation, column_types).subquery()

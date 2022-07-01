@@ -27,12 +27,12 @@ __all__ = (
     "make_join_row_iterable",
 )
 
-from collections.abc import Set, Iterator
+from collections.abc import Iterator, Set
 from typing import TYPE_CHECKING
 
 from .._columns import _T, is_unique_key_covered
-from ._row_iterable import RowIterable
 from .._join_condition import JoinCondition
+from ._row_iterable import RowIterable
 from .selection import SelectionRowIterable
 
 if TYPE_CHECKING:
