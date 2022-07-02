@@ -19,13 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""A relation engine backed by native Python iterables.
-
-The iteration engine uses iterables of mappings to represent `Relations`, with
-generators and built-in collection types used to implement various operations
-on them.
-"""
-
 from . import typing
 from ._engine import *
 from ._row_iterable import *
