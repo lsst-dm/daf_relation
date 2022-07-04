@@ -53,6 +53,8 @@ Both `RowIterable` and `RowCollection` can be subclassed further to customize th
 The `~RowIterable.try_selection`, `~RowIterable.try_join`, and `~RowIterable.try_slice` methods may also be overridden by subclasses to provide special handling of predicates, join conditions, or order-by terms, respectively, without per-engine state.
 Note that adding these customizations on a leaf relation's `RowIterable` will have no effect if the desired operation doesn't act directly on the leaf relation, since any intermediate operation will create a new `RowIterable` instance, with the default implementations of those methods.
 
+Support for native iteration on `.Extension` operation subclasses can be added by implementing all `ExtensionInterface` methods on the subclass.
+
 API reference
 """""""""""""
 

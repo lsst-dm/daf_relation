@@ -36,6 +36,7 @@ from .selection import SelectionRowIterable
 
 if TYPE_CHECKING:
     from .. import operations
+    from .._extension import Extension
     from .._leaf import Leaf
     from ._engine import OrderByTermState
 
@@ -53,6 +54,11 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         base_rows = visited.visit(self)
         key_columns = next(iter(visited.unique_keys))  # don't care which unique key we use
         return base_rows.with_unique_index(key_columns)
+
+    def visit_extension(self, visited: Extension[_T]) -> RowIterable[_T]:
+        from ._engine import ExtensionInterface
+
+        return cast(ExtensionInterface, visited).to_row_iterable()
 
     def visit_join(self, visited: operations.Join[_T]) -> RowIterable[_T]:
         # Docstring inherited.

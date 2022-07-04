@@ -38,6 +38,7 @@ from .._relation_visitor import RelationVisitor
 from ._column_type_info import _L, ColumnTypeInfo
 
 if TYPE_CHECKING:
+    from .._extension import Extension
     from .._join_condition import JoinCondition
     from .._relation import Relation
 
@@ -84,8 +85,8 @@ class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
     Notes
     -----
     This class never attempts to serialize its `SelectParts` state, and cannot
-    be fully deserialized without a custom implementation of `MappingReader`
-    (which by default will deserialize a `SelectPartsLeaf` as a base `Leaf`
+    be fully deserialized without a custom implementation of `.MappingReader`
+    (which by default will deserialize a `SelectPartsLeaf` as a base `.Leaf`
     instance, or raise if `extra` is not empty).
     """
 
@@ -104,8 +105,8 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     """A `.RelationVisitor` implemention that converts a `.Relation` tree into
     a `SelectParts` struct.
 
-    This visitor directly handles `Leaf`, `operations.Join`,
-    `operations.Projection`, and `operations.Selection` relations, and
+    This visitor directly handles `.Leaf`, `.Extension`, `.operations.Join`,
+    `.operations.Projection`, and `.operations.Selection` relations, and
     delegates the others to `ToExecutable`.  It does not handle transfers at
     all.
     """
@@ -122,6 +123,10 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             [],
             None,
         )
+
+    def visit_extension(self, visited: Extension[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
+        return self.column_types.convert_extension_to_select_parts(visited)
 
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.

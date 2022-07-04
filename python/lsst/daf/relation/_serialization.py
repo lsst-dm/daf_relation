@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Generic, cast
 from . import operations
 from ._columns import _T, UniqueKey
 from ._exceptions import RelationSerializationError
+from ._extension import Extension
 from ._join_condition import JoinCondition
 from ._leaf import Leaf
 from ._order_by_term import OrderByTerm
@@ -98,6 +99,21 @@ class MappingReader(Generic[_T]):
             case {"type": "distinct", "base": base, "unique_keys": unique_keys}:
                 return operations.Distinct(
                     self.read_relation(base), self.read_unique_keys(unique_keys)
+                ).checked_and_simplified(recursive=False)
+            case {
+                "type": "extension",
+                "name": str(name),
+                "base": base,
+                "columns": columns,
+                "unique_keys": unique_keys,
+                **extra,
+            }:
+                return self.read_extension(
+                    name,
+                    base=self.read_relation(base),
+                    columns=self.read_columns(columns),
+                    unique_keys=self.read_unique_keys(unique_keys),
+                    extra=cast(dict[str, Any], extra),
                 ).checked_and_simplified(recursive=False)
             case {
                 "type": "leaf",
@@ -281,10 +297,45 @@ class MappingReader(Generic[_T]):
         """
         if extra:
             raise RelationSerializationError(
-                f"Leaf relation {name!r} is safed with extra state {extra}, "
+                f"Leaf relation {name!r} is saved with extra state {extra}, "
                 "but reader has not been specialized to support it."
             )
         return Leaf.from_extra_mapping(name, engine, columns, unique_keys, extra)
+
+    def read_extension(
+        self,
+        name: str,
+        base: Relation[_T],
+        columns: Set[_T],
+        unique_keys: Set[UniqueKey[_T]],
+        extra: dict[str, Any],
+    ) -> Extension[_T]:
+        """Read an extension relation.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the leaf relation.
+        base : `Relation`
+            Base relation the operation acts upon.
+        columns : `~collections.abc.Set` [ `.ColumnTag` ]
+            Set of columns for the relation.
+        unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
+            Set of sets representing unique constraints.
+        extra : `dict`
+            Dictionary of extra operation-specific state.
+
+        Returns
+        -------
+        relation : `Relation`
+            Extension relation.  Derived classes will typically override and
+            invoke the appropriate `Extension` subclass's `from_extra_mapping`
+            based on the name.  The default implementation always raises
+            `RelationSerializationError`.
+        """
+        raise RelationSerializationError(
+            f"Extension relation {name!r} requires a custom `MappingReader` to be read."
+        )
 
     def read_join_condition(
         self,
@@ -568,6 +619,17 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "type": "distinct",
             "base": visited.base.visit(self),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
+        }
+
+    def visit_extension(self, visited: Extension[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {
+            "type": "extension",
+            "base": visited.base.visit(self),
+            "name": visited.name,
+            "columns": self.write_columns(visited.columns),
+            "unique_keys": self.write_unique_keys(visited.unique_keys),
+            **visited.write_extra_to_mapping(),
         }
 
     def visit_leaf(self, visited: Leaf[_T]) -> dict[str, Any]:

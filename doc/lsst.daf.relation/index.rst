@@ -14,6 +14,8 @@ A `Relation` instance does not necessarily correspond to a concrete in-memory ta
 
 The core operations on relations are represented by the `Relation` subclasses in the `operations` module, while the `Leaf` class provides an intermediate base class for relations that represent direct storage of rows (and in some cases actually do store rows themselves).
 Direct construction of the `operations` classes is not recommended; the `Relation` class itself provides safer factory method that should be used instead.
+Custom operations can be defined by subclassing `Extension` and providing
+implementations for that operation in all relevant engines (see engine documentation for details).
 
 Engines and operation guarantees
 --------------------------------

@@ -37,18 +37,74 @@ from .._columns import _T
 
 if TYPE_CHECKING:
     from .._engines import EngineTag
+    from .._extension import Extension
     from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
     from .._predicate import Predicate
-
+    from ._select_parts import SelectParts
 
 _L = TypeVar("_L")
 
 _L_con = TypeVar("_L_con", contravariant=True)
 
 
+class ExtensionInterface(Protocol[_T, _L]):
+    """Interface for `.Extension` operations in this engine.
+
+    `.Extension` subclasses must either implement this interface or be handled
+    by a `ColumnTypeInfo` implementation to be used with the SQL engine.
+    """
+
+    def to_executable(
+        self,
+        column_types: ColumnTypeInfo[_T, _L],
+        *,
+        distinct: bool = False,
+        order_by: Sequence[OrderByTerm[_T]] = (),
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> sqlalchemy.sql.expression.SelectBase:
+        """Convert this relation into SQL as an executable query.
+
+        Parameters
+        ----------
+        column_types : `ColumnTypeInfo`
+            Object that relates column tags to logical columns.
+        distinct : `bool`
+            Whether to generate an expression whose rows are forced to be
+            unique.
+        order_by : `Iterable` [ `.OrderByTerm` ]
+            Iterable of objects that specify a sort order.
+        offset : `int`, optional
+            Starting index for returned rows, with ``0`` as the first row.
+        limit : `int` or `None`, optional
+            Maximum number of rows returned, or `None` (default) for no limit.
+
+        Returns
+        -------
+        select : `sqlalchemy.sql.expression.SelectBase`
+            A SQLAlchemy SELECT or compound SELECT query.
+        """
+        ...
+
+    def to_select_parts(self, column_types: ColumnTypeInfo[_T, _L]) -> SelectParts[_T, _L]:
+        """Convert this relation into SQL as a `SelectParts` struct.
+
+        Parameters
+        ----------
+        column_types : `ColumnTypeInfo`
+            Object that relates column tags to logical columns.
+
+        Returns
+        -------
+        select_parts : `SelectParts`
+            Struct representing a simple SELECT query.
+        """
+        ...
+
+
 class PredicateState(Protocol[_T, _L_con]):
-    """Callable protocol for the values of `Predicate.engine_state` for this
+    """Callable protocol for the values of `.Predicate.engine_state` for this
     engine.
     """
 
@@ -64,7 +120,7 @@ class PredicateState(Protocol[_T, _L_con]):
             available to the predicate.  This will typically involve columns
             beyond those in ``columns_required``.
         columns_required : `~collections.abc.Set`
-            Forwarded from `Predicate.columns_required`.
+            Forwarded from `.Predicate.columns_required`.
 
         Returns
         -------
@@ -76,7 +132,7 @@ class PredicateState(Protocol[_T, _L_con]):
 
 
 class OrderByTermState(Protocol[_T, _L_con]):
-    """Callable protocol for the values of `OrderByTerm.engine_state` for this
+    """Callable protocol for the values of `.OrderByTerm.engine_state` for this
     engine.
     """
 
@@ -92,7 +148,7 @@ class OrderByTermState(Protocol[_T, _L_con]):
             available to the order-by-term.  This will typically involve
             columns beyond those in ``columns_required``.
         columns_required : `~collections.abc.Set`
-            Forwarded from `OrderByTerm.columns_required`.
+            Forwarded from `.OrderByTerm.columns_required`.
         ascending : `bool`
             Whether to sort ascending (`True`) or descending (`False`).
 
@@ -106,7 +162,7 @@ class OrderByTermState(Protocol[_T, _L_con]):
 
 
 class JoinConditionState(Protocol[_T, _L_con]):
-    """Callable protocol for the values of `JoinCondition.engine_state` for
+    """Callable protocol for the values of `.JoinCondition.engine_state` for
     this engine.
     """
 
@@ -126,7 +182,7 @@ class JoinConditionState(Protocol[_T, _L_con]):
             will typically involve columns beyond those in
             ``columns_required``.
         columns_required : `~collections.abc.Set`
-            Forwarded from `JoinCondnition.columns_required`.  Is ordered
+            Forwarded from `.JoinCondition.columns_required`.  Is ordered
             consistently with ``logical_columns``.
         was_flipped : `bool`
             Whether this join condition was flipped relative to its original
@@ -391,3 +447,66 @@ class ColumnTypeInfo(Generic[_T, _L]):
                 f"No default SQL implementation for Predicate {predicate} "
                 f"with no state for engine {engine}."
             )
+
+    def convert_extension_to_executable(
+        self,
+        extension: Extension[_T],
+        *,
+        distinct: bool = False,
+        order_by: Sequence[OrderByTerm[_T]] = (),
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> sqlalchemy.sql.expression.SelectBase:
+        """Convert a relation into SQL as an executable query.
+
+        Parameters
+        ----------
+        extension : `Extension`
+            Extension relation to convert.
+        distinct : `bool`
+            Whether to generate an expression whose rows are forced to be
+            unique.
+        order_by : `Iterable` [ `.OrderByTerm` ]
+            Iterable of objects that specify a sort order.
+        offset : `int`, optional
+            Starting index for returned rows, with ``0`` as the first row.
+        limit : `int` or `None`, optional
+            Maximum number of rows returned, or `None` (default) for no limit.
+
+        Returns
+        -------
+        select : `sqlalchemy.sql.expression.SelectBase`
+            A SQLAlchemy SELECT or compound SELECT query.
+
+        Notes
+        -----
+        The default implementation assumes ``extension`` satisfies
+        `ExtensionInterface` and delegates to
+        `~ExtensionInterface.to_executable`.
+        """
+        sql_extension = cast(ExtensionInterface, extension)
+        return sql_extension.to_executable(
+            self, distinct=distinct, order_by=order_by, offset=offset, limit=limit
+        )
+
+    def convert_extension_to_select_parts(self, extension: Extension[_T]) -> SelectParts[_T, _L]:
+        """Convert a relation into SQL as a `SelectParts` struct.
+
+        Parameters
+        ----------
+        extension : `Extension`
+            Extension relation to convert.
+
+        Returns
+        -------
+        select_parts : `SelectParts`
+            Struct representing a simple SELECT query.
+
+        Notes
+        -----
+        The default implementation assumes ``extension`` satisfies
+        `ExtensionInterface` and delegates to
+        `~ExtensionInterface.to_select_parts`.
+        """
+        sql_extension = cast(ExtensionInterface, extension)
+        return sql_extension.to_select_parts(self)

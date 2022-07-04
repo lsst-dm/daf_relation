@@ -28,6 +28,8 @@ with `.Relation` and most other `.lsst.daf.relation` classes, and another we cal
 In the simplest case, the logical column type is just `sqlalchemy.sql.ColumnElement`, and this is what the default implementations of most `ColumnTypeInfo` methods assume, but custom subclasses can use other types, such as wrappers that hold one or more `sqlalchemy.sql.ColumnElement` objects.
 This allows one column tag and logical column in the `.Relation` expression of query to map to multiple columns in the SQL representation.
 
+Support for `.Extension` operation subclasses can be added by either reimplementing `ColumnTypeInfo.to_executable` and `ColumnTypeInfo.to_select_parts`, or by including the `ExtensionInterface` methods in the `.Extension` subclass.
+
 Leaf types
 """"""""""
 

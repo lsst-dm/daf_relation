@@ -37,6 +37,7 @@ from ._column_type_info import _L, ColumnTypeInfo
 from ._select_parts import ToSelectParts
 
 if TYPE_CHECKING:
+    from .._extension import Extension
     from .._leaf import Leaf
     from .._order_by_term import OrderByTerm
     from .._relation import Relation
@@ -48,9 +49,9 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     a SQLAlchemy (possibly-compound) SELECT query that can be directly
     executed.
 
-    This visitor directly handles `operations.Slice`, `operations.Union`, and
-    `operations.Distinct` relations, and delegates the others to
-    `ToSelectParts`.  It does not handle transfers at all.
+    This visitor directly handles `.Extension`, `.operations.Slice`,
+    `.operations.Union`, and `.operations.Distinct` relations, and delegates
+    the others to `ToSelectParts`.  It does not handle transfers at all.
     """
 
     column_types: ColumnTypeInfo[_T, _L]
@@ -79,6 +80,12 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     def visit_distinct(self, visited: operations.Distinct[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         return visited.base.visit(dataclasses.replace(self, distinct=True))
+
+    def visit_extension(self, visited: Extension[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
+        return self.column_types.convert_extension_to_executable(
+            visited, distinct=self.distinct, order_by=self.order_by, offset=self.offset, limit=self.limit
+        )
 
     def visit_leaf(self, visited: Leaf[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.

@@ -30,6 +30,7 @@ from ._columns import _T
 
 if TYPE_CHECKING:
     from . import operations
+    from ._extension import Extension
     from ._leaf import Leaf
 
 _U = TypeVar("_U", covariant=True)
@@ -43,6 +44,11 @@ class RelationVisitor(Generic[_T, _U]):
     @abstractmethod
     def visit_distinct(self, visited: operations.Distinct[_T]) -> _U:
         """Hook for processing `~operations.Distinct` operations."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_extension(self, visited: Extension[_T]) -> _U:
+        """Hook for processing `Extension` operations."""
         raise NotImplementedError()
 
     @abstractmethod

@@ -50,13 +50,14 @@ class Relation(Generic[_T]):
     Notes
     -----
     `Relation` is an unusual abstract base class in that inheritance from it is
-    closed to the `Leaf` class (and its subclasses) and the types in the
-    `operations` subpackage; while other external derived classes are not
-    explicitly prohibited (there's no graceful way to do that in Python), much
-    of the functionality of this package relies on the set of derived types
-    enumerated in the `RelationVisitor` interface.  Essentially, instead of the
-    types of relations in a tree being extensible, this package treats things
-    one can *do* with a relation tree as its primary extension interface.
+    closed to the `Leaf` class (and its subclasses) the types in the
+    `operations` subpackage, and subclasses of the `Extension` class; while
+    other external derived classes are not explicitly prohibited (there's no
+    graceful way to do that in Python), much of the functionality of this
+    package relies on the set of derived types enumerated in the
+    `RelationVisitor` interface.  Essentially, instead of the types of
+    relations in a tree being extensible, this package treats things one can
+    *do* with a relation tree as its primary extension interface.
 
     **Relation construction**
 
