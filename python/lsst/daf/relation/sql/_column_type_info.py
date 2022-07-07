@@ -232,7 +232,10 @@ class ColumnTypeInfo(Generic[_T, _L]):
         return {tag: cast(_L, sql_columns[str(tag)]) for tag in tags}
 
     def select_items(
-        self, items: Iterable[tuple[_T, _L]], sql_from: sqlalchemy.sql.FromClause
+        self,
+        items: Iterable[tuple[_T, _L]],
+        sql_from: sqlalchemy.sql.FromClause,
+        *extra: sqlalchemy.sql.ColumnElement,
     ) -> sqlalchemy.sql.Select:
         """Construct a SQLAlchemy representation of a SELECT query.
 
@@ -246,6 +249,8 @@ class ColumnTypeInfo(Generic[_T, _L]):
             SQLAlchemy representation of a FROM clause, such as a single table,
             aliased subquery, or join expression.  Must provide all columns
             referenced by ``items``.
+        *extra : `sqlalchemy.sql.ColumnElement`
+            Additional SQL column expressions to include.
 
         Returns
         -------
@@ -261,6 +266,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
             cast(sqlalchemy.sql.ColumnElement, logical_column).label(str(tag))
             for tag, logical_column in items
         ]
+        select_columns.extend(extra)
         self.handle_empty_columns(select_columns)
         return sqlalchemy.sql.select(*select_columns).select_from(sql_from)
 
