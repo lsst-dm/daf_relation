@@ -108,9 +108,7 @@ class PredicateState(Protocol[_T, _L_con]):
     engine.
     """
 
-    def __call__(
-        self, logical_columns: Mapping[_T, _L_con], columns_required: Set[_T]
-    ) -> sqlalchemy.sql.ColumnElement:
+    def __call__(self, logical_columns: Mapping[_T, _L_con], /) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing the predicate.
 
         Parameters
@@ -119,8 +117,6 @@ class PredicateState(Protocol[_T, _L_con]):
             Mapping from `.ColumnTag` to logical column, containing all columns
             available to the predicate.  This will typically involve columns
             beyond those in ``columns_required``.
-        columns_required : `~collections.abc.Set`
-            Forwarded from `.Predicate.columns_required`.
 
         Returns
         -------
@@ -137,7 +133,7 @@ class OrderByTermState(Protocol[_T, _L_con]):
     """
 
     def __call__(
-        self, logical_columns: Mapping[_T, _L_con], columns_required: Set[_T], ascending: bool
+        self, logical_columns: Mapping[_T, _L_con], /, ascending: bool
     ) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing the order-by term.
 
@@ -147,8 +143,6 @@ class OrderByTermState(Protocol[_T, _L_con]):
             Mapping from `.ColumnTag` to logical column, containing all columns
             available to the order-by-term.  This will typically involve
             columns beyond those in ``columns_required``.
-        columns_required : `~collections.abc.Set`
-            Forwarded from `.OrderByTerm.columns_required`.
         ascending : `bool`
             Whether to sort ascending (`True`) or descending (`False`).
 
@@ -169,7 +163,7 @@ class JoinConditionState(Protocol[_T, _L_con]):
     def __call__(
         self,
         logical_columns: tuple[Mapping[_T, _L_con], Mapping[_T, _L_con]],
-        columns_required: tuple[Set[_T], Set[_T]],
+        /,
         was_flipped: bool,
     ) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing the join condition.
@@ -181,9 +175,6 @@ class JoinConditionState(Protocol[_T, _L_con]):
             all columns available to the condition from each relation.  This
             will typically involve columns beyond those in
             ``columns_required``.
-        columns_required : `~collections.abc.Set`
-            Forwarded from `.JoinCondition.columns_required`.  Is ordered
-            consistently with ``logical_columns``.
         was_flipped : `bool`
             Whether this join condition was flipped relative to its original
             definition.
@@ -220,7 +211,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
     columns on result rows when a query is actually executed.
     """
 
-    def extract_mapping(self, tags: Set[_T], sql_columns: sqlalchemy.sql.ColumnCollection) -> Mapping[_T, _L]:
+    def extract_mapping(self, tags: Set[_T], sql_columns: sqlalchemy.sql.ColumnCollection) -> dict[_T, _L]:
         """Extract a mapping with `.ColumnTag` keys and logical column values
         from a SQLAlchemy column collection.
 
@@ -235,8 +226,8 @@ class ColumnTypeInfo(Generic[_T, _L]):
 
         Returns
         -------
-        logical_columns : `Mapping`
-            Mapping from `.ColumnTag` to logical column type.
+        logical_columns : `dict`
+            Dictionary mapping `.ColumnTag` to logical column type.
         """
         return {tag: cast(_L, sql_columns[str(tag)]) for tag in tags}
 
@@ -362,7 +353,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
         """
         callable: JoinConditionState[_T, _L] | None = condition.engine_state.get(engine)
         if callable is not None:
-            return callable(logical_columns, condition.columns_required, condition.was_flipped)
+            return callable(logical_columns, condition.was_flipped)
         else:
             raise NotImplementedError(
                 f"No default SQL implementation for Predicate {condition} "
@@ -401,7 +392,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
         """
         callable: OrderByTermState[_T, _L] | None = order_by.engine_state.get(engine)
         if callable is not None:
-            return callable(logical_columns, order_by.columns_required, order_by.ascending)
+            return callable(logical_columns, order_by.ascending)
         elif len(order_by.columns_required) == 1:
             (tag,) = order_by.columns_required
             logical_column = cast(sqlalchemy.sql.ColumnElement, logical_columns[tag])
@@ -441,7 +432,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
         """
         callable: PredicateState[_T, _L] | None = predicate.engine_state.get(engine)
         if callable is not None:
-            return callable(logical_columns, predicate.columns_required)
+            return callable(logical_columns)
         else:
             raise NotImplementedError(
                 f"No default SQL implementation for Predicate {predicate} "
