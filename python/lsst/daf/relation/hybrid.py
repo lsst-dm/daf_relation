@@ -28,12 +28,13 @@ from typing import TYPE_CHECKING, Mapping, Protocol
 from . import operations
 from ._columns import _T
 from ._exceptions import EngineError
+from ._relation import Relation
 from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
     from ._engines import EngineTag
+    from ._extension import Extension
     from ._leaf import Leaf
-    from ._relation import Relation
 
 
 class TransferFunction(Protocol[_T]):
@@ -48,6 +49,11 @@ class HybridVisitor(RelationVisitor[_T, Relation[_T]]):
     def visit_distinct(self, visited: operations.Distinct[_T]) -> Relation[_T]:
         if (base := visited.base.visit(self)) is not visited.base:
             return operations.Distinct(base, visited.unique_keys)
+        return visited
+
+    def visit_extension(self, visited: Extension[_T]) -> Relation[_T]:
+        if (base := visited.base.visit(self)) is not visited.base:
+            return visited.rebased(base, equivalent=True)
         return visited
 
     def visit_leaf(self, visited: Leaf[_T]) -> Relation[_T]:
@@ -82,7 +88,7 @@ class HybridVisitor(RelationVisitor[_T, Relation[_T]]):
     def visit_transfer(self, visited: operations.Transfer) -> Relation[_T]:
         # First traverse the tree down to leaf nodes.
         source = visited.base.visit(self)
-        # On the way back down to the root, use the register functions to
+        # On the way back down to the root, use the registered functions to
         # execute transfers from one engine to another.
         try:
             transfer_function = self.transfer_functions[source.engine.tag, visited.engine.tag]

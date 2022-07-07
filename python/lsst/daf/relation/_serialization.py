@@ -300,7 +300,7 @@ class MappingReader(Generic[_T]):
                 f"Leaf relation {name!r} is saved with extra state {extra}, "
                 "but reader has not been specialized to support it."
             )
-        return Leaf.from_extra_mapping(name, engine, columns, unique_keys, extra)
+        return Leaf(name, engine, columns, unique_keys)
 
     def read_extension(
         self,
@@ -487,8 +487,13 @@ class MappingReader(Generic[_T]):
             raw, f"Expected an iterable of serialized JoinCondition mappings, got {raw!r}."
         ):
             match mapping:
-                case {"name": str(name), "columns_required": [cr0, cr1], "engines": engines, **general_state}:
-                    result.add(
+                case {
+                    "name": str(name),
+                    "columns_required": [cr0, cr1],
+                    "engines": engines,
+                    **general_state,
+                }:
+                    result.add(  # type: ignore
                         self.read_join_condition(
                             name,
                             (frozenset(self.read_columns(cr0)), frozenset(self.read_columns(cr1))),

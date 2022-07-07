@@ -24,10 +24,10 @@ from __future__ import annotations
 __all__ = ("Extension",)
 
 from abc import abstractmethod
-from collections.abc import Mapping, Set
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from ._columns import _T, UniqueKey
+from ._columns import _T
 from ._engines import EngineTree
 from ._relation import Relation
 
@@ -48,6 +48,7 @@ class Extension(Relation[_T]):
         raise NotImplementedError()
 
     @property
+    @abstractmethod
     def name(self) -> str:
         """Name for the relation (`str`).
 
@@ -63,7 +64,7 @@ class Extension(Relation[_T]):
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
-        raise NotImplementedError("TODO")
+        return visitor.visit_extension(self)
 
     def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
         # Docstring inherited.
@@ -91,20 +92,8 @@ class Extension(Relation[_T]):
             A new version of this operation, with all simplifications and
             checks done.  Due to simplification this may not be an instance of
             the original extension type anymore.
-
-        Notes
-        -----
-        The default implementation round-trips through serialization hooks
-        `write_extra_to_mapping` and `from_extra_mapping`, ignoring
-        ``equivalent``.
         """
-        return (
-            type(self)
-            .from_extra_mapping(
-                self.name, base, self.columns, self.unique_keys, self.write_extra_to_mapping()
-            )
-            .checked_and_simplified(recursive=False)
-        )
+        raise NotImplementedError()
 
     def write_extra_to_mapping(self) -> Mapping[str, Any]:
         """Transform any extra operation-specific state that should be
@@ -121,43 +110,3 @@ class Extension(Relation[_T]):
             "name", "columns", or "unique_keys".
         """
         return {}
-
-    @classmethod
-    @abstractmethod
-    def from_extra_mapping(
-        cls,
-        name: str,
-        base: Relation[_T],
-        columns: Set[_T],
-        unique_keys: Set[UniqueKey[_T]],
-        extra: Mapping[str, Any],
-    ) -> Extension[_T]:
-        """Construct a new `Extension` instance from a serialization-friendly
-        mapping.
-
-        The default implementation calls ``cls`` with all base-class
-        constructor arguments positional and ``extra`` unpacked into keyword
-        arguments.
-
-        Parameters
-        ----------
-        name : `str`
-            Name for the relation.  This is used to implement `str` and is part
-            of the serialized form of a relation (and hence `repr` as well),
-            but is otherwise ignored.
-        base : `Relation`
-            Base relation this operation acts on.
-        columns : `~collections.abc.Set`
-            Set of columns in the relation.
-        unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
-            The set of unique constraints this relation is guaranteed to
-            satisfy.  See `Relation.unique_keys` for details.
-        extra : `Mapping`
-            Mapping returned by `write_extra_to_mapping`.
-
-        Returns
-        -------
-        extension : `Relation`
-            Extension instance or equivalent simplified relation.
-        """
-        raise NotImplementedError()

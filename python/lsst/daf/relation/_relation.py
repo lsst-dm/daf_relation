@@ -56,14 +56,15 @@ class Relation(Generic[_T]):
     graceful way to do that in Python), much of the functionality of this
     package relies on the set of derived types enumerated in the
     `RelationVisitor` interface.  Essentially, instead of the types of
-    relations in a tree being extensible, this package treats things one can
-    *do* with a relation tree as its primary extension interface.
+    relations in a tree being arbitrarily extensible, this package treats
+    things one can *do* with a relation tree as its primary extension
+    interface.
 
     **Relation construction**
 
     The `Relation` base class provides factory methods that should generally be
     used to construct derived instances (instead of the class constructors).
-    These factories perform checking and simplifification that can't be always
+    These factories perform checking and simplification that can't be always
     be done in constructors, because they can change the type of the operation
     returned.  The `checked_and_simplified` and `assert_checked_and_simplified`
     methods can be used instead to ensure the invariants of derived types are
@@ -203,7 +204,7 @@ class Relation(Generic[_T]):
         """
         return frozenset()
 
-    def distinct(self, unique_keys: Set[UniqueKey[_T]] | None = None):
+    def distinct(self, unique_keys: Set[UniqueKey[_T]] | None = None) -> Relation[_T]:
         """Construct a relation with the same rows and columns as ``self``, but
         with rows guaranteed to be unique.
 

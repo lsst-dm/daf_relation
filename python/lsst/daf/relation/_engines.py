@@ -25,7 +25,7 @@ __all__ = ("EngineTag", "EngineTree", "EngineOptions")
 
 import dataclasses
 from collections.abc import Hashable, Iterator, Set
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 
 @dataclasses.dataclass(frozen=True)
@@ -99,12 +99,10 @@ class EngineTag(Hashable, Protocol):
     def __str__(self) -> str:
         ...
 
-    @property
-    def options(self) -> EngineOptions:
-        """The options that specialize how this engine's relations are checked
-        and simplified (`EngineOptions`).
-        """
-        ...
+    options: ClassVar[EngineOptions]
+    """The options that specialize how this engine's relations are checked
+    and simplified (`EngineOptions`).
+    """
 
 
 @dataclasses.dataclass(frozen=True)

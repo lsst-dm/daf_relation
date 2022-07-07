@@ -149,7 +149,7 @@ class Join(Relation[_T]):
                     f"Join condition {condition} was flipped; only unflipped "
                     "conditions should be added to relations."
                 )
-            if self.engine not in condition.engine_state:
+            if self.engine.tag not in condition.engine_state:
                 raise EngineError(
                     f"Join condition {condition} supports engine(s) {set(condition.engine_state.keys())}, "
                     f"while join has {self.engine}."

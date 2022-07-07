@@ -55,14 +55,6 @@ class Leaf(Relation[_T]):
     unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
         The set of unique constraints this relation is guaranteed to satisfy.
         See `Relation.unique_keys` for details.
-
-    Notes
-    -----
-    The `Leaf` constructor takes care of simplifying and checking (at least for
-    the `columns` and `unique_keys`), allowing `checked_and_simplified` to have
-    a trivial implementation that just returns ``self``.  This is possible only
-    because `Leaf` instances by definition do not need to recursively check and
-    simplify nested relations, and cannot transform their type when simplified.
     """
 
     def __init__(
@@ -76,7 +68,6 @@ class Leaf(Relation[_T]):
         self._engine = EngineTree.build_if_needed(engine)
         self._columns = columns
         self._unique_keys = drop_covered_internal_unique_keys(unique_keys)
-        check_unique_keys_in_columns(self)
 
     def __str__(self) -> str:
         return f"{self.name}@{self.engine.tag!s}"
@@ -111,6 +102,7 @@ class Leaf(Relation[_T]):
 
     def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
         # Docstring inherited.
+        check_unique_keys_in_columns(self)
         return self
 
     def write_extra_to_mapping(self) -> Mapping[str, Any]:

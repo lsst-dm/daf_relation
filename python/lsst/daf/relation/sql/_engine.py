@@ -51,6 +51,9 @@ class Engine:
     """Name that identifies this engine relative to others of the same type.
     """
 
+    def __str__(self) -> str:
+        return self.name
+
     def __repr__(self) -> str:
         return f"lsst.daf.relation.sql.Engine({self.name!r})"
 

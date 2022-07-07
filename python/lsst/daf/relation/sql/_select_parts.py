@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("SelectParts", "SelectPartsLeaf", "ToSelectParts")
+__all__ = ("MutableSelectParts", "SelectParts", "SelectPartsLeaf", "ToSelectParts")
 
 import dataclasses
 from collections import deque
@@ -40,6 +40,7 @@ from ._column_type_info import _L, ColumnTypeInfo
 if TYPE_CHECKING:
     from .._extension import Extension
     from .._join_condition import JoinCondition
+    from .._order_by_term import OrderByTerm
     from .._relation import Relation
 
 
@@ -68,6 +69,20 @@ class SelectParts(Generic[_T, _L]):
     optimization that avoids calls to `ColumnTypeInfo.extract_mapping` when
     `columns_available` isn't actually needed.
     """
+
+
+@dataclasses.dataclass(slots=True, eq=False)
+class MutableSelectParts(SelectParts[_T, _L]):
+    """A mutable variant of `SelectParts.
+
+    This is intended primarily for construction of `SelectPartsLeaf` instances,
+    where it's convenient to be able to modify the struct in place before
+    passing it to the leaf constructor, and `columns_available` is not allowed
+    to be `None`.
+    """
+
+    where: list[sqlalchemy.sql.ColumnElement] = dataclasses.field(default_factory=list)
+    columns_available: dict[_T, _L] = dataclasses.field(default_factory=dict)
 
 
 class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
@@ -164,7 +179,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             )
         full_where = list(base_parts.where)
         for p in visited.predicates:
-            full_where.extend(
+            full_where.append(
                 self.column_types.convert_predicate(visited.engine.tag, p, base_parts.columns_available)
             )
         return dataclasses.replace(base_parts, where=full_where)
@@ -322,7 +337,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         for tag in base_parts.columns_available.keys() & next_parts.columns_available.keys():
             on_terms.append(base_parts.columns_available[tag] == next_parts.columns_available[tag])
         for condition in conditions:
-            on_terms.extend(
+            on_terms.append(
                 self.column_types.convert_join_condition(
                     next_relation.engine.tag,
                     condition,

@@ -335,7 +335,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
         engine: EngineTag,
         condition: JoinCondition[_T],
         logical_columns: tuple[Mapping[_T, _L], Mapping[_T, _L]],
-    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
+    ) -> sqlalchemy.sql.ColumnElement:
         """Convert a `.JoinCondition` instance into a SQLAlchemy expression.
 
         Parameters
@@ -414,7 +414,7 @@ class ColumnTypeInfo(Generic[_T, _L]):
 
     def convert_predicate(
         self, engine: EngineTag, predicate: Predicate[_T], logical_columns: Mapping[_T, _L]
-    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
+    ) -> sqlalchemy.sql.ColumnElement:
         """Convert a `.Predicate` instance into a SQLAlchemy expression.
 
         Parameters

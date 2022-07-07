@@ -58,10 +58,9 @@ class Predicate(Generic[_T]):
     general_state: dict[str, Any] = dataclasses.field(default_factory=dict, compare=True, hash=False)
     """State for the predicate that is independent of any engine (`dict`).
 
-    This state is included in equality comparison and serialization.  It is not
-    modified when the conditions is flipped.  To support serialization via
-    nested dictionary formats like JSON or YAML, this must (recursively)
-    contain only types supported by that format.
+    This state is included in equality comparison and serialization. To support
+    serialization via nested dictionary formats like JSON or YAML, this must
+    (recursively) contain only types supported by that format.
 
     While this is a mutable mapping, the expectation is that its contents will
     not change after the `Predicate` is added to a `Relation`; this is

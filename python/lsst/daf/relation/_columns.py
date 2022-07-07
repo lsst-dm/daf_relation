@@ -128,7 +128,7 @@ def drop_covered_internal_unique_keys(keys: Set[UniqueKey]) -> set[UniqueKey]:
     """
     keys = set(keys)
     while True:
-        to_drop = {k1 for k1, k2 in itertools.permutations(keys) if k1.issuperset(k2)}
+        to_drop = {k1 for k1, k2 in itertools.permutations(keys, 2) if k1.issuperset(k2)}
         if to_drop:
             keys.difference_update(to_drop)
         else:

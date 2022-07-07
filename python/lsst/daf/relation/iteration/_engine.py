@@ -116,7 +116,7 @@ class PredicateState(Protocol[_T]):
     `RowIterable.try_join` to handle it.
     """
 
-    def __call__(self, row: Row[_T]) -> bool:
+    def __call__(self, row: Row[_T], /) -> bool:
         """Evaluate the predicate.
 
         Parameters
@@ -138,7 +138,7 @@ class OrderByTermState(Protocol[_T]):
     engine.
     """
 
-    def __call__(self, row: Row[_T]) -> Sortable:
+    def __call__(self, row: Row[_T], /) -> Sortable:
         """Evaluate the order-by term.
 
         Parameters
