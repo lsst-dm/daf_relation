@@ -24,8 +24,8 @@ from __future__ import annotations
 __all__ = ("ToExecutable",)
 
 import dataclasses
-from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Generic, cast
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Generic
 
 import sqlalchemy
 
@@ -170,32 +170,11 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
             SQL SELECT statement.
         """
         select_parts = relation.visit(ToSelectParts(self.column_types))
-        if select_parts.columns_available is None:
-            columns_available = self.column_types.extract_mapping(
-                relation.columns, select_parts.from_clause.columns
-            )
-            columns_projected = columns_available
-        else:
-            columns_available = select_parts.columns_available
-            columns_projected = {tag: columns_available[tag] for tag in relation.columns}
-        select = self.column_types.select_items(columns_projected.items(), select_parts.from_clause)
-        if len(select_parts.where) == 1:
-            select = select.where(select_parts.where[0])
-        elif select_parts.where:
-            select = select.where(sqlalchemy.sql.and_(*select_parts.where))
-        if self.distinct:
-            select = select.distinct()
-        if self.order_by:
-            select = select.order_by(
-                *[
-                    self.column_types.convert_order_by_term(
-                        relation.engine.tag, t, cast(Mapping[_T, _L], select_parts.columns_available)
-                    )
-                    for t in self.order_by
-                ]
-            )
-        if self.offset:
-            select = select.offset(self.offset)
-        if self.limit is not None:
-            select = select.limit(self.limit)
-        return select
+        return select_parts.to_executable(
+            relation,
+            self.column_types,
+            distinct=self.distinct,
+            order_by=self.order_by,
+            offset=self.offset,
+            limit=self.limit,
+        )

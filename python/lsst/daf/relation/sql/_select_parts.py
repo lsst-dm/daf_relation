@@ -39,6 +39,7 @@ from ._column_type_info import _L, ColumnTypeInfo
 
 if TYPE_CHECKING:
     from .._extension import Extension
+    from .._order_by_term import OrderByTerm
     from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
     from .._relation import Relation
@@ -69,6 +70,70 @@ class SelectParts(Generic[_T, _L]):
     optimization that avoids calls to `ColumnTypeInfo.extract_mapping` when
     `columns_available` isn't actually needed.
     """
+
+    def to_executable(
+        self,
+        relation: Relation[_T],
+        column_types: ColumnTypeInfo[_T, _L],
+        *,
+        distinct: bool = False,
+        order_by: Sequence[OrderByTerm[_T]] = (),
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> sqlalchemy.sql.Select:
+        """Create a SQL executable from this struct.
+
+        Parameters
+        ----------
+        relation : `.Relation`
+            Relation this struct was built from.
+        column_types : `ColumnTypeInfo`
+            Object that relates column tags to logical columns.
+        distinct : `bool`
+            Whether to generate an expression whose rows are forced to be
+            unique.
+        order_by : `Iterable` [ `.OrderByTerm` ]
+            Iterable of objects that specify a sort order.
+        offset : `int`, optional
+            Starting index for returned rows, with ``0`` as the first row.
+        limit : `int` or `None`, optional
+            Maximum number of rows returned, or `None` (default) for no limit.
+
+        Returns
+        -------
+        select : `sqlalchemy.sql.Select`
+            SQL SELECT statement.
+        """
+        select_parts = relation.visit(ToSelectParts(column_types))
+        if select_parts.columns_available is None:
+            columns_available: Mapping[_T, _L] = column_types.extract_mapping(
+                relation.columns, select_parts.from_clause.columns
+            )
+            columns_projected = columns_available
+        else:
+            columns_available = select_parts.columns_available
+            columns_projected = {tag: columns_available[tag] for tag in relation.columns}
+        select = column_types.select_items(columns_projected.items(), select_parts.from_clause)
+        if len(select_parts.where) == 1:
+            select = select.where(select_parts.where[0])
+        elif select_parts.where:
+            select = select.where(sqlalchemy.sql.and_(*select_parts.where))
+        if distinct:
+            select = select.distinct()
+        if order_by:
+            select = select.order_by(
+                *[
+                    column_types.convert_order_by_term(
+                        relation.engine.tag, t, cast(Mapping[_T, _L], select_parts.columns_available)
+                    )
+                    for t in order_by
+                ]
+            )
+        if offset:
+            select = select.offset(offset)
+        if limit is not None:
+            select = select.limit(limit)
+        return select
 
 
 @dataclasses.dataclass(slots=True, eq=False)
