@@ -397,8 +397,17 @@ class RowIterableLeaf(Leaf[_T]):
 
     Parameters
     ----------
-    *args
-        Positional arguments forwarded to the `Leaf` constructor.
+    name : `str`
+        Name for the relation.  This is used to implement `str` and is part of
+        the serialized form of a relation (and hence `repr` as well), but is
+        otherwise ignored.
+    engine : `EngineTag`
+        Identifier for the engine this relation belongs to.
+    columns : `~collections.abc.Set`
+        Set of columns in the relation.
+    unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
+        The set of unique constraints this relation is guaranteed to satisfy.
+        See `Relation.unique_keys` for details.
     rows : `RowIterable`
         Iterable over mappings that backs this leaf relation.
 
@@ -415,47 +424,35 @@ class RowIterableLeaf(Leaf[_T]):
     to handle either leaf class.
     """
 
-    def __init__(self, *args: Any, rows: RowIterable):
-        super().__init__(*args)
-        self.rows = rows
-
-    @classmethod
-    def from_extra_mapping(
-        cls,
+    def __init__(
+        self,
         name: str,
         engine: EngineTag,
         columns: Set[_T],
         unique_keys: Set[UniqueKey[_T]],
-        extra: Mapping[str, Any],
-    ) -> Leaf[_T]:
-        # Docstring inheritd.
-        if "rows" in extra:
-            return SerializableRowIterableLeaf.from_extra_mapping(name, engine, columns, unique_keys, extra)
-        return super().from_extra_mapping(name, engine, columns, unique_keys, extra)
+        rows: RowIterable,
+    ):
+        super().__init__(
+            name,
+            engine,
+            columns,
+            unique_keys=unique_keys,
+        )
+        self.rows = rows
 
 
 class SerializableRowIterableLeaf(RowIterableLeaf[_T]):
     """A `Leaf` relation for the native iteration engine, backed by a lazy
     iterable.
 
-    Parameters
-    ----------
-    *args
-        Positional arguments forwarded to the `Leaf` constructor.
-    rows : `RowIterable`
-        Iterable over mappings that backs this leaf relation.
-
     Notes
     -----
     `SerializableRowIterableLeaf` differs from its base class in that it saves
     its rows when written to a dictionary for serialization.  The
     `MappingReader` must be specialized to call
-    `RowIterableLeaf.from_extra_mapping` appropriately for these to
-    be read.
+    `SerializeableRowIterableLeaf.from_extra_mapping` appropriately for these
+    to be read.
     """
-
-    def __init__(self, *args: Any, rows: RowIterable[_T]):
-        super().__init__(*args, rows=rows)
 
     def write_extra_to_mapping(self) -> Mapping[str, Any]:
         # Docstring inherited.

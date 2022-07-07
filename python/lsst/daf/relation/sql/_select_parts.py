@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Generic, cast
 import sqlalchemy
 
 from .. import operations
-from .._columns import _T
+from .._columns import _T, UniqueKey
 from .._exceptions import EngineError
 from .._leaf import Leaf
 from .._relation_visitor import RelationVisitor
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
     from .._relation import Relation
+    from ._engine import Engine
 
 
 @dataclasses.dataclass(slots=True, eq=False)
@@ -155,11 +156,21 @@ class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
 
     Parameters
     ----------
-    *args
-        Positional arguments forwarded to the `Leaf` constructor.
+    name : `str`
+        Name for the relation.  This is used to implement `str` and is part of
+        the serialized form of a relation (and hence `repr` as well), but is
+        otherwise ignored.
+    engine : `Engine`
+        Identifier for the engine this relation belongs to.
     select_parts : `SelectParts`
         The `SelectParts` struct that backs this relation.
-    extra : `Mapping`
+    columns : `~collections.abc.Set`. optional
+        Set of columns in the relation.  If not provided,
+        ``select_parts.columns_available`` is used and must not be `None`.
+    unique_keys : `~collections.abc.Set` [ `UniqueKey` ], optional
+        The set of unique constraints this relation is guaranteed to satisfy.
+        See `Relation.unique_keys` for details.
+    extra : `Mapping`, optional
         Extra information to serialize with this relation.
 
     Notes
@@ -170,10 +181,27 @@ class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
     instance, or raise if `extra` is not empty).
     """
 
-    def __init__(self, *args: Any, select_parts: SelectParts[_T, _L], extra: Mapping[str, Any]):
-        super().__init__(*args)
+    def __init__(
+        self,
+        name: str,
+        engine: Engine,
+        select_parts: SelectParts[_T, _L],
+        *,
+        columns: Set[_T] | None = None,
+        unique_keys: Set[UniqueKey[_T]] = frozenset(),
+        extra: Mapping[str, Any] | None = None,
+    ):
+        if columns is None:
+            if select_parts.columns_available is None:
+                raise RuntimeError(
+                    "SelectParts used to construct leaf must have explicit "
+                    "columns_available unless columns is provided."
+                )
+            else:
+                columns = select_parts.columns_available.keys()
+        super().__init__(name, engine, columns, unique_keys)
         self.select_parts = select_parts
-        self.extra = extra
+        self.extra = extra if extra is not None else {}
 
     def write_extra_to_mapping(self) -> Mapping[str, Any]:
         # Docstring inherited.
