@@ -632,7 +632,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "type": "extension",
             "base": visited.base.visit(self),
             "name": visited.name,
-            "columns": self.write_columns(visited.columns),
+            "columns": self.write_column_set(visited.columns),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
             **visited.write_extra_to_mapping(),
         }
@@ -643,7 +643,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "type": "leaf",
             "name": visited.name,
             "engine": self.write_engine(visited.engine.tag),
-            "columns": self.write_columns(visited.columns),
+            "columns": self.write_column_set(visited.columns),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
             **visited.write_extra_to_mapping(),
         }
@@ -657,7 +657,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "conditions": sorted(
                 {
                     "name": jc.name,
-                    "columns_required": [self.write_columns(cr) for cr in jc.columns_required],
+                    "columns_required": [self.write_column_set(cr) for cr in jc.columns_required],
                     "engines": sorted(self.write_engine(engine) for engine in jc.engine_state),
                     **jc.general_state,
                 }
@@ -670,7 +670,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         return {
             "type": "projection",
             "base": visited.base.visit(self),
-            "columns": self.write_columns(visited.columns),
+            "columns": self.write_column_set(visited.columns),
         }
 
     def visit_selection(self, visited: operations.Selection[_T]) -> dict[str, Any]:
@@ -681,7 +681,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "predicates": sorted(
                 {
                     "name": p.name,
-                    "columns_required": self.write_columns(p.columns_required),
+                    "columns_required": self.write_column_set(p.columns_required),
                     "engines": sorted(self.write_engine(engine) for engine in p.engine_state),
                     **p.general_state,
                 }
@@ -697,7 +697,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "order_by": [
                 {
                     "name": o.name,
-                    "columns_required": self.write_columns(o.columns_required),
+                    "columns_required": self.write_column_set(o.columns_required),
                     "ascending": o.ascending,
                     "engines": sorted(self.write_engine(engine) for engine in o.engine_state),
                     **o.general_state,
@@ -721,13 +721,30 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         return {
             "type": "union",
             "engine": self.write_engine(visited.engine.tag),
-            "columns": self.write_columns(visited.columns),
+            "columns": self.write_column_set(visited.columns),
             "relations": sorted(r.visit(self) for r in visited.relations),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
             "extra_doomed_by": sorted(visited.extra_doomed_by),
         }
 
-    def write_columns(self, columns: Set[_T]) -> Any:
+    def write_column(self, column: _T) -> Any:
+        """Convert a single column tag to a serializable type.
+
+        Parameters
+        ----------
+        column : `.ColumnTag`
+            Column tag to save.
+
+        Returns
+        -------
+        serialization
+            Serializable object (`list`, `dict`, `str`, etc.) representing the
+            column.  The default implementation returns the `str`
+            representation of the column tag.
+        """
+        return str(column)
+
+    def write_column_set(self, columns: Set[_T]) -> Any:
         """Convert a set of column tags to a serializable type.
 
         Parameters
@@ -740,9 +757,9 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         serialization
             Serializable object (`list`, `dict`, `str`, etc.) representing the
             columns.  The default implementation returns a sorted `list` of
-            the `str` representation of each column tag.
+            the result of calling `write_column` on each column tag.
         """
-        return sorted(str(t) for t in columns)
+        return sorted(self.write_column(t) for t in columns)
 
     def write_engine(self, engine: EngineTag) -> Any:
         """Convert an engine tag to a serializable type.
@@ -773,7 +790,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         -------
         serialization
             Serializable object (`list`, `dict`, `str`, etc.) representing the
-            set of keys.  The default implementation calls `write_columns` on
-            each key and returns a sorted list of the results.
+            set of keys.  The default implementation calls `write_column_set`
+            on each key and returns a sorted list of the results.
         """
-        return sorted(self.write_columns(key) for key in unique_keys)
+        return sorted(self.write_column_set(key) for key in unique_keys)
