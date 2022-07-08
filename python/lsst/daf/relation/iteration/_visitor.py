@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, cast
 from .._columns import _T
 from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
+from ._engine import OrderByTermInterface, PredicateInterface
 from ._row_iterable import RowCollection, RowIterable, RowIterableLeaf
 from .chain import ChainRowIterable
 from .joins import make_join_row_iterable
@@ -38,7 +39,6 @@ if TYPE_CHECKING:
     from .. import operations
     from .._extension import Extension
     from .._leaf import Leaf
-    from ._engine import OrderByTermState
 
 
 class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
@@ -87,9 +87,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         rows = visited.base.visit(self)
         rows, predicates_used = rows.try_selection(visited.predicates)
         remaining_predicates = visited.predicates - predicates_used
-        return SelectionRowIterable(
-            rows, tuple(p.engine_state[visited.engine.tag] for p in remaining_predicates)
-        )
+        return SelectionRowIterable(rows, tuple(cast(PredicateInterface, p) for p in remaining_predicates))
 
     def visit_slice(self, visited: operations.Slice[_T]) -> RowIterable[_T]:
         # Docstring inherited.
@@ -98,8 +96,11 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
             return result
         rows_list = list(base_rows)
         for order_by_term in visited.order_by[::-1]:
-            sort_key: OrderByTermState[_T] = order_by_term.engine_state[visited.engine.tag]
-            rows_list.sort(key=sort_key, reverse=not order_by_term.ascending)
+            order_by_term_interface = cast(OrderByTermInterface, order_by_term)
+            rows_list.sort(
+                key=order_by_term_interface.get_iteration_row_sort_key,
+                reverse=order_by_term_interface.get_iteration_row_sort_reverse(),
+            )
         if visited.limit is not None:
             stop = visited.offset + visited.limit
             rows_list = rows_list[visited.offset : stop]

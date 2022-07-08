@@ -29,7 +29,7 @@ from .._columns import _T
 from ._row_iterable import RowIterable
 
 if TYPE_CHECKING:
-    from ._engine import PredicateState
+    from ._engine import PredicateInterface
     from .typing import Row
 
 
@@ -44,9 +44,9 @@ class SelectionRowIterable(RowIterable[_T]):
         Tuple of callables with the `PredicateState` signature.
     """
 
-    def __init__(self, base: RowIterable[_T], predicates: tuple[PredicateState[_T], ...]):
+    def __init__(self, base: RowIterable[_T], predicates: tuple[PredicateInterface[_T], ...]):
         self.base = base
         self.predicates = predicates
 
     def __iter__(self) -> Iterator[Row[_T]]:
-        return (row for row in self.base if all(p(row) for p in self.predicates))
+        return (row for row in self.base if all(p.test_iteration_row(row) for p in self.predicates))

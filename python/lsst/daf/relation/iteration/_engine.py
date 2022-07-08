@@ -24,9 +24,9 @@ from __future__ import annotations
 __all__ = (
     "Engine",
     "ExtensionInterface",
-    "JoinConditionState",
-    "OrderByTermState",
-    "PredicateState",
+    "JoinConditionInterface",
+    "OrderByTermInterface",
+    "PredicateInterface",
 )
 
 from typing import TYPE_CHECKING, ClassVar, Protocol, final
@@ -37,7 +37,6 @@ from .._columns import _T
 from .._engines import EngineOptions
 from .._exceptions import EngineError
 from ._row_iterable import RowIterable
-from ._visitor import IterationVisitor
 
 if TYPE_CHECKING:
     from .._relation import Relation
@@ -77,6 +76,8 @@ class Engine(metaclass=Singleton):
         rows : `RowIterable`
             Iterable over rows, with each row a mapping keyed by `.ColumnTag`.
         """
+        from ._visitor import IterationVisitor
+
         if relation.engine.tag != self:
             raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine.tag}.")
         return relation.visit(IterationVisitor())
@@ -105,18 +106,8 @@ class ExtensionInterface(Protocol[_T]):
         ...
 
 
-class PredicateState(Protocol[_T]):
-    """Callable protocol for the values of `.Predicate.engine_state` for this
-    engine.
-
-    This is also used as the type for `.JoinCondition` state, as join
-    conditions are applied as predicates after performing natural joins on any
-    common columns.  A join condition's state for this engine may also be
-    `None` if and only if the second `RowIterable` in the join implements
-    `RowIterable.try_join` to handle it.
-    """
-
-    def __call__(self, row: Row[_T], /) -> bool:
+class PredicateInterface(Protocol[_T]):
+    def test_iteration_row(self, row: Row[_T]) -> bool:
         """Evaluate the predicate.
 
         Parameters
@@ -133,12 +124,8 @@ class PredicateState(Protocol[_T]):
         ...
 
 
-class OrderByTermState(Protocol[_T]):
-    """Callable protocol for the values of `.OrderByTerm.engine_state` for this
-    engine.
-    """
-
-    def __call__(self, row: Row[_T], /) -> Sortable:
+class OrderByTermInterface(Protocol[_T]):
+    def get_iteration_row_sort_key(self, row: Row[_T]) -> Sortable:
         """Evaluate the order-by term.
 
         Parameters
@@ -149,11 +136,14 @@ class OrderByTermState(Protocol[_T]):
 
         Returns
         -------
-        sortable
+        key
             Arbitrary Python object that implements at least less-than
             comparison.
         """
         ...
 
+    def get_iteration_row_sort_reverse(self) -> bool:
+        ...
 
-JoinConditionState = PredicateState
+
+JoinConditionInterface = PredicateInterface

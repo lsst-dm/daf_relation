@@ -129,11 +129,8 @@ class Slice(Relation[_T]):
         if self.order_by and not self.engine.tag.options.can_sort:
             raise EngineError(f"Engine {self.engine.tag} does not support sorting.")
         for o in self.order_by:
-            if self.engine.tag not in o.engine_state:
-                raise EngineError(
-                    f"Order-by term {o} supports engine(s) {set(o.engine_state.keys())}, "
-                    f"while relation has {self.engine}."
-                )
+            if not o.supports_engine(self.engine.tag):
+                raise EngineError(f"Order-by term {o} does not support engine {self.engine.tag}.")
             if not o.columns_required <= self.base.columns:
                 raise ColumnError(
                     f"Order-by term {o} for base relation {self.base} needs "

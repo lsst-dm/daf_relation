@@ -44,6 +44,7 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._engines import EngineTag
+    from .._serialization import DictWriter
     from .typing import GeneralIndex, IndexKey, Row, UniqueIndex
 
 
@@ -417,28 +418,25 @@ class RowIterableLeaf(Leaf[_T]):
     that it does not save its rows when written to a dictionary for
     serialization; instead it is assumed that the name and other state are
     sufficient for a `MappingReader` to construct the iterable.
-
-    Howver, it does reimplement `from_extra_mapping` to construct to
-    `SerializableRowIterable` when its serialized form is found, so this method
-    can be used by any implementation of `MappingReader` that needs that needs
-    to handle either leaf class.
     """
 
     def __init__(
         self,
-        name: str,
         engine: EngineTag,
         columns: Set[_T],
         unique_keys: Set[UniqueKey[_T]],
         rows: RowIterable,
     ):
         super().__init__(
-            name,
             engine,
             columns,
             unique_keys=unique_keys,
         )
         self.rows = rows
+
+    def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return super().serialize(writer)
 
 
 class SerializableRowIterableLeaf(RowIterableLeaf[_T]):
@@ -454,16 +452,9 @@ class SerializableRowIterableLeaf(RowIterableLeaf[_T]):
     to be read.
     """
 
-    def write_extra_to_mapping(self) -> Mapping[str, Any]:
-        # Docstring inherited.
-        columns = list(self.columns)
-        columns.sort(key=str)
-        return {"rows": [[row[t] for t in columns] for row in self.rows]}
-
     @classmethod
     def from_extra_mapping(
         cls,
-        name: str,
         engine: EngineTag,
         columns: Set[_T],
         unique_keys: Set[UniqueKey[_T]],
@@ -482,4 +473,12 @@ class SerializableRowIterableLeaf(RowIterableLeaf[_T]):
             rows = RowCollection.build_with_unique_index(deserialize_rows(), index_columns)
         else:
             rows = RowCollection(list(deserialize_rows()))
-        return cls(name, engine, columns, unique_keys, rows=rows)
+        return cls(engine, columns, unique_keys, rows=rows)
+
+    def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        result = super().serialize(writer)
+        columns = list(self.columns)
+        columns.sort(key=str)
+        result["rows"] = [[row[t] for t in columns] for row in self.rows]
+        return result

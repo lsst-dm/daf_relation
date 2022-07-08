@@ -36,13 +36,14 @@ from .._exceptions import EngineError
 from .._leaf import Leaf
 from .._relation_visitor import RelationVisitor
 from ._column_type_info import _L, ColumnTypeInfo
+from ._interfaces import ExtensionInterface, JoinConditionInterface, OrderByTermInterface, PredicateInterface
 
 if TYPE_CHECKING:
     from .._extension import Extension
-    from .._order_by_term import OrderByTerm
     from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
     from .._relation import Relation
+    from .._serialization import DictWriter
     from ._engine import Engine
 
 
@@ -124,10 +125,8 @@ class SelectParts(Generic[_T, _L]):
         if order_by:
             select = select.order_by(
                 *[
-                    column_types.convert_order_by_term(
-                        relation.engine.tag, t, cast(Mapping[_T, _L], select_parts.columns_available)
-                    )
-                    for t in order_by
+                    cast(OrderByTermInterface[_T, _L], o).to_sql_sort_column(columns_available, column_types)
+                    for o in order_by
                 ]
             )
         if offset:
@@ -156,10 +155,6 @@ class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
 
     Parameters
     ----------
-    name : `str`
-        Name for the relation.  This is used to implement `str` and is part of
-        the serialized form of a relation (and hence `repr` as well), but is
-        otherwise ignored.
     engine : `Engine`
         Identifier for the engine this relation belongs to.
     select_parts : `SelectParts`
@@ -177,13 +172,11 @@ class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
     -----
     This class never attempts to serialize its `SelectParts` state, and cannot
     be fully deserialized without a custom implementation of `.MappingReader`
-    (which by default will deserialize a `SelectPartsLeaf` as a base `.Leaf`
-    instance, or raise if `extra` is not empty).
+    that knows how to construct a `SelectParts` instance from ``extra``.
     """
 
     def __init__(
         self,
-        name: str,
         engine: Engine,
         select_parts: SelectParts[_T, _L],
         *,
@@ -199,13 +192,15 @@ class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
                 )
             else:
                 columns = select_parts.columns_available.keys()
-        super().__init__(name, engine, columns, unique_keys)
+        super().__init__(engine, columns, unique_keys)
         self.select_parts = select_parts
         self.extra = extra if extra is not None else {}
 
-    def write_extra_to_mapping(self) -> Mapping[str, Any]:
+    def serialize(self, writer: DictWriter) -> dict[str, Any]:
         # Docstring inherited.
-        return self.extra
+        result = super().serialize(writer)
+        result.update(self.extra)
+        return result
 
 
 @dataclasses.dataclass(eq=False, slots=True)
@@ -234,7 +229,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
     def visit_extension(self, visited: Extension[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        return self.column_types.convert_extension_to_select_parts(visited)
+        return cast(ExtensionInterface, visited).to_sql_select_parts(self.column_types)
 
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
@@ -273,7 +268,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         full_where = list(base_parts.where)
         for p in visited.predicates:
             full_where.append(
-                self.column_types.convert_predicate(visited.engine.tag, p, base_parts.columns_available)
+                cast(PredicateInterface, p).to_sql_boolean(base_parts.columns_available, self.column_types)
             )
         return dataclasses.replace(base_parts, where=full_where)
 
@@ -431,10 +426,8 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             on_terms.append(base_parts.columns_available[tag] == next_parts.columns_available[tag])
         for condition in conditions:
             on_terms.append(
-                self.column_types.convert_join_condition(
-                    next_relation.engine.tag,
-                    condition,
-                    (base_parts.columns_available, next_parts.columns_available),
+                cast(JoinConditionInterface, condition).to_sql_join_on(
+                    (base_parts.columns_available, next_parts.columns_available), self.column_types
                 )
             )
         on_clause: sqlalchemy.sql.ColumnElement

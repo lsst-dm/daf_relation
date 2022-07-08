@@ -24,37 +24,25 @@ from __future__ import annotations
 __all__ = ("Extension",)
 
 from abc import abstractmethod
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from ._columns import _T
-from ._engines import EngineTree
+from ._engines import EngineTag, EngineTree
+from ._exceptions import EngineError
 from ._relation import Relation
 
 if TYPE_CHECKING:
     from ._relation_visitor import _U, RelationVisitor
+    from ._serialization import DictWriter
 
 
 class Extension(Relation[_T]):
     """A `Relation` intermediate abstract base class for custom operations."""
 
-    def __str__(self) -> str:
-        return f"{self.name}@{self.engine.tag!s}"
-
     @property
     @abstractmethod
     def base(self) -> Relation[_T]:
         """Base relation this operation acts on (`Relation`)."""
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Name for the relation (`str`).
-
-        This is used to implement `str` and is part of the serialized form of a
-        relation (and hence `repr` as well), but is otherwise ignored.
-        """
         raise NotImplementedError()
 
     @property
@@ -69,10 +57,30 @@ class Extension(Relation[_T]):
     def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
         # Docstring inherited.
         if recursive:
-            new_base = self.base.checked_and_simplified(recursive=True)
-            if new_base is not self.base:
-                return self.rebased(new_base, equivalent=True)
+            base = self.base.checked_and_simplified(recursive=True)
+        else:
+            base = self.base
+        if not self.supports_engine(base.engine.tag):
+            raise EngineError(f"Extension operation {self} does not support engine {base.engine.tag}.")
+        if base is not self.base:
+            return self.rebased(base, equivalent=True)
         return self
+
+    @abstractmethod
+    def supports_engine(self, engine: EngineTag) -> bool:
+        """Test whether this extension supports the given engine.
+
+        Parameters
+        ----------
+        engine : `EngineTag`
+            Engine to test.
+
+        Returns
+        -------
+        supported : `bool`
+            Whether the given engine is supported by this extension.
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def rebased(self, base: Relation[_T], *, equivalent: bool) -> Relation[_T]:
@@ -95,18 +103,6 @@ class Extension(Relation[_T]):
         """
         raise NotImplementedError()
 
-    def write_extra_to_mapping(self) -> Mapping[str, Any]:
-        """Transform any extra operation-specific state that should be
-        serialized into a mapping with `str` keys and serializable values.
-
-        The default implementation returns an empty dict.
-
-        Returns
-        -------
-        mapping : `Mapping`
-            Possibly-nested mapping containing any extra subclass-specific
-            state in a form suitable for serialization.  Keys must not include
-            the base class constructor's keyword arguments, i.e. "base",
-            "name", "columns", or "unique_keys".
-        """
-        return {}
+    @abstractmethod
+    def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
+        raise NotImplementedError()

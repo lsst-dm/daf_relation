@@ -144,16 +144,8 @@ class Join(Relation[_T]):
         conditions_flat: set[JoinCondition[_T]] = set()
         any_changes = False
         for condition in self.conditions:
-            if condition.was_flipped:
-                raise RelationalAlgebraError(
-                    f"Join condition {condition} was flipped; only unflipped "
-                    "conditions should be added to relations."
-                )
-            if self.engine.tag not in condition.engine_state:
-                raise EngineError(
-                    f"Join condition {condition} supports engine(s) {set(condition.engine_state.keys())}, "
-                    f"while join has {self.engine}."
-                )
+            if not condition.supports_engine(self.engine.tag):
+                raise EngineError(f"Join condition {condition} does not support engine {self.engine.tag}.")
         for original in self.relations:
             if recursive:
                 relation = original.checked_and_simplified(recursive=True)

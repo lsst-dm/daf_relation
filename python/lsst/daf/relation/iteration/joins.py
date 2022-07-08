@@ -28,10 +28,11 @@ __all__ = (
 )
 
 from collections.abc import Iterator, Set
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from .._columns import _T, is_unique_key_covered
 from .._join_condition import JoinCondition
+from ._engine import JoinConditionInterface
 from ._row_iterable import RowIterable
 from .selection import SelectionRowIterable
 
@@ -140,7 +141,7 @@ def _finish_join_row_iterable(
     """
     if not missing_conditions:
         return base
-    return SelectionRowIterable(base, tuple(c.engine_state[engine] for c in missing_conditions))
+    return SelectionRowIterable(base, tuple(cast(JoinConditionInterface, c) for c in missing_conditions))
 
 
 class UniqueIndexJoinRowIterable(RowIterable[_T]):

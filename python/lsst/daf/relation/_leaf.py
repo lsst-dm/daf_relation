@@ -23,7 +23,8 @@ from __future__ import annotations
 
 __all__ = ("Leaf",)
 
-from collections.abc import Mapping, Set
+from abc import abstractmethod
+from collections.abc import Set
 from typing import TYPE_CHECKING, Any
 
 from ._columns import _T, UniqueKey, check_unique_keys_in_columns, drop_covered_internal_unique_keys
@@ -32,54 +33,35 @@ from ._relation import Relation
 
 if TYPE_CHECKING:
     from ._relation_visitor import _U, RelationVisitor
+    from ._serialization import DictWriter
 
 
 class Leaf(Relation[_T]):
     """A `Relation` class that represents direct storage of rows, rather than
     an operation on some other relation.
 
-    Most engines are expected to define their own leaf types that inherit from
-    this class, but `Leaf` itself is concrete and may be used directly in
-    contexts where there is no engine-specific state.
-
     Parameters
     ----------
-    name : `str`
-        Name for the relation.  This is used to implement `str` and is part of
-        the serialized form of a relation (and hence `repr` as well), but is
-        otherwise ignored.
     engine : `EngineTag`
         Identifier for the engine this relation belongs to.
     columns : `~collections.abc.Set`
         Set of columns in the relation.
     unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
         The set of unique constraints this relation is guaranteed to satisfy.
-        See `Relation.unique_keys` for details.
+        See `Relation.unique_keys` for details.  The base class constructor
+        will take care of processing this with
+        `drop_covered_internal_unique_keys`.
     """
 
     def __init__(
         self,
-        name: str,
         engine: EngineTag,
         columns: Set[_T],
         unique_keys: Set[UniqueKey[_T]],
     ):
-        self._name = name
         self._engine = EngineTree.build_if_needed(engine)
         self._columns = columns
         self._unique_keys = drop_covered_internal_unique_keys(unique_keys)
-
-    def __str__(self) -> str:
-        return f"{self.name}@{self.engine.tag!s}"
-
-    @property
-    def name(self) -> str:
-        """Name for the relation (`str`).
-
-        This is used to implement `str` and is part of the serialized form of a
-        relation (and hence `repr` as well), but is otherwise ignored.
-        """
-        return self._name
 
     @property
     def engine(self) -> EngineTree:
@@ -93,7 +75,6 @@ class Leaf(Relation[_T]):
 
     @property
     def unique_keys(self) -> Set[UniqueKey[_T]]:
-        # Docstring inherited.
         return self._unique_keys
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
@@ -105,57 +86,10 @@ class Leaf(Relation[_T]):
         check_unique_keys_in_columns(self)
         return self
 
-    def write_extra_to_mapping(self) -> Mapping[str, Any]:
-        """Transform any extra engine-specific state that should be serialized
-        into a mapping with `str` keys and serializable values.
-
-        The default implementation returns an empty dict.
-
-        Returns
-        -------
-        mapping : `Mapping`
-            Possibly-nested mapping containing any extra engine-specific state
-            in a form suitable for serialization.  Keys must not include the
-            base class constructor's keyword arguments, i.e. "name", "engine",
-            "columns", or "unique_keys".
-        """
-        return {}
-
-    @classmethod
-    def from_extra_mapping(
-        cls,
-        name: str,
-        engine: EngineTag,
-        columns: Set[_T],
-        unique_keys: Set[UniqueKey[_T]],
-        extra: Mapping[str, Any],
-    ) -> Leaf[_T]:
-        """Construct a new `Leaf` instance from a serialization-friendly
-        mapping.
-
-        The default implementation calls ``cls`` with all base-class
-        constructor arguments positional and ``extra`` unpacked into keyword
-        arguments.
-
-        Parameters
-        ----------
-        name : `str`
-            Name for the relation.  This is used to implement `str` and is part
-            of the serialized form of a relation (and hence `repr` as well),
-            but is otherwise ignored.
-        engine : `EngineTag`
-            Identifier for the engine this relation belongs to.
-        columns : `~collections.abc.Set`
-            Set of columns in the relation.
-        unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
-            The set of unique constraints this relation is guaranteed to
-            satisfy.  See `Relation.unique_keys` for details.
-        extra : `Mapping`
-            Mapping returned by `write_extra_to_mapping`.
-
-        Returns
-        -------
-        leaf : `Leaf`
-            Leaf instance.
-        """
-        return cls(name, engine, columns, unique_keys, **extra)
+    @abstractmethod
+    def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
+        return {
+            "engine": writer.write_engine(self.engine.tag),
+            "columns": writer.write_column_set(self.columns),
+            "unique_keys": writer.write_unique_keys(self.unique_keys),
+        }

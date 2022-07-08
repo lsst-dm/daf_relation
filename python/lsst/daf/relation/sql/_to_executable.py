@@ -25,7 +25,7 @@ __all__ = ("ToExecutable",)
 
 import dataclasses
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Generic
+from typing import TYPE_CHECKING, Generic, cast
 
 import sqlalchemy
 
@@ -34,6 +34,7 @@ from .._columns import _T
 from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
 from ._column_type_info import _L, ColumnTypeInfo
+from ._interfaces import ExtensionInterface, OrderByTermInterface
 from ._select_parts import ToSelectParts
 
 if TYPE_CHECKING:
@@ -83,8 +84,12 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
 
     def visit_extension(self, visited: Extension[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
-        return self.column_types.convert_extension_to_executable(
-            visited, distinct=self.distinct, order_by=self.order_by, offset=self.offset, limit=self.limit
+        return cast(ExtensionInterface, visited).to_sql_executable(
+            self.column_types,
+            distinct=self.distinct,
+            order_by=self.order_by,
+            offset=self.offset,
+            limit=self.limit,
         )
 
     def visit_leaf(self, visited: Leaf[_T]) -> sqlalchemy.sql.expression.SelectBase:
@@ -146,8 +151,8 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
             )
             executable = executable.order_by(
                 *[
-                    self.column_types.convert_order_by_term(visited.engine.tag, t, columns_available)
-                    for t in self.order_by
+                    cast(OrderByTermInterface, o).to_sql_sort_column(columns_available, self.column_types)
+                    for o in self.order_by
                 ]
             )
         if self.offset:

@@ -23,61 +23,38 @@ from __future__ import annotations
 
 __all__ = ("Predicate",)
 
-import dataclasses
+from abc import abstractmethod
+from collections.abc import Set
 from typing import TYPE_CHECKING, Any, Generic
 
 from ._columns import _T
 
 if TYPE_CHECKING:
     from ._engines import EngineTag
+    from ._serialization import DictWriter
 
 
-@dataclasses.dataclass(frozen=True)
 class Predicate(Generic[_T]):
-    """A helper struct for relation trees that represents a boolean-returning
-    unary function in a selection.
+    @abstractmethod
+    def __eq__(self, other: Any) -> bool:
+        raise NotImplementedError()
 
-    Notes
-    -----
-    Like other relation helpers (`JoinCondition`, `OrderByTerm`), a single
-    `Predicate` instance can support multiple engines, and store custom state
-    for each of these.
-    """
+    @abstractmethod
+    def __hash__(self) -> int:
+        raise NotImplementedError()
 
-    name: str
-    """Name of the predicate (`str`).
+    @property
+    @abstractmethod
+    def columns_required(self) -> Set[_T]:
+        """The columns required to compute this expression
+        (`~collections.abc.Set`).
+        """
+        raise NotImplementedError()
 
-    This is used as the `str` representation, and is included in both equality
-    comparison and serialization.
-    """
+    @abstractmethod
+    def supports_engine(self, engine: EngineTag) -> bool:
+        raise NotImplementedError()
 
-    columns_required: frozenset[_T]
-    """The columns required to compute this expression (`frozenset`).
-    """
-
-    general_state: dict[str, Any] = dataclasses.field(default_factory=dict, compare=True, hash=False)
-    """State for the predicate that is independent of any engine (`dict`).
-
-    This state is included in equality comparison and serialization. To support
-    serialization via nested dictionary formats like JSON or YAML, this must
-    (recursively) contain only types supported by that format.
-
-    While this is a mutable mapping, the expectation is that its contents will
-    not change after the `Predicate` is added to a `Relation`; this is
-    important because these objects are frequently held by sets that rely on
-    equality comparisons not changing.
-    """
-
-    engine_state: dict[EngineTag, Any] = dataclasses.field(default_factory=dict, compare=False, repr=False)
-    """State for the join condition that is engine-dependent.
-
-    This state is not included in equality comparison or serialization.
-    Instead, concrete implementations of `serialization.MappingReader` are
-    expected to reconstruct any needed per-engine state from `name`,
-    `columns_required`, and `general_state`.
-
-    Values are frequently callables with engine-specific signatures.
-    """
-
-    def __str__(self) -> str:
-        return self.name
+    @abstractmethod
+    def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
+        raise NotImplementedError()
