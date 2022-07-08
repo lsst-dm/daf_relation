@@ -21,20 +21,16 @@
 
 from __future__ import annotations
 
-__all__ = ("Predicate", "ConstantComparison", "ComparisonOperator")
+__all__ = ("Predicate",)
 
-import enum
-import operator
+
 from abc import abstractmethod
-from collections.abc import Mapping, Set
+from collections.abc import Set
 from typing import TYPE_CHECKING, Any, Generic
-
-import sqlalchemy
 
 from ._columns import _T
 
 if TYPE_CHECKING:
-    from . import iteration, sql
     from ._engines import EngineTag
     from ._serialization import DictWriter
 
@@ -63,57 +59,3 @@ class Predicate(Generic[_T]):
     @abstractmethod
     def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
         raise NotImplementedError()
-
-
-class ComparisonOperator(enum.Enum):
-    EQ = operator.eq
-    LT = operator.lt
-    LE = operator.le
-    GT = operator.gt
-    GE = operator.ge
-
-
-class ConstantComparison(Predicate[_T]):
-    def __init__(
-        self,
-        column: _T,
-        value: Any,
-        comparison_operator: ComparisonOperator = ComparisonOperator.EQ,
-    ):
-        self.column = column
-        self.value = value
-        self.comparison_operator = comparison_operator
-
-    def __eq__(self, other: Any) -> bool:
-        if self.__class__ != other.__class__:
-            return NotImplemented
-        return (
-            self.column == other.column
-            and self.value == other.value
-            and self.comparison_operator == other.comparison_operator
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.column, self.comparison_operator))
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return {self.column}
-
-    def supports_engine(self, engine: EngineTag) -> bool:
-        return True
-
-    def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
-        return {
-            "type": "constant_comparison",
-            "column": writer.write_column(self.column),
-            "value": self.value,
-        }
-
-    def test_iteration_row(self, row: iteration.typing.Row[_T]) -> bool:
-        return self.comparison_operator.value(row[self.column], self.value)
-
-    def to_sql_boolean(
-        self, logical_columns: Mapping[_T, Any], column_types: sql.ColumnTypeInfo[_T, Any]
-    ) -> sqlalchemy.sql.ColumnElement:
-        return self.comparison_operator.value(logical_columns[self.column], self.value)

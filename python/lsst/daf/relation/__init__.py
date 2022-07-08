@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from . import operations
+from . import expressions, operations
 from ._columns import *
 from ._engines import *
 from ._exceptions import *
