@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ()
+__all__ = ("TransferFunction", "TransferVisitor")
 
 from typing import TYPE_CHECKING, Mapping, Protocol
 
@@ -42,7 +42,7 @@ class TransferFunction(Protocol[_T]):
         ...
 
 
-class HybridVisitor(RelationVisitor[_T, Relation[_T]]):
+class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
     def __init__(self, transfer_functions: Mapping[tuple[EngineTag, EngineTag], TransferFunction]):
         self.transfer_functions = transfer_functions
 
