@@ -23,7 +23,6 @@ from __future__ import annotations
 
 __all__ = (
     "Engine",
-    "ExtensionInterface",
     "JoinConditionInterface",
     "OrderByTermInterface",
     "PredicateInterface",
@@ -81,29 +80,6 @@ class Engine(metaclass=Singleton):
         if relation.engine.tag != self:
             raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine.tag}.")
         return relation.visit(IterationVisitor())
-
-
-class ExtensionInterface(Protocol[_T]):
-    """Interface for `.Extension` relations in this engine.
-
-    `.Extension` subclasses must implement this interface to be used in the
-    native iteration engine.
-    """
-
-    def to_row_iterable(self) -> RowIterable[_T]:
-        """Evaluate the extension operation.
-
-        Parameters
-        ----------
-        extension : `.Extension`
-            Extension relation the callable was attached to.
-
-        Returns
-        -------
-        rows : `RowIterable`
-            The result of the operation.
-        """
-        ...
 
 
 class PredicateInterface(Protocol[_T]):

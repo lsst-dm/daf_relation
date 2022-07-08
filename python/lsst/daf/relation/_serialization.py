@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING, Any, Generic, cast
 from . import operations
 from ._columns import _T, UniqueKey
 from ._exceptions import RelationSerializationError
-from ._extension import Extension
 from ._join_condition import JoinCondition
 from ._leaf import Leaf
 from ._order_by_term import OrderByTerm
@@ -55,7 +54,6 @@ class MappingReader(Generic[_T]):
     - `read_columns`
     - `read_engine`
     - `read_leaf`
-    - `read_extension`
     - `read_predicate`
     - `read_join_condition`
     - `read_order_by_term`
@@ -91,19 +89,6 @@ class MappingReader(Generic[_T]):
             case {"type": "distinct", "base": base, "unique_keys": unique_keys}:
                 return operations.Distinct(
                     self.read_relation(base), self.read_unique_keys(unique_keys)
-                ).checked_and_simplified(recursive=False)
-            case {
-                "type": "extension",
-                "base": base,
-                "columns": columns,
-                "unique_keys": unique_keys,
-                **extra,
-            }:
-                return self.read_extension(
-                    base=self.read_relation(base),
-                    columns=self.read_columns(columns),
-                    unique_keys=self.read_unique_keys(unique_keys),
-                    extra=cast(dict[str, Any], extra),
                 ).checked_and_simplified(recursive=False)
             case {
                 "type": "leaf",
@@ -279,34 +264,6 @@ class MappingReader(Generic[_T]):
         -------
         leaf : `Leaf`
             Leaf relation.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def read_extension(
-        self,
-        base: Relation[_T],
-        columns: Set[_T],
-        unique_keys: Set[UniqueKey[_T]],
-        extra: dict[str, Any],
-    ) -> Extension[_T]:
-        """Read an extension relation.
-
-        Parameters
-        ----------
-        base : `Relation`
-            Base relation the operation acts upon.
-        columns : `~collections.abc.Set` [ `.ColumnTag` ]
-            Set of columns for the relation.
-        unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
-            Set of sets representing unique constraints.
-        extra : `dict`
-            Dictionary of extra operation-specific state.
-
-        Returns
-        -------
-        relation : `Relation`
-            Extension relation.
         """
         raise NotImplementedError()
 
@@ -591,14 +548,6 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "type": "distinct",
             "base": visited.base.visit(self),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
-        }
-
-    def visit_extension(self, visited: Extension[_T]) -> dict[str, Any]:
-        # Docstring inherited.
-        return {
-            "type": "extension",
-            "base": visited.base.visit(self),
-            **visited.serialize(self),
         }
 
     def visit_leaf(self, visited: Leaf[_T]) -> dict[str, Any]:

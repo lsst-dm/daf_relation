@@ -26,7 +26,7 @@ __all__ = ("Predicate", "ConstantComparison", "ComparisonOperator")
 import enum
 import operator
 from abc import abstractmethod
-from collections.abc import Set, Mapping
+from collections.abc import Mapping, Set
 from typing import TYPE_CHECKING, Any, Generic
 
 import sqlalchemy
@@ -34,10 +34,9 @@ import sqlalchemy
 from ._columns import _T
 
 if TYPE_CHECKING:
+    from . import iteration, sql
     from ._engines import EngineTag
     from ._serialization import DictWriter
-    from . import iteration
-    from . import sql
 
 
 class Predicate(Generic[_T]):

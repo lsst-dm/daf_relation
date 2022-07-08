@@ -22,13 +22,12 @@
 from __future__ import annotations
 
 __all__ = (
-    "ExtensionInterface",
     "JoinConditionInterface",
     "OrderByTermInterface",
     "PredicateInterface",
 )
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
 import sqlalchemy
@@ -36,66 +35,9 @@ import sqlalchemy
 from .._columns import _T
 
 if TYPE_CHECKING:
-    from .._order_by_term import OrderByTerm
     from ._column_type_info import ColumnTypeInfo
-    from ._select_parts import SelectParts
 
 _L = TypeVar("_L")
-
-
-class ExtensionInterface(Protocol[_T, _L]):
-    """Interface for `.Extension` operations in this engine.
-
-    `.Extension` subclasses must either implement this interface or be handled
-    by a `ColumnTypeInfo` implementation to be used with the SQL engine.
-    """
-
-    def to_sql_executable(
-        self,
-        column_types: ColumnTypeInfo[_T, _L],
-        *,
-        distinct: bool = False,
-        order_by: Sequence[OrderByTerm[_T]] = (),
-        offset: int = 0,
-        limit: int | None = None,
-    ) -> sqlalchemy.sql.expression.SelectBase:
-        """Convert this relation into SQL as an executable query.
-
-        Parameters
-        ----------
-        column_types : `ColumnTypeInfo`
-            Object that relates column tags to logical columns.
-        distinct : `bool`
-            Whether to generate an expression whose rows are forced to be
-            unique.
-        order_by : `Iterable` [ `.OrderByTerm` ]
-            Iterable of objects that specify a sort order.
-        offset : `int`, optional
-            Starting index for returned rows, with ``0`` as the first row.
-        limit : `int` or `None`, optional
-            Maximum number of rows returned, or `None` (default) for no limit.
-
-        Returns
-        -------
-        select : `sqlalchemy.sql.expression.SelectBase`
-            A SQLAlchemy SELECT or compound SELECT query.
-        """
-        ...
-
-    def to_sql_select_parts(self, column_types: ColumnTypeInfo[_T, _L]) -> SelectParts[_T, _L]:
-        """Convert this relation into SQL as a `SelectParts` struct.
-
-        Parameters
-        ----------
-        column_types : `ColumnTypeInfo`
-            Object that relates column tags to logical columns.
-
-        Returns
-        -------
-        select_parts : `SelectParts`
-            Struct representing a simple SELECT query.
-        """
-        ...
 
 
 class PredicateInterface(Protocol[_T, _L]):

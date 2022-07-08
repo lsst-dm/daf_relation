@@ -23,7 +23,6 @@ from . import operations
 from ._columns import *
 from ._engines import *
 from ._exceptions import *
-from ._extension import *
 from ._join_condition import *
 from ._leaf import *
 from ._order_by_term import *

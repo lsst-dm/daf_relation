@@ -33,7 +33,6 @@ from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
     from ._engines import EngineTag
-    from ._extension import Extension
     from ._leaf import Leaf
 
 
@@ -49,11 +48,6 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
     def visit_distinct(self, visited: operations.Distinct[_T]) -> Relation[_T]:
         if (base := visited.base.visit(self)) is not visited.base:
             return operations.Distinct(base, visited.unique_keys)
-        return visited
-
-    def visit_extension(self, visited: Extension[_T]) -> Relation[_T]:
-        if (base := visited.base.visit(self)) is not visited.base:
-            return visited.rebased(base, equivalent=True)
         return visited
 
     def visit_leaf(self, visited: Leaf[_T]) -> Relation[_T]:

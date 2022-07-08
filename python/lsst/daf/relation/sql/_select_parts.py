@@ -36,10 +36,9 @@ from .._exceptions import EngineError
 from .._leaf import Leaf
 from .._relation_visitor import RelationVisitor
 from ._column_type_info import _L, ColumnTypeInfo
-from ._interfaces import ExtensionInterface, JoinConditionInterface, OrderByTermInterface, PredicateInterface
+from ._interfaces import JoinConditionInterface, OrderByTermInterface, PredicateInterface
 
 if TYPE_CHECKING:
-    from .._extension import Extension
     from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
     from .._relation import Relation
@@ -226,10 +225,6 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             [],
             None,
         )
-
-    def visit_extension(self, visited: Extension[_T]) -> SelectParts[_T, _L]:
-        # Docstring inherited.
-        return cast(ExtensionInterface, visited).to_sql_select_parts(self.column_types)
 
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.

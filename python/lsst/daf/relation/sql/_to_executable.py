@@ -34,11 +34,10 @@ from .._columns import _T
 from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
 from ._column_type_info import _L, ColumnTypeInfo
-from ._interfaces import ExtensionInterface, OrderByTermInterface
+from ._interfaces import OrderByTermInterface
 from ._select_parts import ToSelectParts
 
 if TYPE_CHECKING:
-    from .._extension import Extension
     from .._leaf import Leaf
     from .._order_by_term import OrderByTerm
     from .._relation import Relation
@@ -81,16 +80,6 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     def visit_distinct(self, visited: operations.Distinct[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         return visited.base.visit(dataclasses.replace(self, distinct=True))
-
-    def visit_extension(self, visited: Extension[_T]) -> sqlalchemy.sql.expression.SelectBase:
-        # Docstring inherited.
-        return cast(ExtensionInterface, visited).to_sql_executable(
-            self.column_types,
-            distinct=self.distinct,
-            order_by=self.order_by,
-            offset=self.offset,
-            limit=self.limit,
-        )
 
     def visit_leaf(self, visited: Leaf[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
