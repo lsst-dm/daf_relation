@@ -35,13 +35,6 @@ if TYPE_CHECKING:
 
 
 class OrderByTerm(Generic[_T]):
-    @abstractmethod
-    def __eq__(self, other: Any) -> bool:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def __hash__(self) -> int:
-        raise NotImplementedError()
 
     @property
     @abstractmethod
