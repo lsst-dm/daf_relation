@@ -73,9 +73,9 @@ class Transfer(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def engine(self) -> EngineTree:
+    def engines(self) -> EngineTree:
         # Docstring inherited.
-        return EngineTree.build_if_needed(self._destination, {self.base.engine})
+        return EngineTree.build_if_needed(self._destination, {self.base.engines})
 
     @property
     def columns(self) -> Set[_T]:
@@ -101,14 +101,14 @@ class Transfer(Relation[_T]):
         base = self.base
         if recursive:
             base = base.checked_and_simplified(recursive=True)
-        if base.engine == self.engine:
+        if base.engines == self.engines:
             return base
         match base:
             case Transfer(base=base):
-                if base.engine == self.engine:
+                if base.engines == self.engines:
                     return base
-                return Transfer(base, self.engine.tag)
+                return Transfer(base, self.engines.destination)
             case _:
                 if base is self.base:
                     return self
-                return Transfer(base, self.engine.tag)
+                return Transfer(base, self.engines.destination)

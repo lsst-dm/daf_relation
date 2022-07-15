@@ -76,9 +76,9 @@ class Selection(Relation[_T]):
         return f"σ({self.base!s}, {{{', '.join(str(p) for p in self.predicates)}}})"
 
     @property
-    def engine(self) -> EngineTree:
+    def engines(self) -> EngineTree:
         # Docstring inherited.
-        return self.base.engine
+        return self.base.engines
 
     @property
     def columns(self) -> Set[_T]:
@@ -102,8 +102,8 @@ class Selection(Relation[_T]):
         if not self.predicates:
             return base
         for p in self.predicates:
-            if not p.supports_engine(self.engine.tag):
-                raise EngineError(f"Predicate {p} does not support engine {self.engine.tag}.")
+            if not p.supports_engine(self.engines.destination):
+                raise EngineError(f"Predicate {p} does not support engine {self.engines.destination}.")
             if not p.columns_required <= self.base.columns:
                 raise ColumnError(
                     f"Predicate {p} for base relation {self.base} needs "

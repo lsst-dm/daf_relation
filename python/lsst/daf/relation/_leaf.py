@@ -64,7 +64,7 @@ class Leaf(Relation[_T]):
         self._unique_keys = drop_covered_internal_unique_keys(unique_keys)
 
     @property
-    def engine(self) -> EngineTree:
+    def engines(self) -> EngineTree:
         # Docstring inherited.
         return self._engine
 
@@ -89,7 +89,7 @@ class Leaf(Relation[_T]):
     @abstractmethod
     def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
         return {
-            "engine": writer.write_engine(self.engine.tag),
+            "engine": writer.write_engine(self.engines.destination),
             "columns": writer.write_column_set(self.columns),
             "unique_keys": writer.write_unique_keys(self.unique_keys),
         }

@@ -61,7 +61,7 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
                 any_changed = True
             relations.append(relation)
         if any_changed:
-            return operations.Join(visited.engine.tag, tuple(relations), visited.conditions)
+            return operations.Join(visited.engines.destination, tuple(relations), visited.conditions)
         return visited
 
     def visit_projection(self, visited: operations.Projection[_T]) -> Relation[_T]:
@@ -85,10 +85,12 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
         # On the way back down to the root, use the registered functions to
         # execute transfers from one engine to another.
         try:
-            transfer_function = self.transfer_functions[source.engine.tag, visited.engine.tag]
+            transfer_function = self.transfer_functions[
+                source.engines.destination, visited.engines.destination
+            ]
         except KeyError:
             raise EngineError(
-                f"No function registered for transfer from {source.engine.tag} to {visited.engine.tag}."
+                f"No function registered for transfer from {source.engines.destination} to {visited.engines.destination}."
             ) from None
         return transfer_function(visited.base)
 
@@ -101,7 +103,7 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
             relations.append(relation)
         if any_changed:
             return operations.Union(
-                visited.engine.tag,
+                visited.engines.destination,
                 visited.columns,
                 tuple(relations),
                 visited.unique_keys,

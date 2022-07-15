@@ -113,8 +113,8 @@ class EngineTree:
     Iteration over an `EngineTree` is depth-first.
     """
 
-    tag: EngineTag
-    """Tag for the engine of the relation this tree is directly attached to
+    destination: EngineTag
+    """Tag for the final engine htat evaluates this tree.
     (`EngineTag`).
     """
 
@@ -125,17 +125,17 @@ class EngineTree:
     """
 
     @classmethod
-    def build_if_needed(cls, tag: EngineTag, sources: Set[EngineTree] = frozenset()) -> EngineTree:
+    def build_if_needed(cls, destination: EngineTag, sources: Set[EngineTree] = frozenset()) -> EngineTree:
         """Construct a new tree or return an existing one.
 
         Parameters
         ----------
-        tag : `EngineTag`
+        destination : `EngineTag`
             Tag to serve as the root of the tree.
         sources : `~collections.abc.Set` [ `EngineTree` ], optional
             Set of source engine trees.  If this has only one element whose
-            root is already ``tag``, this element will be returned instead of
-            creating a new one.
+            root is already ``destination``, this element will be returned
+            instead of creating a new one.
 
         Returns
         -------
@@ -144,9 +144,9 @@ class EngineTree:
         """
         if len(sources) == 1:
             (source,) = sources
-            if source.tag == tag:
+            if source.destination == destination:
                 return source
-        return cls(tag, sources)
+        return cls(destination, sources)
 
     @property
     def depth(self) -> int:
@@ -154,7 +154,7 @@ class EngineTree:
         return 1 + max((source.depth for source in self.sources), default=0)
 
     def __contains__(self, tag: EngineTag) -> bool:
-        if tag == self.tag:
+        if tag == self.destination:
             return True
         else:
             return any(tag in source for source in self.sources)
@@ -162,4 +162,4 @@ class EngineTree:
     def __iter__(self) -> Iterator[EngineTag]:
         for source in self.sources:
             yield from source
-        yield self.tag
+        yield self.destination

@@ -74,9 +74,9 @@ class Distinct(Relation[_T]):
         return f"distinct {self.base!s}"
 
     @property
-    def engine(self) -> EngineTree:
+    def engines(self) -> EngineTree:
         # Docstring inherited.
-        return self.base.engine
+        return self.base.engines
 
     @property
     def columns(self) -> Set[_T]:

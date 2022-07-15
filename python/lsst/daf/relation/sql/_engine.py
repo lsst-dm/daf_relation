@@ -104,6 +104,8 @@ class Engine:
             Raised if the relation's engine is not the same as ``self``, or if
             the tree contains any transfers.
         """
-        if relation.engine.tag != self:
-            raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine.tag}.")
+        if relation.engines.destination != self:
+            raise EngineError(
+                f"Iteration engine cannot execute relation with engine {relation.engines.destination}."
+            )
         return relation.visit(ToExecutable(column_types, distinct, order_by, offset, limit))

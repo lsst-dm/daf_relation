@@ -92,9 +92,9 @@ class Slice(Relation[_T]):
         )
 
     @property
-    def engine(self) -> EngineTree:
+    def engines(self) -> EngineTree:
         # Docstring inherited.
-        return self.base.engine
+        return self.base.engines
 
     @property
     def columns(self) -> Set[_T]:
@@ -126,11 +126,11 @@ class Slice(Relation[_T]):
             base = base.checked_and_simplified(recursive=True)
         if not self.order_by and not self.offset and self.limit is None:
             return base
-        if self.order_by and not self.engine.tag.options.can_sort:
-            raise EngineError(f"Engine {self.engine.tag} does not support sorting.")
+        if self.order_by and not self.engines.destination.options.can_sort:
+            raise EngineError(f"Engine {self.engines.destination} does not support sorting.")
         for o in self.order_by:
-            if not o.supports_engine(self.engine.tag):
-                raise EngineError(f"Order-by term {o} does not support engine {self.engine.tag}.")
+            if not o.supports_engine(self.engines.destination):
+                raise EngineError(f"Order-by term {o} does not support engine {self.engines.destination}.")
             if not o.columns_required <= self.base.columns:
                 raise ColumnError(
                     f"Order-by term {o} for base relation {self.base} needs "

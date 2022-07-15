@@ -156,7 +156,7 @@ class Relation(Generic[_T]):
 
     @property
     @abstractmethod
-    def engine(self) -> EngineTree:
+    def engines(self) -> EngineTree:
         """The tree of engines that this relation and those it its built from
         depend on (`EngineTree`).
 
@@ -288,7 +288,7 @@ class Relation(Generic[_T]):
         from .operations import Join
 
         return Join(
-            self.engine.tag, (self,) + others, conditions=frozenset(conditions)
+            self.engines.destination, (self, other), conditions=frozenset(conditions)
         ).checked_and_simplified(recursive=False)
 
     def projection(self, columns: Set[_T]) -> Relation[_T]:
@@ -490,7 +490,7 @@ class Relation(Generic[_T]):
         from .operations import Union
 
         return Union(
-            self.engine.tag,
+            self.engines.destination,
             self.columns,
             (self,) + others,
             unique_keys=unique_keys,

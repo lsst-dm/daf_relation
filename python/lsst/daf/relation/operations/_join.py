@@ -101,9 +101,9 @@ class Join(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def engine(self) -> EngineTree:
+    def engines(self) -> EngineTree:
         # Docstring inherited.
-        return EngineTree.build_if_needed(self._engine, {r.engine for r in self.relations})
+        return EngineTree.build_if_needed(self._engine, {r.engines for r in self.relations})
 
     @property  # type: ignore
     @cached_getter
@@ -144,8 +144,10 @@ class Join(Relation[_T]):
         conditions_flat: set[JoinCondition[_T]] = set()
         any_changes = False
         for condition in self.conditions:
-            if not condition.supports_engine(self.engine.tag):
-                raise EngineError(f"Join condition {condition} does not support engine {self.engine.tag}.")
+            if not condition.supports_engine(self.engines.destination):
+                raise EngineError(
+                    f"Join condition {condition} does not support engine {self.engines.destination}."
+                )
         for original in self.relations:
             if recursive:
                 relation = original.checked_and_simplified(recursive=True)
@@ -157,7 +159,7 @@ class Join(Relation[_T]):
                 case Join(relations=nested_relations, conditions=nested_conditions):
                     if not nested_relations:
                         any_changes = True
-                    elif self.engine.tag.options.flatten_joins:
+                    elif self.engines.destination.options.flatten_joins:
                         relations_flat.extend(nested_relations)
                         conditions_flat.update(nested_conditions)
                         any_changes = True
@@ -169,20 +171,20 @@ class Join(Relation[_T]):
             conditions_to_match.difference_update(
                 JoinCondition.find_matching(relation.columns, columns_in_others, conditions_to_match)
             )
-            if relation.engine.tag != self.engine.tag:
+            if relation.engines.destination != self.engines.destination:
                 raise EngineError(
-                    f"Join member {relation} has engine {relation.engine.tag}, "
-                    f"while join has {self.engine.tag}."
+                    f"Join member {relation} has engine {relation.engines.destination}, "
+                    f"while join has {self.engines.destination}."
                 )
         if conditions_to_match:
             raise RelationalAlgebraError(f"No join order matches join condition(s) {conditions_to_match}.")
         if len(relations_flat) == 1:
             assert not conditions_flat, "Should be guaranteed by previous check on matching conditions."
             return relations_flat[0]
-        if self.engine.tag.options.pairwise_joins_only:
+        if self.engines.destination.options.pairwise_joins_only:
             if len(relations_flat) > 2:
-                raise EngineError(f"Engine {self.engine.tag} requires pairwise joins only.")
+                raise EngineError(f"Engine {self.engines.destination} requires pairwise joins only.")
         if not any_changes:
             return self
         else:
-            return Join(self.engine.tag, tuple(relations_flat), frozenset(conditions_flat))
+            return Join(self.engines.destination, tuple(relations_flat), frozenset(conditions_flat))

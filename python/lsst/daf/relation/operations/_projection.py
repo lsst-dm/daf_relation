@@ -73,9 +73,9 @@ class Projection(Relation[_T]):
         return f"Π({self.base!s}, {{{', '.join(str(c) for c in self.columns)}}})"
 
     @property
-    def engine(self) -> EngineTree:
+    def engines(self) -> EngineTree:
         # Docstring inherited.
-        return self.base.engine
+        return self.base.engines
 
     @property
     def columns(self) -> frozenset[_T]:
