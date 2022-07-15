@@ -115,6 +115,9 @@ class SingleColumnOrderByTerm(OrderByTerm[_T]):
     ) -> sqlalchemy.sql.ColumnElement:
         return logical_columns[self.column]
 
+    def reversed(self) -> DescendingOrderByTerm[_T]:
+        return DescendingOrderByTerm(self)
+
 
 class DescendingOrderByTerm(OrderByTerm[_T]):
     def __init__(self, base: OrderByTerm[_T]):
@@ -134,6 +137,9 @@ class DescendingOrderByTerm(OrderByTerm[_T]):
             "type": "descending",
             "base": self.base.serialize(writer),
         }
+
+    def reversed(self) -> OrderByTerm[_T]:
+        return self.base
 
     def get_iteration_row_sort_key(self, row: iteration.typing.Row[_T]) -> iteration.typing.Sortable:
         return cast(iteration.OrderByTermInterface, self.base).get_iteration_row_sort_key(row)

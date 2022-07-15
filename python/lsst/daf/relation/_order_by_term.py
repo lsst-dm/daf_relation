@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 
 
 class OrderByTerm(Generic[_T]):
-
     @property
     @abstractmethod
     def columns_required(self) -> Set[_T]:
