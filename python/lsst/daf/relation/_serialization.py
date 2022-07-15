@@ -561,7 +561,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         # Docstring inherited.
         return {
             "type": "join",
-            "engine": self.write_engine(visited.engines.destination),
+            "engine": self.write_engine(visited.engine),
             "relations": sorted(r.visit(self) for r in visited.relations),
             "conditions": sorted(jc.serialize(self) for jc in visited.conditions),
         }
@@ -597,14 +597,14 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         return {
             "type": "transfer",
             "base": visited.base.visit(self),
-            "destination": self.write_engine(visited.engines.destination),
+            "destination": self.write_engine(visited.engine),
         }
 
     def visit_union(self, visited: operations.Union[_T]) -> dict[str, Any]:
         # Docstring inherited.
         return {
             "type": "union",
-            "engine": self.write_engine(visited.engines.destination),
+            "engine": self.write_engine(visited.engine),
             "columns": self.write_column_set(visited.columns),
             "relations": sorted(r.visit(self) for r in visited.relations),
             "unique_keys": self.write_unique_keys(visited.unique_keys),

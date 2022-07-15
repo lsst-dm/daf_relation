@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, final
 from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey, check_unique_keys_in_columns, is_unique_key_covered
-from .._engines import EngineTag, EngineTree
+from .._engines import EngineTag
 from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
@@ -116,11 +116,10 @@ class Union(Relation[_T]):
     all input relations also have no rows.
     """
 
-    @property  # type: ignore
-    @cached_getter
-    def engines(self) -> EngineTree:
+    @property
+    def engine(self) -> EngineTag:
         # Docstring inherited.
-        return EngineTree.build_if_needed(self._engine, {r.engines for r in self.relations})
+        return self._engine
 
     @property
     def columns(self) -> Set[_T]:
@@ -158,7 +157,7 @@ class Union(Relation[_T]):
                 any_changes = any_changes or relation is not original
             else:
                 relation = original
-            if self.engines.destination.options.flatten_unions:
+            if self.engine.options.flatten_unions:
                 match relation:
                     case Union(relations=relations, extra_doomed_by=extra_doomed_by):
                         relations_flat.extend(relations)
@@ -171,9 +170,9 @@ class Union(Relation[_T]):
 
         if len(relations_flat) == 1 and not extra_doomed_by_flat:
             return relations_flat[0]
-        if self.engines.destination.options.pairwise_unions_only:
+        if self.engine.options.pairwise_unions_only:
             if len(relations_flat) > 2:
-                raise EngineError(f"Engine {self.engines.destination} requires pairwise unions only.")
+                raise EngineError(f"Engine {self.engine} requires pairwise unions only.")
         check_unique_keys_in_columns(self)
         for relation in relations_flat:
             for key in self.unique_keys:
@@ -182,10 +181,10 @@ class Union(Relation[_T]):
                         f"Union is declared to have unique key {set(key)}, but "
                         f"member {relation} is not unique with those columns."
                     )
-            if relation.engines != self.engines:
+            if relation.engine != self.engine:
                 raise EngineError(
-                    f"Union member {relation} has engine {relation.engines}, "
-                    f"while union has {self.engines}."
+                    f"Union member {relation} has engine {relation.engine}, "
+                    f"while union has {self.engine}."
                 )
             if relation.columns != self.columns:
                 raise ColumnError(
@@ -196,7 +195,7 @@ class Union(Relation[_T]):
             return self
         else:
             return Union(
-                self.engines.destination,
+                self.engine,
                 self.columns,
                 tuple(relations_flat),
                 self.unique_keys,

@@ -72,7 +72,7 @@ class InsertJoin(RelationVisitor[_T, Relation[_T]]):
         # Docstring inherited.
         for i, nested_relation in enumerate(visited.relations):
             if (
-                self.relation.engines.destination in nested_relation.engines
+                self.relation.engine in nested_relation.engines
                 and self.common_columns <= nested_relation.columns
                 and JoinCondition.find_matching(
                     nested_relation.columns, self.relation.columns, self.conditions
@@ -82,7 +82,7 @@ class InsertJoin(RelationVisitor[_T, Relation[_T]]):
                 new_relations = list(visited.relations)
                 new_relations[i] = nested_relation.visit(self)
                 return operations.Join(
-                    visited.engines.destination, tuple(new_relations), frozenset(visited.conditions)
+                    visited.engine, tuple(new_relations), frozenset(visited.conditions)
                 ).checked_and_simplified(recursive=False)
         return self._fail(visited)
 
@@ -106,16 +106,16 @@ class InsertJoin(RelationVisitor[_T, Relation[_T]]):
 
     def visit_transfer(self, visited: operations.Transfer) -> Relation[_T]:
         # Docstring inherited.
-        if visited.base.engines.destination == self.relation.engines.destination:
+        if visited.base.engine == self.relation.engine:
             new_base = visited.base.join(self.relation, conditions=self.conditions)
         else:
             new_base = visited.base.visit(self)
-        return operations.Transfer(new_base, visited.engines.destination)
+        return operations.Transfer(new_base, visited.engine)
 
     def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
         # Docstring inherited.
         return operations.Union(
-            visited.engines.destination,
+            visited.engine,
             visited.columns,
             tuple(nested_relation.visit(self) for nested_relation in visited.relations),
             unique_keys=frozenset(),

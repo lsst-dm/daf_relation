@@ -85,14 +85,12 @@ def make_join_row_iterable(
         next_relation, base_rows, base_relation, flipped_conditions
     )
     if join_rows is not None:
-        return _finish_join_row_iterable(
-            base_relation.engines.destination, join_rows, conditions - matched_conditions
-        )
+        return _finish_join_row_iterable(base_relation.engine, join_rows, conditions - matched_conditions)
     common_columns = frozenset(base_relation.columns & next_relation.columns)
     if is_unique_key_covered(common_columns, next_relation.unique_keys):
         next_rows_with_unique_index = next_rows.with_unique_index(common_columns)
         return _finish_join_row_iterable(
-            base_relation.engines.destination,
+            base_relation.engine,
             UniqueIndexJoinRowIterable(
                 base_rows,
                 next_rows_with_unique_index.get_unique_index(common_columns),
@@ -103,7 +101,7 @@ def make_join_row_iterable(
     else:
         next_rows_with_general_index = next_rows.with_general_index(common_columns)
         return _finish_join_row_iterable(
-            base_relation.engines.destination,
+            base_relation.engine,
             GeneralJoinRowIterable(
                 base_rows,
                 next_rows_with_general_index.get_general_index(common_columns),

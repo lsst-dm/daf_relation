@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, final
 from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey
-from .._engines import EngineTag, EngineTree
+from .._engines import EngineTag
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -73,9 +73,9 @@ class Transfer(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def engines(self) -> EngineTree:
+    def engine(self) -> EngineTag:
         # Docstring inherited.
-        return EngineTree.build_if_needed(self._destination, {self.base.engines})
+        return self._destination
 
     @property
     def columns(self) -> Set[_T]:
@@ -101,14 +101,14 @@ class Transfer(Relation[_T]):
         base = self.base
         if recursive:
             base = base.checked_and_simplified(recursive=True)
-        if base.engines == self.engines:
+        if base.engine == self.engine:
             return base
         match base:
             case Transfer(base=base):
-                if base.engines == self.engines:
+                if base.engine == self.engine:
                     return base
-                return Transfer(base, self.engines.destination)
+                return Transfer(base, self.engine)
             case _:
                 if base is self.base:
                     return self
-                return Transfer(base, self.engines.destination)
+                return Transfer(base, self.engine)

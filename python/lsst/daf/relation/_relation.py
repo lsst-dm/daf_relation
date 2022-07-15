@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 from ._columns import _T, UniqueKey
 
 if TYPE_CHECKING:
-    from ._engines import EngineTag, EngineTree
+    from ._engines import EngineTag
     from ._join_condition import JoinCondition
     from ._order_by_term import OrderByTerm
     from ._predicate import Predicate
@@ -156,12 +156,8 @@ class Relation(Generic[_T]):
 
     @property
     @abstractmethod
-    def engines(self) -> EngineTree:
-        """The tree of engines that this relation and those it its built from
-        depend on (`EngineTree`).
-
-        The relation's own engine is available as `engine.tag`.
-        """
+    def engine(self) -> EngineTag:
+        """The engine that this relation is evaluated by (`EngineTag`)."""
         raise NotImplementedError()
 
     @property
@@ -264,14 +260,14 @@ class Relation(Generic[_T]):
             Objects that represent boolean conditions other than equality
             comparison for pairs of column sets.
         before_existing_transfer : `bool`, optional
-            If `True` (default), and ``other.engines.destination !=
-            self.engines.destination``, attempt to insert the join to ``other``
-            prior to an existing transfer out of ``other.engines.destination``.
-            This can fail even if such a transfer exists if that transfer
-            occurs before a `slice` or `distinct` operation, an existing `join`
-            for which no single operand can be joined to ``other`` with the
-            same columns and conditions that ``self`` would be, or a `union`
-            for which any operand does not have the desired engine in its tree.
+            If `True` (default), and ``other.engine != self.engine``, attempt
+            to insert the join to ``other`` prior to an existing transfer out
+            of ``other.engine``.  This can fail even if such a transfer exists
+            if that transfer occurs before a `slice` or `distinct` operation,
+            an existing `join` for which no single operand can be joined to
+            ``other`` with the same columns and conditions that ``self`` would
+            be, or a `union` for which any operand does not have the desired
+            engine in its tree.
 
         Returns
         -------
@@ -305,14 +301,14 @@ class Relation(Generic[_T]):
         """
         from .operations import Join
 
-        if before_existing_transfer and self.engines.destination != other.engines.destination:
+        if before_existing_transfer and self.engine != other.engine:
             from .transformations import InsertJoin
 
             return self.visit(InsertJoin(other, self.columns & other.columns, frozenset(conditions)))
 
-        return Join(
-            self.engines.destination, (self, other), conditions=frozenset(conditions)
-        ).checked_and_simplified(recursive=False)
+        return Join(self.engine, (self, other), conditions=frozenset(conditions)).checked_and_simplified(
+            recursive=False
+        )
 
     def projection(self, columns: Set[_T]) -> Relation[_T]:
         """Construct a relation whose columns are a subset of this relation's.
@@ -386,7 +382,7 @@ class Relation(Generic[_T]):
             matched: list[Predicate[_T]] = []
             unmatched: list[Predicate[_T]] = list(predicates)
             for predicate in predicates:
-                if predicate.supports_engine(self.engines.destination):
+                if predicate.supports_engine(self.engine):
                     matched.append(predicate)
                 else:
                     unmatched.append(predicate)
@@ -537,7 +533,7 @@ class Relation(Generic[_T]):
         from .operations import Union
 
         return Union(
-            self.engines.destination,
+            self.engine,
             self.columns,
             (self,) + others,
             unique_keys=unique_keys,

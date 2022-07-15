@@ -33,7 +33,7 @@ from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._engines import EngineTree
+    from .._engines import EngineTag
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
@@ -76,9 +76,9 @@ class Selection(Relation[_T]):
         return f"σ({self.base!s}, {{{', '.join(str(p) for p in self.predicates)}}})"
 
     @property
-    def engines(self) -> EngineTree:
+    def engine(self) -> EngineTag:
         # Docstring inherited.
-        return self.base.engines
+        return self.base.engine
 
     @property
     def columns(self) -> Set[_T]:
@@ -102,8 +102,8 @@ class Selection(Relation[_T]):
         if not self.predicates:
             return base
         for p in self.predicates:
-            if not p.supports_engine(self.engines.destination):
-                raise EngineError(f"Predicate {p} does not support engine {self.engines.destination}.")
+            if not p.supports_engine(self.engine):
+                raise EngineError(f"Predicate {p} does not support engine {self.engine}.")
             if not p.columns_required <= self.base.columns:
                 raise ColumnError(
                     f"Predicate {p} for base relation {self.base} needs "

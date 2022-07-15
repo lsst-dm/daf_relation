@@ -111,7 +111,7 @@ class InsertSelection(RelationVisitor[_T, Relation[_T]]):
         matched: list[Predicate[_T]] = []
         unmatched: list[Predicate[_T]] = []
         for predicate in self.predicates:
-            if predicate.supports_engine(visited.base.engines.destination):
+            if predicate.supports_engine(visited.base.engine):
                 matched.append(predicate)
             else:
                 unmatched.append(predicate)
@@ -120,7 +120,7 @@ class InsertSelection(RelationVisitor[_T, Relation[_T]]):
             new_base = new_base.visit(InsertSelection(unmatched))
         if matched:
             new_base = new_base.selection(*matched)
-        return operations.Transfer(new_base, visited.engines.destination)
+        return operations.Transfer(new_base, visited.engine)
 
     def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
         # Docstring inherited.

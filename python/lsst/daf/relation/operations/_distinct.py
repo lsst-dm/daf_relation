@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, final
 from lsst.utils.classes import immutable
 
 from .._columns import _T, UniqueKey, check_unique_keys_in_columns, drop_covered_internal_unique_keys
-from .._engines import EngineTree
+from .._engines import EngineTag
 from .._exceptions import RelationalAlgebraError
 from .._relation import Relation
 
@@ -74,9 +74,9 @@ class Distinct(Relation[_T]):
         return f"distinct {self.base!s}"
 
     @property
-    def engines(self) -> EngineTree:
+    def engine(self) -> EngineTag:
         # Docstring inherited.
-        return self.base.engines
+        return self.base.engine
 
     @property
     def columns(self) -> Set[_T]:

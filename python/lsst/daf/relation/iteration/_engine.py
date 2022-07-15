@@ -77,9 +77,9 @@ class Engine(metaclass=Singleton):
         """
         from ._visitor import IterationVisitor
 
-        if relation.engines.destination != self:
+        if relation.engine != self:
             raise EngineError(
-                f"Iteration engine cannot execute relation with engine {relation.engines.destination}."
+                f"Iteration engine cannot execute relation with engine {relation.engine}."
             )
         return relation.visit(IterationVisitor())
 
