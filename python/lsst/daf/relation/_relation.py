@@ -244,19 +244,34 @@ class Relation(Generic[_T]):
 
         return Distinct(self, unique_keys).checked_and_simplified(recursive=False)
 
-    def join(self, *others: Relation[_T], conditions: Iterable[JoinCondition[_T]] = ()) -> Relation[_T]:
+    def join(
+        self,
+        other: Relation[_T],
+        conditions: Iterable[JoinCondition[_T]] = (),
+        *,
+        before_existing_transfer: bool = True,
+    ) -> Relation[_T]:
         """Construct a relation that performs a natural join operation.
 
         Parameters
         ----------
-        *others : `Relation`
-            Relations to join to self.  If any of these is itself a join, and
-            the engine sets `EngineOptions.flatten_joins`, the relations and
-            conditions will be flattened out into the returned join.  Unit
-            relations (joins with no nested relations) are always flattened.
+        others : `Relation`
+            Relation to join to self.  If ``self`` or ``other`` is itself a
+            join, and the engine sets `EngineOptions.flatten_joins`, the
+            relations and conditions will be flattened out into the returned
+            join.  Unit relations are always flattened.
         conditions : `Iterable` [ `JoinCondition` ], optional
             Objects that represent boolean conditions other than equality
             comparison for pairs of column sets.
+        before_existing_transfer : `bool`, optional
+            If `True` (default), and ``other.engines.destination !=
+            self.engines.destination``, attempt to insert the join to ``other``
+            prior to an existing transfer out of ``other.engines.destination``.
+            This can fail even if such a transfer exists if that transfer
+            occurs before a `slice` or `distinct` operation, an existing `join`
+            for which no single operand can be joined to ``other`` with the
+            same columns and conditions that ``self`` would be, or a `union`
+            for which any operand does not have the desired engine in its tree.
 
         Returns
         -------
@@ -268,24 +283,32 @@ class Relation(Generic[_T]):
         Raises
         ------
         EngineError
-            Raised if the join includes more than two relations but this is
-            not supported by the engine (`EngineOptions.pairwise_joins_only`).
-            Also raised if the engines of the relations in the join are not
-            consistent, or if a join condition does not support the join's
-            engine.
+            Raised if the join includes more than two relations but this is not
+            supported by the engine (`EngineOptions.pairwise_joins_only`).
+            Also raised if the destination engines of the relations in the join
+            are not the same and ``before_existing_transfer`` is either `False`
+            or fails.
         RelationalAlgebraError
             Raised if a join condition's required columns cannot be satisfied
             by any possible ordering of the join, or if any join condition has
             `~JoinCondition.was_flipped` set to `True`.
 
+        Notes
+        -----
+        This operation is symmetric in ``self`` and ``other`` only when they
+        have the same destination engine.
+
         See Also
         --------
-        operations.Join
-        JoinCondition
-        EngineOptions.flatten_joins
+        operations.Join JoinCondition EngineOptions.flatten_joins
         EngineOptions.pairwise_joins_only
         """
         from .operations import Join
+
+        if before_existing_transfer and self.engines.destination != other.engines.destination:
+            from .transformations import InsertJoin
+
+            return self.visit(InsertJoin(other, self.columns & other.columns, frozenset(conditions)))
 
         return Join(
             self.engines.destination, (self, other), conditions=frozenset(conditions)
@@ -318,7 +341,7 @@ class Relation(Generic[_T]):
 
         return Projection(self, frozenset(columns)).checked_and_simplified(recursive=False)
 
-    def selection(self, *predicates: Predicate[_T]) -> Relation[_T]:
+    def selection(self, *predicates: Predicate[_T], before_existing_transfer: bool = True) -> Relation[_T]:
         """Construct a relation that filters out rows by applying predicates.
 
         Parameters
@@ -327,6 +350,15 @@ class Relation(Generic[_T]):
             Objects that represent conceptual functions (not *necessarily*
             Python callables) that are invoked to determine whether each row
             should be included in the result relation.
+        before_existing_transfer : `bool`, optional
+            If `True` (default), and any predicate does not support this
+            relation's engine, but some does support some other engine in its
+            engine tree, attempt to apply that predicates prior to a transfer
+            out of the last supported engine.  This can fail even if that
+            transfer exists if it occurs before a `slice` or `distinct`
+            operation, a `join` for which no operand has all columns needed by
+            the predicate, or a `union` with any operand that lacks such a
+            transfer.
 
         Returns
         -------
@@ -343,12 +375,27 @@ class Relation(Generic[_T]):
 
         See Also
         --------
-        operations.Selection
-        Predicate
+        operations.Selection Predicate
         """
         from .operations import Selection
 
-        return Selection(self, frozenset(predicates)).checked_and_simplified(recursive=False)
+        new_base = self
+        if before_existing_transfer:
+            from .transformations import InsertSelection
+
+            matched: list[Predicate[_T]] = []
+            unmatched: list[Predicate[_T]] = list(predicates)
+            for predicate in predicates:
+                if predicate.supports_engine(self.engines.destination):
+                    matched.append(predicate)
+                else:
+                    unmatched.append(predicate)
+            if unmatched:
+                new_base = self.visit(InsertSelection(unmatched))
+        else:
+            matched = list(predicates)
+
+        return Selection(new_base, tuple(matched)).checked_and_simplified(recursive=False)
 
     def slice(
         self, order_by: Iterable[OrderByTerm[_T]], offset: int = 0, limit: int | None = None

@@ -22,3 +22,6 @@
 """Visitors that apply relational algebra identities to transform relation
 trees.
 """
+
+from ._insert_join import *
+from ._insert_selection import *

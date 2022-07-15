@@ -21,15 +21,15 @@
 
 from __future__ import annotations
 
-__all__ = ("InsertJoin",)
+__all__ = ("InsertSelection",)
 
-from collections.abc import Set
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from .. import operations
 from .._columns import _T
 from .._exceptions import EngineError
-from .._join_condition import JoinCondition
+from .._predicate import Predicate
 from .._relation import Relation
 from .._relation_visitor import RelationVisitor
 
@@ -37,54 +37,56 @@ if TYPE_CHECKING:
     from .._leaf import Leaf
 
 
-class InsertJoin(RelationVisitor[_T, Relation[_T]]):
-    """A `RelationVisitor` that traverses a relation tree to add a join at a
-    point compatible with the new relation's engine.
+class InsertSelection(RelationVisitor[_T, Relation[_T]]):
+    """A `RelationVisitor` that traverses a relation tree to add a join a point
+    compatible with the new relation's engine.
 
     Parameters
     ----------
-    relation : `Relation`
+    predicates : `Sequence` [ `Predicate` ]
         Relation to join into the visited relation's tree.  Must have an engine
         that is contained by the visited relation's engine tree.
-    common_columns : `~collections.abc.Set`
-        Columns that the relation should be joined on; assumed to be a subset
-        of the columns of the given ``relation``, and checked to be a subset
-        of the relation it is ultimately joined to directly.
-    conditions : `~collections.abc.Set` [ `JoinCondition` ]
-        Special conditions for the join.  Must match ``relation`` and the
-        visited relation, but the flip order does not matter.
     """
 
-    def __init__(self, relation: Relation[_T], common_columns: Set[_T], conditions: Set[JoinCondition[_T]]):
-        self.relation = relation
-        self.common_columns = common_columns
-        self.conditions = conditions
+    def __init__(self, predicates: Sequence[Predicate[_T]]):
+        self.predicates = predicates
 
     def visit_distinct(self, visited: operations.Distinct[_T]) -> Relation[_T]:
         # Docstring inherited.
-        return self._fail(visited)
+        new_base = visited.base.visit(self)
+        return operations.Distinct(new_base, visited.unique_keys).assert_checked_and_simplified(
+            recursive=False
+        )
 
     def visit_leaf(self, visited: Leaf[_T]) -> Relation[_T]:
         # Docstring inherited.
-        return self._fail(visited)
+        return self._fail(visited, self.predicates)
 
     def visit_join(self, visited: operations.Join[_T]) -> Relation[_T]:
         # Docstring inherited.
+
+        predicate_indices_unmatched = set(range(len(self.predicates)))
+        new_relations: list[Relation[_T]] = []
         for i, nested_relation in enumerate(visited.relations):
-            if (
-                self.relation.engines.destination in nested_relation.engines
-                and self.common_columns <= nested_relation.columns
-                and JoinCondition.find_matching(
-                    nested_relation.columns, self.relation.columns, self.conditions
-                )
-                == self.conditions
-            ):
-                new_relations = list(visited.relations)
-                new_relations[i] = nested_relation.visit(self)
-                return operations.Join(
-                    visited.engines.destination, tuple(new_relations), frozenset(visited.conditions)
-                ).checked_and_simplified(recursive=False)
-        return self._fail(visited)
+            matched: list[Predicate[_T]] = []
+            unmatched: list[Predicate[_T]] = []
+            for n, predicate in enumerate(self.predicates):
+                if predicate.columns_required <= nested_relation.columns and any(
+                    predicate.supports_engine(engine) for engine in nested_relation.engines
+                ):
+                    matched.append(predicate)
+                    predicate_indices_unmatched.discard(n)
+                else:
+                    unmatched.append(predicate)
+            if matched:
+                new_relations.append(nested_relation.visit(InsertSelection(matched)))
+            else:
+                new_relations.append(nested_relation)
+        if predicate_indices_unmatched:
+            return self._fail(visited, [self.predicates[n] for n in predicate_indices_unmatched])
+        return operations.Join(
+            visited.engines.destination, tuple(new_relations), frozenset(visited.conditions)
+        ).checked_and_simplified(recursive=False)
 
     def visit_projection(self, visited: operations.Projection[_T]) -> Relation[_T]:
         # Docstring inherited.
@@ -102,14 +104,22 @@ class InsertJoin(RelationVisitor[_T, Relation[_T]]):
 
     def visit_slice(self, visited: operations.Slice[_T]) -> Relation[_T]:
         # Docstring inherited.
-        return self._fail(visited)
+        return self._fail(visited, self.predicates)
 
     def visit_transfer(self, visited: operations.Transfer) -> Relation[_T]:
         # Docstring inherited.
-        if visited.base.engines.destination == self.relation.engines.destination:
-            new_base = visited.base.join(self.relation, conditions=self.conditions)
-        else:
-            new_base = visited.base.visit(self)
+        matched: list[Predicate[_T]] = []
+        unmatched: list[Predicate[_T]] = []
+        for predicate in self.predicates:
+            if predicate.supports_engine(visited.base.engines.destination):
+                matched.append(predicate)
+            else:
+                unmatched.append(predicate)
+        new_base = visited.base
+        if unmatched:
+            new_base = new_base.visit(InsertSelection(unmatched))
+        if matched:
+            new_base = new_base.selection(*matched)
         return operations.Transfer(new_base, visited.engines.destination)
 
     def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
@@ -122,7 +132,8 @@ class InsertJoin(RelationVisitor[_T, Relation[_T]]):
             extra_doomed_by=visited.extra_doomed_by,
         ).assert_checked_and_simplified()
 
-    def _fail(self, relation: Relation[_T]) -> Relation[_T]:
+    def _fail(self, relation: Relation[_T], predicates: Sequence[Predicate[_T]]) -> Relation[_T]:
         raise EngineError(
-            f"Cannot push join to {self.relation} through {relation} to satisfy engine consistency."
+            f"Cannot push selection with predicates {predicates} through {relation} to satisfy engine "
+            "consistency."
         )
