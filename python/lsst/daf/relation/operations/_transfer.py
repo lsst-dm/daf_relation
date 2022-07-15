@@ -33,6 +33,8 @@ from .._engines import EngineTag
 from .._relation import Relation
 
 if TYPE_CHECKING:
+    from .._join_condition import JoinCondition
+    from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -112,3 +114,25 @@ class Transfer(Relation[_T]):
                 if base is self.base:
                     return self
                 return Transfer(base, self.engine)
+
+    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
+        # Docstring inherited.
+        new_base: Relation[_T] | None = None
+        if self.base.engine == other.engine:
+            new_base = self.base.join(other, conditions=conditions)
+        else:
+            new_base = self.base.try_insert_join(other, conditions)
+        if new_base is None:
+            return None
+        return Transfer(new_base, self.engine)
+
+    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        new_base: Relation[_T] | None
+        if predicate.supports_engine(self.base.engine):
+            new_base = self.base.selection(predicate)
+        else:
+            new_base = self.base.try_insert_selection(predicate)
+        if new_base is None:
+            return None
+        return Transfer(new_base, self._destination)

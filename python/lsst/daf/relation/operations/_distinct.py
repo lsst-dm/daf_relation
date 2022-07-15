@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("Distinct",)
 
-from collections.abc import Set
+from collections.abc import Sequence, Set
 from typing import TYPE_CHECKING, final
 
 from lsst.utils.classes import immutable
@@ -35,6 +35,8 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._relation_visitor import _U, RelationVisitor
+    from .._join_condition import JoinCondition
+    from .._predicate import Predicate
 
 
 @final
@@ -118,3 +120,13 @@ class Distinct(Relation[_T]):
             return self
         else:
             return Distinct(base, unique_keys)
+
+    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
+        # Docstring inherited.
+        return None
+
+    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (new_base := self.base.try_insert_selection(predicate)) is not None:
+            return Distinct(new_base, self.unique_keys).assert_checked_and_simplified(recursive=False)
+        return None

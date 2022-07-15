@@ -34,7 +34,9 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._engines import EngineTag
+    from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
+    from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -140,3 +142,17 @@ class Slice(Relation[_T]):
             return self
         else:
             return Slice(base, self.order_by, self.offset, self.limit)
+
+    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
+        # Docstring inherited.
+        return None
+
+    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        if self.offset or self.limit is not None:
+            return None
+        if (new_base := self.base.try_insert_selection(predicate)) is not None:
+            return Slice(
+                new_base, self.order_by, offset=self.offset, limit=self.limit
+            ).assert_checked_and_simplified(recursive=False)
+        return None

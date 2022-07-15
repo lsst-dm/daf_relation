@@ -34,6 +34,8 @@ from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
+    from .._join_condition import JoinCondition
+    from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -198,6 +200,32 @@ class Union(Relation[_T]):
                 self.engine,
                 self.columns,
                 tuple(relations_flat),
-                self.unique_keys,
+                frozenset(),
                 frozenset(extra_doomed_by_flat),
             )
+
+    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
+        # Docstring inherited.
+        new_relations: list[Relation[_T]] = []
+        for nested_relation in self.relations:
+            if (new_relation := nested_relation.try_insert_join(other, conditions)) is not None:
+                new_relations.append(new_relation)
+            else:
+                return None
+        return Union(self.engine, self.columns, tuple(new_relations), self.unique_keys, self.extra_doomed_by)
+
+    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        new_relations: list[Relation[_T]] = []
+        for nested_relation in self.relations:
+            if (new_relation := nested_relation.try_insert_selection(predicate)) is not None:
+                new_relations.append(new_relation)
+            else:
+                return None
+        return Union(
+            self.engine,
+            self._columns,
+            tuple(new_relations),
+            unique_keys=self.unique_keys,
+            extra_doomed_by=self.extra_doomed_by,
+        ).assert_checked_and_simplified()

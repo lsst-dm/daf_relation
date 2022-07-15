@@ -29,6 +29,7 @@ from collections.abc import Iterable, Set
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from ._columns import _T, UniqueKey
+from ._exceptions import EngineError
 
 if TYPE_CHECKING:
     from ._engines import EngineTag
@@ -302,9 +303,13 @@ class Relation(Generic[_T]):
         from .operations import Join
 
         if before_existing_transfer and self.engine != other.engine:
-            from .transformations import InsertJoin
+            # TODO: this could insert above a Projection and satisfy a join
+            # condition only with those additional columns, which breaks our
+            # rule that moving things for engine can't change a relation.
 
-            return self.visit(InsertJoin(other, self.columns & other.columns, frozenset(conditions)))
+            if (result := self.try_insert_join(other, frozenset(conditions))) is None:
+                raise EngineError(f"Could not insert join to {other} before transfer in {self}.")
+            return result
 
         return Join(self.engine, (self, other), conditions=frozenset(conditions)).checked_and_simplified(
             recursive=False
@@ -375,23 +380,7 @@ class Relation(Generic[_T]):
         """
         from .operations import Selection
 
-        new_base = self
-        if before_existing_transfer:
-            from .transformations import InsertSelection
-
-            matched: list[Predicate[_T]] = []
-            unmatched: list[Predicate[_T]] = list(predicates)
-            for predicate in predicates:
-                if predicate.supports_engine(self.engine):
-                    matched.append(predicate)
-                else:
-                    unmatched.append(predicate)
-            if unmatched:
-                new_base = self.visit(InsertSelection(unmatched))
-        else:
-            matched = list(predicates)
-
-        return Selection(new_base, tuple(matched)).checked_and_simplified(recursive=False)
+        raise NotImplementedError("TODO")
 
     def slice(
         self, order_by: Iterable[OrderByTerm[_T]], offset: int = 0, limit: int | None = None
@@ -623,3 +612,11 @@ class Relation(Generic[_T]):
             self.checked_and_simplified(recursive=recursive) is self
         ), f"Relation {self} expected to be already checked and simplified."
         return self
+
+    @abstractmethod
+    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        raise NotImplementedError()

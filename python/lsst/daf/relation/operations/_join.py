@@ -36,6 +36,7 @@ from .._join_condition import JoinCondition
 from .._relation import Relation
 
 if TYPE_CHECKING:
+    from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -170,7 +171,7 @@ class Join(Relation[_T]):
             )
             if relation.engine != self.engine:
                 raise EngineError(
-                    f"Join member {relation} has engine {relation.engine}, " f"while join has {self.engine}."
+                    f"Join member {relation} has engine {relation.engine}, while join has {self.engine}."
                 )
         if conditions_to_match:
             raise RelationalAlgebraError(f"No join order matches join condition(s) {conditions_to_match}.")
@@ -184,3 +185,36 @@ class Join(Relation[_T]):
             return self
         else:
             return Join(self.engine, tuple(relations_flat), frozenset(conditions_flat))
+
+    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
+        # Docstring inherited.
+        common_columns = self.columns & other.columns
+        for i, nested_relation in enumerate(self.relations):
+            if (
+                common_columns <= nested_relation.columns
+                and JoinCondition.find_matching(nested_relation.columns, other.columns, conditions)
+                == conditions
+            ):
+                if (new_relation := nested_relation.try_insert_join(other, conditions)) is not None:
+                    new_relations = list(self.relations)
+                    new_relations[i] = new_relation
+                    return Join(
+                        self.engine, tuple(new_relations), frozenset(self.conditions)
+                    ).checked_and_simplified(recursive=False)
+        return None
+
+    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        new_relations: list[Relation[_T]] = []
+        any_matched: bool = False
+        for i, nested_relation in enumerate(self.relations):
+            if predicate.columns_required <= nested_relation.columns:
+                if (new_relation := nested_relation.try_insert_selection(predicate)) is not None:
+                    nested_relation = new_relation
+                    any_matched = True
+            new_relations.append(nested_relation)
+        if not any_matched:
+            return None
+        return Join(self.engine, tuple(new_relations), self.conditions).assert_checked_and_simplified(
+            recursive=False
+        )

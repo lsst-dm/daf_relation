@@ -34,6 +34,8 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._engines import EngineTag
+    from .._join_condition import JoinCondition
+    from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -112,3 +114,15 @@ class Projection(Relation[_T]):
         if base is self.base:
             return self
         return Projection(base, self.columns)
+
+    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (new_base := self.base.try_insert_join(other, conditions)) is not None:
+            return Projection(new_base, self._columns)
+        return None
+
+    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (new_base := self.base.try_insert_selection(predicate)) is not None:
+            return Projection(new_base, self._columns).assert_checked_and_simplified(recursive=False)
+        return None
