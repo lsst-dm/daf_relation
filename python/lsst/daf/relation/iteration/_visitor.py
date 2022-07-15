@@ -37,6 +37,7 @@ from .selection import SelectionRowIterable
 
 if TYPE_CHECKING:
     from .. import operations
+    from .._relation import Identity, Null
     from .._leaf import Leaf
 
 
@@ -54,6 +55,10 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         key_columns = next(iter(visited.unique_keys))  # don't care which unique key we use
         return base_rows.with_unique_index(key_columns)
 
+    def visit_identity(self, visited: Identity[_T]) -> RowIterable[_T]:
+        # Docstring inherited.
+        return RowCollection[_T]([{}])
+
     def visit_join(self, visited: operations.Join[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         if len(visited.relations) == 0:
@@ -70,6 +75,10 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
     def visit_leaf(self, visited: Leaf[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         return cast(RowIterableLeaf[_T], visited).rows
+
+    def visit_null(self, visited: Null[_T]) -> RowIterable[_T]:
+        # Docstring inherited.
+        return RowCollection[_T]([])
 
     def visit_projection(self, visited: operations.Projection[_T]) -> RowIterable[_T]:
         # Docstring inherited.

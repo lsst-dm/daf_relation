@@ -89,11 +89,6 @@ class Projection(Relation[_T]):
         # Docstring inherited.
         return {keys for keys in self.base.unique_keys if keys.issubset(self._columns)}
 
-    @property
-    def doomed_by(self) -> Set[str]:
-        # Docstring inherited.
-        return self.base.doomed_by
-
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_projection(self)

@@ -41,7 +41,7 @@ from ._interfaces import JoinConditionInterface, OrderByTermInterface, Predicate
 if TYPE_CHECKING:
     from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
-    from .._relation import Relation
+    from .._relation import Relation, Identity, Null
     from .._serialization import DictWriter
     from ._engine import Engine
 
@@ -226,6 +226,14 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             None,
         )
 
+    def visit_identity(self, visited: Identity[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
+        return SelectParts(
+            self.column_types.make_unit_subquery(),
+            [],
+            None,
+        )
+
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return cast(SelectPartsLeaf[_T, _L], visited).select_parts
@@ -245,6 +253,14 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         for term_relation, term_conditions in other_terms:
             join_parts = self._join_select_parts(join_parts, term_relation, term_conditions)
         return join_parts
+
+    def visit_null(self, visited: Null[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
+        return SelectParts(
+            self._use_executable(visited),
+            [],
+            None,
+        )
 
     def visit_projection(self, visited: operations.Projection[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.

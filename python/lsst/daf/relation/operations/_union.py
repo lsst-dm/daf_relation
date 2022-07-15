@@ -26,12 +26,12 @@ __all__ = ("Union",)
 from collections.abc import Set
 from typing import TYPE_CHECKING, final
 
-from lsst.utils.classes import cached_getter, immutable
+from lsst.utils.classes import immutable
 
 from .._columns import _T, UniqueKey, check_unique_keys_in_columns, is_unique_key_covered
 from .._engines import EngineTag
 from .._exceptions import ColumnError, EngineError
-from .._relation import Relation
+from .._relation import Relation, Null
 
 if TYPE_CHECKING:
     from .._join_condition import JoinCondition
@@ -47,7 +47,7 @@ class Union(Relation[_T]):
     Parameters
     ----------
     engine : `.EngineTag`
-        Engine the join is performed in.  This must be the same as the engine
+        Engine the union is performed in.  This must be the same as the engine
         of all input relations.
     columns : `~collections.abc.Set` [ `.ColumnTag` ]
         Set of columns for this relation; all input relations must have the
@@ -59,12 +59,6 @@ class Union(Relation[_T]):
         *naturally* satisfied by this union, even if the engine does not take
         any extra action to remove duplicates.  If not provided or empty, the
         returned relation does not guarantee uniqueness.
-    extra_doomed_by : `frozenset` [ `str` ]
-        Diagnostic messages that can be used to report why the relation has no
-        rows when that is the case.  This should generally be provided when
-        there are no relations.  When there are other relations, it is only
-        used as (part of) the `doomed_by` property when those relations also
-        yield no rows.
 
     Notes
     -----
@@ -96,13 +90,11 @@ class Union(Relation[_T]):
         columns: Set[_T],
         relations: tuple[Relation[_T], ...] = (),
         unique_keys: Set[UniqueKey[_T]] = UniqueKey(),
-        extra_doomed_by: frozenset[str] = frozenset(),
     ):
         self._engine = engine
         self._columns = columns
         self.relations = relations
         self._unique_keys = unique_keys
-        self.extra_doomed_by = extra_doomed_by
 
     def __str__(self) -> str:
         return f"({'∪ '.join(str(r) for r in self.relations)})"
@@ -133,17 +125,6 @@ class Union(Relation[_T]):
         # Docstring inherited.
         return self._unique_keys
 
-    @property  # type: ignore
-    @cached_getter
-    def doomed_by(self) -> Set[str]:
-        # Docstring inherited.
-        result = set(self.extra_doomed_by)
-        for related in self.relations:
-            if not related.doomed_by:
-                return frozenset()
-            result.update(related.doomed_by)
-        return result
-
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_union(self)
@@ -170,6 +151,8 @@ class Union(Relation[_T]):
             else:
                 relations_flat.append(relation)
 
+        if len(relations_flat) == 0:
+            return Null(self.engine, self.columns)
         if len(relations_flat) == 1 and not extra_doomed_by_flat:
             return relations_flat[0]
         if self.engine.options.pairwise_unions_only:
@@ -201,7 +184,6 @@ class Union(Relation[_T]):
                 self.columns,
                 tuple(relations_flat),
                 frozenset(),
-                frozenset(extra_doomed_by_flat),
             )
 
     def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
@@ -212,7 +194,7 @@ class Union(Relation[_T]):
                 new_relations.append(new_relation)
             else:
                 return None
-        return Union(self.engine, self.columns, tuple(new_relations), self.unique_keys, self.extra_doomed_by)
+        return Union(self.engine, self.columns, tuple(new_relations), self.unique_keys)
 
     def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
         # Docstring inherited.
@@ -227,5 +209,4 @@ class Union(Relation[_T]):
             self._columns,
             tuple(new_relations),
             unique_keys=self.unique_keys,
-            extra_doomed_by=self.extra_doomed_by,
         ).assert_checked_and_simplified()

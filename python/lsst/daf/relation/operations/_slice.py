@@ -108,15 +108,6 @@ class Slice(Relation[_T]):
         # Docstring inherited.
         return self.base.unique_keys
 
-    @property
-    def doomed_by(self) -> Set[str]:
-        # Docstring inherited.
-        result = self.base.doomed_by
-        if self.limit == 0:
-            result = set(result)
-            result.add("Relation has been sliced to zero length.")
-        return result
-
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_slice(self)

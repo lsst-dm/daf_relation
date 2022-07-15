@@ -90,11 +90,6 @@ class Distinct(Relation[_T]):
         # Docstring inherited.
         return self._unique_keys
 
-    @property
-    def doomed_by(self) -> Set[str]:
-        # Docstring inherited.
-        return self.base.doomed_by
-
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_distinct(self)

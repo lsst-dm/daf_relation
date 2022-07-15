@@ -40,7 +40,7 @@ from ._select_parts import ToSelectParts
 if TYPE_CHECKING:
     from .._leaf import Leaf
     from .._order_by_term import OrderByTerm
-    from .._relation import Relation
+    from .._relation import Relation, Identity, Null
 
 
 @dataclasses.dataclass(eq=False, slots=True)
@@ -81,6 +81,10 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
         # Docstring inherited.
         return visited.base.visit(dataclasses.replace(self, distinct=True))
 
+    def visit_identity(self, visited: Identity[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
+        return self._use_select_parts(visited)
+
     def visit_leaf(self, visited: Leaf[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         return self._use_select_parts(visited)
@@ -88,6 +92,10 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     def visit_join(self, visited: operations.Join[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         return self._use_select_parts(visited)
+
+    def visit_null(self, visited: Null[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
+        return self.column_types.make_zero_select(visited.columns)
 
     def visit_projection(self, visited: operations.Projection[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.

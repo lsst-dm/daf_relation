@@ -21,12 +21,17 @@
 
 from __future__ import annotations
 
-__all__ = ("Relation",)
+__all__ = (
+    "Identity",
+    "Relation",
+)
 
 import json
 from abc import abstractmethod
 from collections.abc import Iterable, Set
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar, final
+
+from lsst.utils.classes import cached_getter, immutable
 
 from ._columns import _T, UniqueKey
 from ._exceptions import EngineError
@@ -85,71 +90,6 @@ class Relation(Generic[_T]):
 
     """
 
-    @staticmethod
-    def make_unit(engine: EngineTag) -> Relation[_T]:
-        """Construct a relation with no columns and (conceptually one row).
-
-        This relation is the identity for the join operation: joining any
-        relation to the unit relation yields the original relation.
-
-        Parameters
-        ----------
-        engine : `EngineTag`
-            Identifier for the engine this relation belongs to.
-
-        Returns
-        -------
-        relation : `Relation`
-            Relation with no columns and a single row.
-
-        See Also
-        --------
-        operations.Join
-        """
-        from .operations import Join
-
-        return Join[_T](engine).assert_checked_and_simplified(recursive=False)
-
-    @staticmethod
-    def make_zero(
-        engine: EngineTag,
-        columns: Set[_T],
-        doomed_by: Set[str] = frozenset(),
-    ) -> Relation[_T]:
-        """Construct a relation with no rows.
-
-        This relation is the identity for the union operation: the union of
-        any relation to the zero relation yields the original relation.
-
-        Parameters
-        ----------
-        engine : `EngineTag`
-            Identifier for the engine this relation belongs to.
-        columns : `~collections.abc.Set` [ `.ColumnTag` ]
-            Set of columns for this relation.
-        doomed_by : `~collections.abc.Set` [ `str` ]
-            Diagnostic messages that can be used to report why the relation
-            has no rows.
-
-        Returns
-        -------
-        relation : `Relation`
-            Relation with no rows.
-
-        See Also
-        --------
-        operations.Union
-        """
-        from .operations import Union
-
-        # There are no rows, so the unique keys are maximal: each column is
-        # itself a unique constraint.
-        unique_keys = {frozenset([c]) for c in columns}
-
-        return Union(engine, columns, (), unique_keys, frozenset(doomed_by)).assert_checked_and_simplified(
-            recursive=False
-        )
-
     def __repr__(self) -> str:
         from ._serialization import DictWriter
 
@@ -189,17 +129,6 @@ class Relation(Generic[_T]):
         unique keys.
         """
         raise NotImplementedError()
-
-    @property
-    def doomed_by(self) -> Set[str]:
-        """A set of diagnostic messages that explain hy this relation has
-        no rows (`~collections.abc.Set` [ `str` ]).
-
-        If this set is not empty, the relation has no rows; implementations
-        should not return diagnostic messages if the relation merely *may* have
-        no rows.
-        """
-        return frozenset()
 
     def distinct(self, unique_keys: Set[UniqueKey[_T]] | None = None) -> Relation[_T]:
         """Construct a relation with the same rows and columns as ``self``, but
@@ -378,8 +307,6 @@ class Relation(Generic[_T]):
         --------
         operations.Selection Predicate
         """
-        from .operations import Selection
-
         raise NotImplementedError("TODO")
 
     def slice(
@@ -526,7 +453,6 @@ class Relation(Generic[_T]):
             self.columns,
             (self,) + others,
             unique_keys=unique_keys,
-            extra_doomed_by=frozenset(),
         ).checked_and_simplified(recursive=False)
 
     @abstractmethod
@@ -620,3 +546,113 @@ class Relation(Generic[_T]):
     @abstractmethod
     def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
         raise NotImplementedError()
+
+
+@final
+@immutable
+class Identity(Relation[_T]):
+    """A leaf `Relation` with one row and no columns.
+
+    Joining any relation to this relation yields the original relation.
+
+    Parameters
+    ----------
+    engine : `.EngineTag`
+        Engine that evaluates this relation.
+    """
+
+    def __init__(self, engine: EngineTag):
+        self._engine = engine
+
+    def __str__(self) -> str:
+        return "I"
+
+    @property
+    def engine(self) -> EngineTag:
+        # Docstring inherited.
+        return self._engine
+
+    @property
+    def columns(self) -> Set[_T]:
+        # Docstring inherited.
+        return frozenset()
+
+    @property
+    def unique_keys(self) -> Set[UniqueKey[_T]]:
+        # Docstring inherited.
+        return frozenset()
+
+    def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
+        # Docstring inherited.
+        return visitor.visit_identity(self)
+
+    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        # Docstring inherited.
+        return self
+
+    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
+        # Docstring inherited.
+        return None
+
+    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        return None
+
+
+@final
+@immutable
+class Null(Relation[_T]):
+    """A leaf `Relation` with no rows.
+
+    Joining any relation to the null relation yields the null relation.
+    The union of the null relation with any other relation is the other
+    relation.
+
+    Parameters
+    ----------
+    engine : `.EngineTag`
+        Engine that evaluates this relation.
+    columns : `~collections.abc.Set` [ `.ColumnTag` ]
+        Set of columns for this relation.
+    """
+
+    def __init__(self, engine: EngineTag, columns: Set[_T]):
+        self._engine = engine
+        self._columns = columns
+
+    def __str__(self) -> str:
+        return "∅"
+
+    @property
+    def engine(self) -> EngineTag:
+        # Docstring inherited.
+        return self._engine
+
+    @property
+    def columns(self) -> Set[_T]:
+        # Docstring inherited.
+        return self._columns
+
+    @property  # type: ignore
+    @cached_getter
+    def unique_keys(self) -> Set[UniqueKey[_T]]:
+        # Docstring inherited.
+        # There are no rows, so the unique keys are maximal: each column is
+        # itself a unique constraint.
+        return {frozenset([c]) for c in self._columns}
+
+    def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
+        # Docstring inherited.
+        return visitor.visit_null(self)
+
+    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
+        # Docstring inherited.
+        return self
+
+    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
+        # Docstring inherited.
+        return None
+
+    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        return None

@@ -30,6 +30,7 @@ from ._columns import _T
 
 if TYPE_CHECKING:
     from . import operations
+    from ._relation import Identity, Null
     from ._leaf import Leaf
 
 _U = TypeVar("_U", covariant=True)
@@ -46,6 +47,11 @@ class RelationVisitor(Generic[_T, _U]):
         raise NotImplementedError()
 
     @abstractmethod
+    def visit_identity(self, visited: Identity[_T]) -> _U:
+        """Hook for processing `Identity` operations."""
+        raise NotImplementedError()
+
+    @abstractmethod
     def visit_leaf(self, visited: Leaf[_T]) -> _U:
         """Hook for processing `Leaf` relations."""
         raise NotImplementedError()
@@ -53,6 +59,11 @@ class RelationVisitor(Generic[_T, _U]):
     @abstractmethod
     def visit_join(self, visited: operations.Join[_T]) -> _U:
         """Hook for processing `~operations.Join` operations."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_null(self, visited: Null[_T]) -> _U:
+        """Hook for processing `~Null` leaf relations."""
         raise NotImplementedError()
 
     @abstractmethod

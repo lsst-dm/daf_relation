@@ -33,7 +33,7 @@ from .._columns import _T, UniqueKey
 from .._engines import EngineTag
 from .._exceptions import EngineError, RelationalAlgebraError
 from .._join_condition import JoinCondition
-from .._relation import Relation
+from .._relation import Relation, Identity
 
 if TYPE_CHECKING:
     from .._predicate import Predicate
@@ -54,8 +54,10 @@ class Join(Relation[_T]):
     engine : `.EngineTag`
         Engine the join is performed in.  This must be the same as the engine
         of all input relations.
-    relations : `tuple` [ `.Relation` , ... ]
-        Input relations for the join.
+    lhs : `.Relation`
+        Left-hand side operand.
+    rhs : `.Relation`
+        Right-hand side operand.
     conditions : `frozenset` [ `.JoinCondition` ]
         Custom (generally non-equality) conditions on which to join pairs of
         relations.
@@ -125,15 +127,6 @@ class Join(Relation[_T]):
             }
         return current_keys
 
-    @property  # type: ignore
-    @cached_getter
-    def doomed_by(self) -> Set[str]:
-        # Docstring inherited.
-        result: set[str] = set()
-        for relation in self.relations:
-            result.update(relation.doomed_by)
-        return result
-
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_join(self)
@@ -175,6 +168,8 @@ class Join(Relation[_T]):
                 )
         if conditions_to_match:
             raise RelationalAlgebraError(f"No join order matches join condition(s) {conditions_to_match}.")
+        if len(relations_flat) == 0:
+            return Identity(self.engine)
         if len(relations_flat) == 1:
             assert not conditions_flat, "Should be guaranteed by previous check on matching conditions."
             return relations_flat[0]

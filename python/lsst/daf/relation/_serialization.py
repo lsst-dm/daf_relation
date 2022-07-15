@@ -35,10 +35,10 @@ from ._leaf import Leaf
 from ._order_by_term import OrderByTerm
 from ._predicate import Predicate
 from ._relation_visitor import RelationVisitor
+from ._relation import Relation, Identity, Null
 
 if TYPE_CHECKING:
     from ._engines import EngineTag
-    from ._relation import Relation
 
 
 class MappingReader(Generic[_T]):
@@ -103,6 +103,8 @@ class MappingReader(Generic[_T]):
                     unique_keys=self.read_unique_keys(unique_keys),
                     extra=cast(dict[str, Any], extra),
                 ).checked_and_simplified(recursive=False)
+            case {"type": "identity", "engine": engine}:
+                return Identity(self.read_engine(engine))
             case {"type": "join", "engine": engine, "relations": relations, "conditions": conditions}:
                 return operations.Join(
                     self.read_engine(engine),
@@ -115,6 +117,8 @@ class MappingReader(Generic[_T]):
                     ),
                     conditions=self._read_raw_join_conditions(conditions),
                 ).checked_and_simplified(recursive=False)
+            case {"type": "null", "engine": engine, "columns": columns}:
+                return Null(self.read_engine(engine), self.read_columns(columns))
             case {"type": "projection", "base": base, "columns": columns}:
                 return operations.Projection(
                     self.read_relation(base),
@@ -148,7 +152,6 @@ class MappingReader(Generic[_T]):
                 "columns": columns,
                 "relations": relations,
                 "unique_keys": unique_keys,
-                "extra_doomed_by": extra_doomed_by,
             }:
                 return operations.Union(
                     self.read_engine(engine),
@@ -161,12 +164,6 @@ class MappingReader(Generic[_T]):
                         )
                     ),
                     unique_keys=self.read_unique_keys(unique_keys),
-                    extra_doomed_by=frozenset(
-                        self._iter(
-                            extra_doomed_by,
-                            f"Expected an iterable representing doom messages, got {extra_doomed_by!r}.",
-                        )
-                    ),
                 ).checked_and_simplified(recursive=False)
             case _:
                 raise RelationSerializationError(
@@ -550,6 +547,10 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "unique_keys": self.write_unique_keys(visited.unique_keys),
         }
 
+    def visit_identity(self, visited: Identity[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "identity", "engine": self.write_engine(visited.engine)}
+
     def visit_leaf(self, visited: Leaf[_T]) -> dict[str, Any]:
         # Docstring inherited.
         return {
@@ -565,6 +566,10 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "relations": sorted(r.visit(self) for r in visited.relations),
             "conditions": sorted(jc.serialize(self) for jc in visited.conditions),
         }
+
+    def visit_null(self, visited: Null[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "null", "columns": self.write_column_set(visited.columns)}
 
     def visit_projection(self, visited: operations.Projection[_T]) -> dict[str, Any]:
         # Docstring inherited.
@@ -608,7 +613,6 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "columns": self.write_column_set(visited.columns),
             "relations": sorted(r.visit(self) for r in visited.relations),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
-            "extra_doomed_by": sorted(visited.extra_doomed_by),
         }
 
     def write_column(self, column: _T) -> Any:

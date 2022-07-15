@@ -105,6 +105,5 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
                 visited.columns,
                 tuple(relations),
                 visited.unique_keys,
-                visited.extra_doomed_by,
             )
         return visited
