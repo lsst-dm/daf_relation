@@ -64,18 +64,6 @@ class ConstantComparisonPredicate(Predicate[_T]):
         self.value = value
         self.comparison_operator = comparison_operator
 
-    def __eq__(self, other: Any) -> bool:
-        if self.__class__ != other.__class__:
-            return NotImplemented
-        return (
-            self.column == other.column
-            and self.value == other.value
-            and self.comparison_operator == other.comparison_operator
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.column, self.comparison_operator))
-
     @property
     def columns_required(self) -> Set[_T]:
         return {self.column}

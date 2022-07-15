@@ -79,9 +79,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
     def visit_selection(self, visited: operations.Selection[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         rows = visited.base.visit(self)
-        rows, predicates_used = rows.try_selection(visited.predicates)
-        remaining_predicates = visited.predicates - predicates_used
-        return SelectionRowIterable(rows, tuple(cast(PredicateInterface, p) for p in remaining_predicates))
+        return SelectionRowIterable(rows, tuple(cast(PredicateInterface, p) for p in visited.predicates))
 
     def visit_slice(self, visited: operations.Slice[_T]) -> RowIterable[_T]:
         # Docstring inherited.

@@ -435,7 +435,7 @@ class MappingReader(Generic[_T]):
                     )
         return frozenset(result)
 
-    def _read_raw_predicates(self, raw: Any) -> frozenset[Predicate[_T]]:
+    def _read_raw_predicates(self, raw: Any) -> tuple[Predicate[_T], ...]:
         """Read a set of `Predicate` instances.
 
         This method delegates to `read_predicate` and should not be
@@ -448,10 +448,10 @@ class MappingReader(Generic[_T]):
 
         Returns
         -------
-        predicates : `frozenset` [ `Predicate` ]
+        predicates : `tuple` [ `Predicate`, ... ]
             Set of `Predicate`objects.
         """
-        result: set[Predicate[_T]] = set()
+        result: list[Predicate[_T]] = []
         for mapping in self._iter(
             raw, f"Expected an iterable of serialized Predicate mappings, got {raw!r}."
         ):
@@ -461,7 +461,7 @@ class MappingReader(Generic[_T]):
                     "engines_supported": engines,
                     **extra,
                 }:
-                    result.add(
+                    result.append(
                         self.read_predicate(
                             frozenset(self.read_columns(columns_required)),
                             {self.read_engine(e) for e in engines},
@@ -472,7 +472,7 @@ class MappingReader(Generic[_T]):
                     raise RelationSerializationError(
                         f"Expecting mapping representing a Predicate, got {mapping!r}."
                     )
-        return frozenset(result)
+        return tuple(result)
 
     def _read_raw_order_by(self, raw: Any) -> tuple[OrderByTerm[_T], ...]:
         """Read a set of `OrderByTerm` instances.

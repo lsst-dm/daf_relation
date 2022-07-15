@@ -61,7 +61,7 @@ class Selection(Relation[_T]):
     this class.
     """
 
-    def __init__(self, base: Relation[_T], predicates: frozenset[Predicate[_T]]):
+    def __init__(self, base: Relation[_T], predicates: tuple[Predicate[_T], ...]):
         self.base = base
         self.predicates = predicates
 
@@ -69,8 +69,8 @@ class Selection(Relation[_T]):
     """Relation this operation acts upon (`.Relation`).
     """
 
-    predicates: frozenset[Predicate[_T]]
-    """Predicates to apply (`frozenset` [ `.Predicate` ])."""
+    predicates: tuple[Predicate[_T], ...]
+    """Predicates to apply (`tuple` [ `.Predicate`, ... ])."""
 
     def __str__(self) -> str:
         return f"σ({self.base!s}, {{{', '.join(str(p) for p in self.predicates)}}})"
@@ -111,7 +111,7 @@ class Selection(Relation[_T]):
                 )
         match base:
             case Selection(base=base, predicates=predicates):
-                return Selection(base, predicates | self.predicates)
+                return Selection(base, predicates + self.predicates)
         if base is self.base:
             return self
         return Selection(base, self.predicates)

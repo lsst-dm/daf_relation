@@ -36,14 +36,6 @@ if TYPE_CHECKING:
 
 
 class Predicate(Generic[_T]):
-    @abstractmethod
-    def __eq__(self, other: Any) -> bool:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def __hash__(self) -> int:
-        raise NotImplementedError()
-
     @property
     @abstractmethod
     def columns_required(self) -> Set[_T]:
