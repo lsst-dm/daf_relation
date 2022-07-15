@@ -39,7 +39,6 @@ from .._columns import _T, UniqueKey
 from .._join_condition import JoinCondition
 from .._leaf import Leaf
 from .._order_by_term import OrderByTerm
-from .._predicate import Predicate
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -156,32 +155,6 @@ class RowIterable(Generic[_T]):
             signature.
         """
         return None, frozenset()
-
-    def try_selection(self, predicates: Set[Predicate[_T]]) -> tuple[RowIterable[_T], Set[Predicate[_T]]]:
-        """Hook for performing custom selections on this iterable.
-
-        This can be overridden by subclasses to customize how selection
-        operations are implemented.  Note that it the leaf relation this
-        iterable holds must be directly held by a selection operation for it to
-        be used.
-
-        Parameters
-        ----------
-        predicates : `~collections.abc.Set` [ `.Predicate` ]
-            Predicates to attempt to apply.
-
-        Returns
-        -------
-        rows : `RowIterable`
-            Rows that may have some predicates already applied.  Should be
-            ``self`` if no predicates are applied.
-        matching_predicates : `~collections.abc.Set` [ `.Predicate` ]
-            Set of predicates actually included in ``rows``.  Any that remain
-            will be applied by assuming they have `Predicate.engine_state`
-            for this engine set to a callable with the `PredicateState`
-            signature.
-        """
-        return (self, frozenset())
 
     def try_slice(
         self, order_by: Sequence[OrderByTerm[_T]], offset: int, limit: int | None
