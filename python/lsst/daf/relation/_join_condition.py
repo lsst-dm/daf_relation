@@ -30,6 +30,7 @@ from collections.abc import Iterable, Set
 from typing import TYPE_CHECKING, Any, Generic
 
 from ._columns import _T
+from ._exceptions import RelationalAlgebraError
 
 if TYPE_CHECKING:
     from ._engines import EngineTag
@@ -107,3 +108,17 @@ class JoinCondition(Generic[_T]):
             for jc in itertools.chain(conditions, (c.flipped() for c in conditions))
             if columns0 >= jc.columns_required[0] and columns1 >= jc.columns_required[1]
         }
+
+    def matches(self, columns0: Set[_T], columns1: Set[_T], /) -> bool:
+        return self.columns_required[0] <= columns0 and self.columns_required[1] <= columns1
+
+    def flipped_if_needed(self, columns0: Set[_T], columns1: Set[_T], /) -> JoinCondition[_T]:
+        if self.columns_required[0] <= columns0 and self.columns_required[1] <= columns1:
+            return self
+        elif self.columns_required[1] <= columns0 and self.columns_required[0] <= columns1:
+            return self.flipped()
+        raise RelationalAlgebraError(
+            f"Join condition {self} does not match the columns of the join operands: "
+            f"{set(self.columns_required[0]), set(self.columns_required[1])} are not subsets of"
+            f"{set(columns0), set(columns1)}."
+        )

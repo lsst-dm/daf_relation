@@ -40,13 +40,13 @@ class SelectionRowIterable(RowIterable[_T]):
     ----------
     base : `RowIterable`
         Original iterable to filter rows from.
-    predicates : `tuple` [ `PredicateState` ]
-        Tuple of callables with the `PredicateState` signature.
+    predicate : `PredicateInterface`
+        Objects that implement this engine's `PredicateInterface`.
     """
 
-    def __init__(self, base: RowIterable[_T], predicates: tuple[PredicateInterface[_T], ...]):
+    def __init__(self, base: RowIterable[_T], predicate: PredicateInterface[_T]):
         self.base = base
-        self.predicates = predicates
+        self.predicate = predicate
 
     def __iter__(self) -> Iterator[Row[_T]]:
-        return (row for row in self.base if all(p.test_iteration_row(row) for p in self.predicates))
+        return (row for row in self.base if self.predicate.test_iteration_row(row))

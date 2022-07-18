@@ -28,6 +28,10 @@ __all__ = (
     "RelationSerializationError",
 )
 
+from typing import TypeVar
+
+_V = TypeVar("_V")
+
 
 class RelationalAlgebraError(RuntimeError):
     """Exception type raised to indicate problems in the definition of a

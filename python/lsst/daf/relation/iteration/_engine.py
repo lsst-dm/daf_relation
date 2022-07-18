@@ -28,12 +28,11 @@ __all__ = (
     "PredicateInterface",
 )
 
-from typing import TYPE_CHECKING, ClassVar, Protocol, final
+from typing import TYPE_CHECKING, Protocol, final
 
 from lsst.utils.classes import Singleton
 
 from .._columns import _T
-from .._engines import EngineOptions
 from .._exceptions import EngineError
 from ._row_iterable import RowIterable
 
@@ -54,14 +53,6 @@ class Engine(metaclass=Singleton):
     def __repr__(self) -> str:
         return "lsst.daf.relation.iteration.engine"
 
-    options: ClassVar[EngineOptions] = EngineOptions(
-        flatten_joins=False,
-        flatten_unions=True,
-        pairwise_joins_only=True,
-        pairwise_unions_only=False,
-        can_sort=True,
-    )
-
     def execute(self, relation: Relation[_T]) -> RowIterable[_T]:
         """Execute a native iteration relation, returning a Python iterable.
 
@@ -78,9 +69,7 @@ class Engine(metaclass=Singleton):
         from ._visitor import IterationVisitor
 
         if relation.engine != self:
-            raise EngineError(
-                f"Iteration engine cannot execute relation with engine {relation.engine}."
-            )
+            raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine}.")
         return relation.visit(IterationVisitor())
 
 

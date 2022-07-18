@@ -37,8 +37,8 @@ from .selection import SelectionRowIterable
 
 if TYPE_CHECKING:
     from .. import operations
-    from .._relation import Identity, Null
     from .._leaf import Leaf
+    from .._relation import Identity, Zero
 
 
 class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
@@ -61,22 +61,15 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
 
     def visit_join(self, visited: operations.Join[_T]) -> RowIterable[_T]:
         # Docstring inherited.
-        if len(visited.relations) == 0:
-            return RowCollection([{}])
-        if len(visited.relations) == 1:
-            return visited.relations[0].visit(self)
-        if len(visited.relations) > 2:
-            raise EngineError("Native iteration requires a tree with only pairwise joins.")
-        base_relation, next_relation = visited.relations
-        base_rows = base_relation.visit(self)
-        next_rows = next_relation.visit(self)
-        return make_join_row_iterable(base_rows, next_rows, base_relation, next_relation, visited.conditions)
+        lhs_rows = visited.lhs.visit(self)
+        rhs_rows = visited.rhs.visit(self)
+        return make_join_row_iterable(lhs_rows, rhs_rows, visited.lhs, visited.rhs, visited.condition)
 
     def visit_leaf(self, visited: Leaf[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         return cast(RowIterableLeaf[_T], visited).rows
 
-    def visit_null(self, visited: Null[_T]) -> RowIterable[_T]:
+    def visit_zero(self, visited: Zero[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         return RowCollection[_T]([])
 
@@ -88,7 +81,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
     def visit_selection(self, visited: operations.Selection[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         rows = visited.base.visit(self)
-        return SelectionRowIterable(rows, tuple(cast(PredicateInterface, p) for p in visited.predicates))
+        return SelectionRowIterable(rows, cast(PredicateInterface, visited.predicate))
 
     def visit_slice(self, visited: operations.Slice[_T]) -> RowIterable[_T]:
         # Docstring inherited.
@@ -115,9 +108,4 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
 
     def visit_union(self, visited: operations.Union[_T]) -> RowIterable[_T]:
         # Docstring inherited.
-        if len(visited.relations) == 0:
-            return RowCollection([])
-        if len(visited.relations) == 1:
-            return visited.relations[0].visit(self)
-        base_row_iterables = [r.visit(self) for r in visited.relations]
-        return ChainRowIterable(base_row_iterables)
+        return ChainRowIterable([visited.first.visit(self), visited.second.visit(self)])

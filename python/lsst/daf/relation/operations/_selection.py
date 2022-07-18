@@ -48,33 +48,30 @@ class Selection(Relation[_T]):
     ----------
     base : `.Relation`
         Relation this operation acts upon.
-    predicates : `frozenset` [ `.Predicate` ]
-        Predicates to apply.
-
-    Notes
-    -----
-    Like other operations, `Selection` objects should only be constructed
-    directly by code that can easily guarantee their `checked_and_simplified`
-    invariants; in all other contexts, the `.Relation.selection` factory should
-    be used instead.
-
-    See `.Relation.selection` for the `checked_and_simplified` behavior for
-    this class.
+    predicate : `.Predicate`
+        Predicate to apply.
     """
 
-    def __init__(self, base: Relation[_T], predicates: tuple[Predicate[_T], ...]):
+    def __init__(self, base: Relation[_T], predicate: Predicate[_T]):
+        if not predicate.columns_required <= base.columns:
+            raise ColumnError(
+                f"Predicate {predicate} for base relation {base} needs "
+                f"columns {predicate.columns_required - base.columns}."
+            )
+        if not predicate.supports_engine(base.engine):
+            raise EngineError(f"Predicate {predicate} does not support engine {base.engine}.")
         self.base = base
-        self.predicates = predicates
+        self.predicate = predicate
 
     base: Relation[_T]
     """Relation this operation acts upon (`.Relation`).
     """
 
-    predicates: tuple[Predicate[_T], ...]
-    """Predicates to apply (`tuple` [ `.Predicate`, ... ])."""
+    predicate: Predicate[_T]
+    """Predicate to apply (`.Predicate`)."""
 
     def __str__(self) -> str:
-        return f"σ({self.base!s}, {{{', '.join(str(p) for p in self.predicates)}}})"
+        return f"σ({self.base!s}, {self.predicate})"
 
     @property
     def engine(self) -> EngineTag:
@@ -91,40 +88,22 @@ class Selection(Relation[_T]):
         # Docstring inherited.
         return self.base.unique_keys
 
+    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (result := super()._try_join(rhs, condition)) is not None:
+            return result
+        if (new_base := self.base._try_join(rhs, condition)) is not None:
+            return Selection(new_base, self.predicate)
+        return None
+
+    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (result := super()._try_selection(predicate)) is not None:
+            return result
+        if (new_base := self.base._try_selection(predicate)) is not None:
+            return Selection(new_base, self.predicate)
+        return None
+
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_selection(self)
-
-    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        # Docstring inherited.
-        base = self.base
-        if recursive:
-            base = base.checked_and_simplified(recursive=True)
-        if not self.predicates:
-            return base
-        for p in self.predicates:
-            if not p.supports_engine(self.engine):
-                raise EngineError(f"Predicate {p} does not support engine {self.engine}.")
-            if not p.columns_required <= self.base.columns:
-                raise ColumnError(
-                    f"Predicate {p} for base relation {self.base} needs "
-                    f"columns {p.columns_required - self.base.columns}."
-                )
-        match base:
-            case Selection(base=base, predicates=predicates):
-                return Selection(base, predicates + self.predicates)
-        if base is self.base:
-            return self
-        return Selection(base, self.predicates)
-
-    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
-        # Docstring inherited.
-        if (new_base := self.base.try_insert_join(other, conditions)) is not None:
-            return Selection(new_base, self.predicates)
-        return None
-
-    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
-        # Docstring inherited.
-        if (new_base := self.base.try_insert_selection(predicate)) is not None:
-            return Selection(new_base, self.predicates).checked_and_simplified(recursive=False)
-        return None

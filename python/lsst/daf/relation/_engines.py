@@ -21,63 +21,11 @@
 
 from __future__ import annotations
 
-__all__ = ("EngineTag", "EngineTree", "EngineOptions")
+__all__ = ("EngineTag", "EngineTree")
 
 import dataclasses
 from collections.abc import Hashable, Iterator, Set
-from typing import ClassVar, Protocol
-
-
-@dataclasses.dataclass(frozen=True)
-class EngineOptions:
-    """A struct containing the options that engines can customize to control
-    form of the relations they accept.
-    """
-
-    flatten_joins: bool = True
-    """Whether relation simplification should flatten all adjacent joins in a
-    tree into a single `operations.Join` instance (`bool`).
-    """
-
-    flatten_unions: bool = True
-    """Whether relation simplification should flatten all adjacent unions in a
-    tree into a single `operations.Union` instance (`bool`).
-    """
-
-    pairwise_joins_only: bool = False
-    """Whether relation checks should require that joins have exactly zero or
-    two elements (`bool`).
-
-    Zero-element joins are used to represent the unit relation (see
-    `Relation.make_unit`), and single-element joins are always simplified away.
-
-    Setting this to `True` requires `flatten_joins` to be `False`.
-    """
-
-    pairwise_unions_only: bool = False
-    """Whether relation checks should require that unions have exactly zero or
-    two elements (`bool`).
-
-    Zero-element unions are used to represent the zero relations (see
-    `Relation.make_zero`), and single-element unions are always simplified
-    away.
-
-    Setting this to `True` requires `flatten_unions` to be `False`.
-    """
-
-    can_sort: bool = True
-    """Whether this engine supports sorting (`bool`).
-    """
-
-    def __post_init__(self) -> None:
-        if self.pairwise_joins_only and self.flatten_joins:
-            raise ValueError(
-                "Inconsistent options: cannot require pairwise joins when joins are being flattened."
-            )
-        if self.pairwise_unions_only and self.flatten_unions:
-            raise ValueError(
-                "Inconsistent options: cannot require pairwise unions when unions are being flattened."
-            )
+from typing import Protocol
 
 
 class EngineTag(Hashable, Protocol):
@@ -98,11 +46,6 @@ class EngineTag(Hashable, Protocol):
 
     def __str__(self) -> str:
         ...
-
-    options: ClassVar[EngineOptions]
-    """The options that specialize how this engine's relations are checked
-    and simplified (`EngineOptions`).
-    """
 
 
 @dataclasses.dataclass(frozen=True)

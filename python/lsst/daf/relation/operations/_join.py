@@ -23,19 +23,18 @@ from __future__ import annotations
 
 __all__ = ("Join",)
 
-import itertools
 from collections.abc import Set
 from typing import TYPE_CHECKING, final
 
 from lsst.utils.classes import cached_getter, immutable
 
-from .._columns import _T, UniqueKey
+from .._columns import _T, UniqueKey, compute_join_unique_keys
 from .._engines import EngineTag
-from .._exceptions import EngineError, RelationalAlgebraError
-from .._join_condition import JoinCondition
-from .._relation import Relation, Identity
+from .._exceptions import ColumnError, EngineError
+from .._relation import Relation
 
 if TYPE_CHECKING:
+    from .._join_condition import JoinCondition
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
@@ -51,165 +50,110 @@ class Join(Relation[_T]):
 
     Parameters
     ----------
-    engine : `.EngineTag`
-        Engine the join is performed in.  This must be the same as the engine
-        of all input relations.
     lhs : `.Relation`
         Left-hand side operand.
     rhs : `.Relation`
         Right-hand side operand.
-    conditions : `frozenset` [ `.JoinCondition` ]
-        Custom (generally non-equality) conditions on which to join pairs of
-        relations.
-
-    Notes
-    -----
-    Like other operations, `Join` objects should only be constructed directly
-    by code that can easily guarantee their `checked_and_simplified`
-    invariants; in all other contexts, the `.Relation.join` factory should be
-    used instead.
-
-    Join objects with no relations are permitted (with no conditions, either),
-    and are used to represent the "unit relation" (see `.Relation.make_unit`),
-    though these are often simplified out after they are added to larger
-    relation trees.  Join objects with one relation are not permitted; these
-    should always be simplified out as a no-op.  Some relations may prohibit
-    joins with more than two relations (see
-    `EngineOptions.pairwise_joins_only`).
-
-    See `.Relation.join` for the `checked_and_simplified` behavior for this
-    class.
+    condition : `.JoinCondition`, optional
+        A custom (generally non-equality) condition for the join, to be applied
+        in addition to common-column equality conditions.
     """
 
     def __init__(
         self,
-        engine: EngineTag,
-        relations: tuple[Relation[_T], ...] = (),
-        conditions: frozenset[JoinCondition[_T]] = frozenset(),
+        lhs: Relation[_T],
+        rhs: Relation[_T],
+        condition: JoinCondition[_T] | None = None,
     ):
-        self._engine = engine
-        self.relations = relations
-        self.conditions = conditions
+        if lhs.engine != rhs.engine:
+            raise EngineError(f"Inconsistent engines for join: {lhs.engine} != {rhs.engine}.")
+        if condition is not None:
+            if not condition.matches(lhs.columns, rhs.columns):
+                raise ColumnError(
+                    f"Join condition {condition} does not match relation columns "
+                    f"{set(lhs.columns)}, {set(rhs.columns)}"
+                )
+            if not condition.supports_engine(rhs.engine):
+                raise EngineError(f"Join engine {rhs.engine} is not supported by condition {condition}.")
+        self.lhs = lhs
+        self.rhs = rhs
+        self.condition = condition
 
-    relations: tuple[Relation[_T], ...]
-    """Input relations for the join (`tuple` [ `.Relation`, ... ])."""
+    lhs: Relation[_T]
+    """Left-hand side operand (`.Relation`).
+    """
 
-    conditions: frozenset[JoinCondition[_T]]
-    """Custom (generally non-equality) conditions on which to join pairs of
-    relations (`frozenset` [ `.JoinCondition` ]).
+    rhs: Relation[_T]
+    """Right-hand side operand (`.Relation`).
+    """
+
+    condition: JoinCondition[_T] | None
+    """A custom (generally non-equality) condition for the join, to be applied
+    in addition to common-column equality conditions (`.JoinCondition` or
+    `None`).
     """
 
     def __str__(self) -> str:
-        return f"({'⋈ '.join(str(r) for r in self.relations)})"
+        return f"({self.lhs} ⋈ {self.rhs})"
 
     @property
     def engine(self) -> EngineTag:
         # Docstring inherited.
-        return self._engine
+        return self.lhs.engine
 
     @property  # type: ignore
     @cached_getter
     def columns(self) -> Set[_T]:
         # Docstring inherited.
-        result: set[_T] = set()
-        for relation in self.relations:
-            result.update(relation.columns)
-        return result
+        return self.lhs.columns | self.rhs.columns
 
     @property  # type: ignore
     @cached_getter
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
-        current_keys: set[UniqueKey[_T]] = set()
-        for relation in self.relations:
-            current_keys = {
-                key1.union(key2) for key1, key2 in itertools.product(current_keys, relation.unique_keys)
-            }
-        return current_keys
+        return compute_join_unique_keys(self.lhs.unique_keys, self.rhs.unique_keys)
+
+    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (result := super()._try_join(rhs, condition)) is not None:
+            return result
+
+        def try_branch_join(branch: Relation[_T]) -> Relation[_T] | None:
+            if not branch.columns >= self.columns & rhs.columns:
+                # Inserting new join at this existing join branch changes the
+                # automatic part of the join condition.
+                return None
+            if condition is not None and not condition.columns_required[0] <= branch.columns:
+                # Explicit join condition doesn't work on this branch, either.
+                return None
+            return branch._try_join(rhs, condition)
+
+        if (new_lhs := try_branch_join(self.lhs)) is not None:
+            return Join(new_lhs, self.rhs, self.condition)
+        if (new_rhs := try_branch_join(self.rhs)) is not None:
+            return Join(self.lhs, new_rhs, self.condition)
+        return None
+
+    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (result := super()._try_selection(predicate)) is not None:
+            return result
+
+        def try_branch_selection(branch: Relation[_T]) -> Relation[_T]:
+            if not branch.columns >= predicate.columns_required:
+                return branch
+            return new_branch if (new_branch := branch._try_selection(predicate)) is not None else branch
+
+        new_lhs = try_branch_selection(self.lhs)
+        new_rhs = try_branch_selection(self.rhs)
+        # If we were able to apply the selection to either branch, the join
+        # will effectively apply it to the other.  If we can apply it to both,
+        # we do, because you almost always want to apply selections as early
+        # and often as possible to evaluate a relation expression efficiently.
+        if new_lhs is not self.lhs or new_rhs is not self.rhs:
+            return Join(new_lhs, new_rhs, self.condition)
+        return None
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_join(self)
-
-    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        # Docstring inherited.
-        relations_flat: list[Relation[_T]] = []
-        conditions_flat: set[JoinCondition[_T]] = set()
-        any_changes = False
-        for condition in self.conditions:
-            if not condition.supports_engine(self.engine):
-                raise EngineError(f"Join condition {condition} does not support engine {self.engine}.")
-        for original in self.relations:
-            if recursive:
-                relation = original.checked_and_simplified(recursive=True)
-                if relation is not original:
-                    any_changes = True
-            else:
-                relation = original
-            match relation:
-                case Join(relations=nested_relations, conditions=nested_conditions):
-                    if not nested_relations:
-                        any_changes = True
-                    elif self.engine.options.flatten_joins:
-                        relations_flat.extend(nested_relations)
-                        conditions_flat.update(nested_conditions)
-                        any_changes = True
-                    else:
-                        relations_flat.append(relation)
-        conditions_to_match = set(conditions_flat)
-        for relation in relations_flat:
-            columns_in_others = set(itertools.chain(r.columns for r in self.relations if r is not relation))
-            conditions_to_match.difference_update(
-                JoinCondition.find_matching(relation.columns, columns_in_others, conditions_to_match)
-            )
-            if relation.engine != self.engine:
-                raise EngineError(
-                    f"Join member {relation} has engine {relation.engine}, while join has {self.engine}."
-                )
-        if conditions_to_match:
-            raise RelationalAlgebraError(f"No join order matches join condition(s) {conditions_to_match}.")
-        if len(relations_flat) == 0:
-            return Identity(self.engine)
-        if len(relations_flat) == 1:
-            assert not conditions_flat, "Should be guaranteed by previous check on matching conditions."
-            return relations_flat[0]
-        if self.engine.options.pairwise_joins_only:
-            if len(relations_flat) > 2:
-                raise EngineError(f"Engine {self.engine} requires pairwise joins only.")
-        if not any_changes:
-            return self
-        else:
-            return Join(self.engine, tuple(relations_flat), frozenset(conditions_flat))
-
-    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
-        # Docstring inherited.
-        common_columns = self.columns & other.columns
-        for i, nested_relation in enumerate(self.relations):
-            if (
-                common_columns <= nested_relation.columns
-                and JoinCondition.find_matching(nested_relation.columns, other.columns, conditions)
-                == conditions
-            ):
-                if (new_relation := nested_relation.try_insert_join(other, conditions)) is not None:
-                    new_relations = list(self.relations)
-                    new_relations[i] = new_relation
-                    return Join(
-                        self.engine, tuple(new_relations), frozenset(self.conditions)
-                    ).checked_and_simplified(recursive=False)
-        return None
-
-    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
-        # Docstring inherited.
-        new_relations: list[Relation[_T]] = []
-        any_matched: bool = False
-        for i, nested_relation in enumerate(self.relations):
-            if predicate.columns_required <= nested_relation.columns:
-                if (new_relation := nested_relation.try_insert_selection(predicate)) is not None:
-                    nested_relation = new_relation
-                    any_matched = True
-            new_relations.append(nested_relation)
-        if not any_matched:
-            return None
-        return Join(self.engine, tuple(new_relations), self.conditions).assert_checked_and_simplified(
-            recursive=False
-        )

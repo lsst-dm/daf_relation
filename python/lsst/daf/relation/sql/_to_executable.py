@@ -40,7 +40,7 @@ from ._select_parts import ToSelectParts
 if TYPE_CHECKING:
     from .._leaf import Leaf
     from .._order_by_term import OrderByTerm
-    from .._relation import Relation, Identity, Null
+    from .._relation import Identity, Relation, Zero
 
 
 @dataclasses.dataclass(eq=False, slots=True)
@@ -93,7 +93,7 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
         # Docstring inherited.
         return self._use_select_parts(visited)
 
-    def visit_null(self, visited: Null[_T]) -> sqlalchemy.sql.expression.SelectBase:
+    def visit_zero(self, visited: Zero[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         return self.column_types.make_zero_select(visited.columns)
 
@@ -132,14 +132,13 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
 
     def visit_union(self, visited: operations.Union[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
-        if not visited.relations:
-            return self.column_types.make_zero_select(visited.columns)
         nested_visitor = dataclasses.replace(self, distinct=False, order_by=False, offset=0, limit=None)
-        nested_executables = [r.visit(nested_visitor) for r in visited.relations]
+        new_first = visited.first.visit(nested_visitor)
+        new_second = visited.second.visit(nested_visitor)
         executable: sqlalchemy.sql.CompoundSelect = (
-            sqlalchemy.sql.union(*nested_executables)
+            sqlalchemy.sql.union(new_first, new_second)
             if self.distinct
-            else sqlalchemy.sql.union_all(*nested_executables)
+            else sqlalchemy.sql.union_all(new_first, new_second)
         )
         if self.order_by:
             columns_available = self.column_types.extract_mapping(

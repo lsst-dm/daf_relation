@@ -89,45 +89,21 @@ class Transfer(Relation[_T]):
         # Docstring inherited.
         return self.base.unique_keys
 
+    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+        if (result := super()._try_join(rhs, condition)) is not None:
+            return result
+        if (new_base := self.base._try_join(rhs, condition)) is not None:
+            return Transfer(new_base, self._destination)
+        return None
+
+    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (result := super()._try_selection(predicate)) is not None:
+            return result
+        if (new_base := self.base._try_selection(predicate)) is not None:
+            return Transfer(new_base, self._destination)
+        return None
+
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_transfer(self)
-
-    def checked_and_simplified(self, recursive: bool = True) -> Relation[_T]:
-        # Docstring inherited.
-        base = self.base
-        if recursive:
-            base = base.checked_and_simplified(recursive=True)
-        if base.engine == self.engine:
-            return base
-        match base:
-            case Transfer(base=base):
-                if base.engine == self.engine:
-                    return base
-                return Transfer(base, self.engine)
-            case _:
-                if base is self.base:
-                    return self
-                return Transfer(base, self.engine)
-
-    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
-        # Docstring inherited.
-        new_base: Relation[_T] | None = None
-        if self.base.engine == other.engine:
-            new_base = self.base.join(other, conditions=conditions)
-        else:
-            new_base = self.base.try_insert_join(other, conditions)
-        if new_base is None:
-            return None
-        return Transfer(new_base, self.engine)
-
-    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
-        # Docstring inherited.
-        new_base: Relation[_T] | None
-        if predicate.supports_engine(self.base.engine):
-            new_base = self.base.selection(predicate)
-        else:
-            new_base = self.base.try_insert_selection(predicate)
-        if new_base is None:
-            return None
-        return Transfer(new_base, self._destination)

@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Mapping, Protocol
 from . import operations
 from ._columns import _T
 from ._exceptions import EngineError
-from ._relation import Relation
+from ._relation import Identity, Relation, Zero
 from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
@@ -50,18 +50,17 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
             return operations.Distinct(base, visited.unique_keys)
         return visited
 
+    def visit_identity(self, visited: Identity[_T]) -> Relation[_T]:
+        return visited
+
     def visit_leaf(self, visited: Leaf[_T]) -> Relation[_T]:
         return visited
 
     def visit_join(self, visited: operations.Join[_T]) -> Relation[_T]:
-        relations = []
-        any_changed: bool = False
-        for original in visited.relations:
-            if (relation := original.visit(self)) is not original:
-                any_changed = True
-            relations.append(relation)
-        if any_changed:
-            return operations.Join(visited.engine, tuple(relations), visited.conditions)
+        new_lhs = visited.lhs.visit(self)
+        new_rhs = visited.rhs.visit(self)
+        if new_lhs is not visited.lhs or new_rhs is not visited.rhs:
+            return operations.Join(new_lhs, new_rhs, visited.condition)
         return visited
 
     def visit_projection(self, visited: operations.Projection[_T]) -> Relation[_T]:
@@ -71,7 +70,7 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
 
     def visit_selection(self, visited: operations.Selection[_T]) -> Relation[_T]:
         if (base := visited.base.visit(self)) is not visited.base:
-            return operations.Selection(base, visited.predicates)
+            return operations.Selection(base, visited.predicate)
         return visited
 
     def visit_slice(self, visited: operations.Slice[_T]) -> Relation[_T]:
@@ -93,17 +92,11 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
         return transfer_function(visited.base)
 
     def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
-        relations = []
-        any_changed: bool = False
-        for original in visited.relations:
-            if (relation := original.visit(self)) is not original:
-                any_changed = True
-            relations.append(relation)
-        if any_changed:
-            return operations.Union(
-                visited.engine,
-                visited.columns,
-                tuple(relations),
-                visited.unique_keys,
-            )
+        new_first = visited.first.visit(self)
+        new_second = visited.second.visit(self)
+        if new_first is not visited.first or new_second is not visited.second:
+            return operations.Union(new_first, new_second, visited.unique_keys)
+        return visited
+
+    def visit_zero(self, visited: Zero[_T]) -> Relation[_T]:
         return visited

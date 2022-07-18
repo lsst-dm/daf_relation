@@ -24,8 +24,7 @@ from __future__ import annotations
 __all__ = ("MutableSelectParts", "SelectParts", "SelectPartsLeaf", "ToSelectParts")
 
 import dataclasses
-from collections import deque
-from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
+from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, Generic, cast
 
 import sqlalchemy
@@ -41,7 +40,7 @@ from ._interfaces import JoinConditionInterface, OrderByTermInterface, Predicate
 if TYPE_CHECKING:
     from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
-    from .._relation import Relation, Identity, Null
+    from .._relation import Identity, Relation, Zero
     from .._serialization import DictWriter
     from ._engine import Engine
 
@@ -229,7 +228,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     def visit_identity(self, visited: Identity[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(
-            self.column_types.make_unit_subquery(),
+            self.column_types.make_identity_subquery(),
             [],
             None,
         )
@@ -240,21 +239,39 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
     def visit_join(self, visited: operations.Join[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        if not visited.relations:
-            return SelectParts(self.column_types.make_unit_subquery(), (), {})
-        first_term, *other_terms = self._sorted_join_terms(visited.relations, visited.conditions)
-        first_relation, first_condition = first_term
-        assert not first_condition, "first relation should not have any join conditions"
-        join_parts = first_relation.visit(self)
-        if join_parts.columns_available is None:
-            join_parts.columns_available = self.column_types.extract_mapping(
-                first_relation.columns, join_parts.from_clause.columns
+        lhs_parts = visited.lhs.visit(self)
+        if lhs_parts.columns_available is None:
+            lhs_parts.columns_available = self.column_types.extract_mapping(
+                visited.lhs.columns, lhs_parts.from_clause.columns
             )
-        for term_relation, term_conditions in other_terms:
-            join_parts = self._join_select_parts(join_parts, term_relation, term_conditions)
-        return join_parts
+        rhs_parts = visited.rhs.visit(self)
+        if rhs_parts.columns_available is None:
+            rhs_parts.columns_available = self.column_types.extract_mapping(
+                visited.rhs.columns, rhs_parts.from_clause.columns
+            )
+        on_terms: list[sqlalchemy.sql.ColumnElement] = []
+        for tag in lhs_parts.columns_available.keys() & rhs_parts.columns_available.keys():
+            on_terms.append(lhs_parts.columns_available[tag] == rhs_parts.columns_available[tag])
+        if visited.condition is not None:
+            on_terms.append(
+                cast(JoinConditionInterface, visited.condition).to_sql_join_on(
+                    (lhs_parts.columns_available, rhs_parts.columns_available), self.column_types
+                )
+            )
+        on_clause: sqlalchemy.sql.ColumnElement
+        if not on_terms:
+            on_clause = sqlalchemy.sql.literal(True)
+        elif len(on_terms) == 1:
+            on_clause = on_terms[0]
+        else:
+            on_clause = sqlalchemy.sql.and_(*on_terms)
+        return SelectParts(
+            from_clause=lhs_parts.from_clause.join(rhs_parts.from_clause, onclause=on_clause),
+            where=tuple(lhs_parts.where) + tuple(rhs_parts.where),
+            columns_available={**lhs_parts.columns_available, **rhs_parts.columns_available},
+        )
 
-    def visit_null(self, visited: Null[_T]) -> SelectParts[_T, _L]:
+    def visit_zero(self, visited: Zero[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(
             self._use_executable(visited),
@@ -276,12 +293,13 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             base_parts.columns_available = self.column_types.extract_mapping(
                 visited.base.columns, base_parts.from_clause
             )
-        full_where = list(base_parts.where)
-        for p in visited.predicates:
-            full_where.append(
-                cast(PredicateInterface, p).to_sql_boolean(base_parts.columns_available, self.column_types)
-            )
-        return dataclasses.replace(base_parts, where=full_where)
+        new_where = cast(PredicateInterface, visited.predicate).to_sql_boolean(
+            base_parts.columns_available, self.column_types
+        )
+        return dataclasses.replace(
+            base_parts,
+            where=tuple(base_parts.where) + (new_where,),
+        )
 
     def visit_slice(self, visited: operations.Slice[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
@@ -319,89 +337,6 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         from ._to_executable import ToExecutable
 
         return relation.visit(ToExecutable(self.column_types)).subquery()
-
-    def _sorted_join_terms(
-        self, relations: Sequence[Relation[_T]], conditions: Set[JoinCondition[_T]]
-    ) -> Iterator[tuple[Relation[_T], set[JoinCondition[_T]]]]:
-        """Sort the relations in a join operation to avoid Cartesian products
-        (empty JOIN ON expressions) and associate join conditions with pairs
-        of relations.
-
-        Parameters
-        ----------
-        relations : `Sequence` [ `.Relation` ]
-            Relations to sort.
-        conditions : `~collections.abc.Set` [ `.JoinCondition` ]
-            Special join conditions to associate with pairs of relations.
-
-        Yields
-        ------
-        relation : `.Relation`
-            A relation to join to all of those previously yielded.
-        matching_conditions : `set` [ `.JoinCondition` ]
-            Join conditions to apply when joining in this relation.
-        """
-        # We want to join terms into the SQL query in an order such that each
-        # join's ON clause has something in common with the ones that preceded
-        # it, and to find out if that's impossible and hence a Cartesian join
-        # is needed.  Starting with the terms that have the most columns is a
-        # good initial guess for such an ordering, so we begin by sort
-        # relations by the number of columns they provide, in reverse, and put
-        # them in a deque. Note that this does sort not take into account
-        # special join conditions, but the rest of the logic will.
-        relations_to_do = deque(sorted(relations, key=lambda r: len(r.columns)))
-        # Make a mutable set of the special join conditions we need to use.
-        conditions_to_do = set(conditions)
-        assert len(relations_to_do) > 1, "No join needed for 0 or 1 clauses."
-        # Start an outer loop over all relations.
-        # We now refine the relation order, popping terms from the front of
-        # `todo` and yielding them when we we have the kind of ON condition
-        # we want.
-        while relations_to_do:
-            candidate = relations_to_do.popleft()
-            yield candidate, set()
-            columns_seen = set(candidate.columns)
-            # A list of relations we haven't been able to join to columns_seen.
-            # We'll move relations to `relations_rejected` from
-            # `relations_to_do` and back in this inner loop, until we either
-            # finish or everything gets rejected.
-            relations_rejected: list[Relation[_T]] = []
-            while relations_to_do:
-                candidate = relations_to_do.popleft()
-                # Find JoinConditions that match this candidate to
-                # columns_seen.
-                conditions_matched = JoinCondition.find_matching(
-                    columns_seen, candidate.columns, conditions_to_do
-                )
-                if columns_seen.isdisjoint(candidate.columns) and not conditions_matched:
-                    # We don't have any way to connect already seen columns to
-                    # this relation.  We put this relation in the rejected list
-                    # for now, and let the inner loop continue to try the next
-                    # one.
-                    relations_rejected.append(candidate)
-                else:
-                    # This candidate does have some column overlap.  In
-                    # addition to yielding it with the matching conditions, we
-                    # reset the rejected list by transferring its contents to
-                    # the end of to_do, since this new term may have some
-                    # column overlap with those we've previously rejected.
-                    yield candidate, conditions_matched
-                    columns_seen.update(candidate.columns)
-                    relations_to_do.extend(relations_rejected)
-                    relations_rejected.clear()
-            if relations_rejected:
-                # We've processed all relations that could be connected to the
-                # starting one by at least one column or special JoinCondition.
-                # In the future, we could guard against unintentional Cartesian
-                # products here (see e.g. DM-33147), by checking for common
-                # mistakes, emitting warnings, looking for some feature flag
-                # that says to enable them, etc.  For now we just permit them.
-                # But we still need to see if any of these "rejected" relations
-                # can be connected to each other.  So we start the algorithm
-                # again by returning to the outermost loop, with a fresh
-                # to_do deque.
-                relations_to_do.extend(relations_rejected)
-                relations_rejected.clear()
 
     def _join_select_parts(
         self,

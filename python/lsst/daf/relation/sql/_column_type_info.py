@@ -137,13 +137,13 @@ class ColumnTypeInfo(Generic[_T, _L]):
         self.handle_empty_columns(select_columns)
         return sqlalchemy.sql.select(*select_columns).where(sqlalchemy.sql.literal(False))
 
-    def make_unit_subquery(self) -> sqlalchemy.sql.FromClause:
+    def make_identity_subquery(self) -> sqlalchemy.sql.FromClause:
         """Construct a SQLAlchemy FROM clause with one row and no (meaningful)
         columns.
 
         Returns
         -------
-        unit_from : `sqlalchemy.sql.FromClause`
+        identity_from : `sqlalchemy.sql.FromClause`
             FROM clause with one column and no meaningful columns.
 
         Notes

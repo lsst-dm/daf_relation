@@ -34,7 +34,6 @@ from .._relation import Relation
 
 if TYPE_CHECKING:
     from .._engines import EngineTag
-    from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
@@ -68,6 +67,14 @@ class Slice(Relation[_T]):
     """
 
     def __init__(self, base: Relation, order_by: tuple[OrderByTerm[_T], ...], offset: int, limit: int | None):
+        for o in order_by:
+            if base.engine is not None and not o.supports_engine(base.engine):
+                raise EngineError(f"Order-by term {o} does not support engine {base.engine}.")
+            if not o.columns_required <= base.columns:
+                raise ColumnError(
+                    f"Order-by term {o} for base relation {self.base} needs "
+                    f"columns {o.columns_required - self.base.columns}."
+                )
         self.base = base
         self.order_by = order_by
         self.offset = offset
@@ -108,42 +115,16 @@ class Slice(Relation[_T]):
         # Docstring inherited.
         return self.base.unique_keys
 
+    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (result := super()._try_selection(predicate)) is not None:
+            return result
+        # Selections and slices only commute when the slice is just a sort.
+        if not self.offset and self.limit is None:
+            if (new_base := self.base._try_selection(predicate)) is not None:
+                return Slice(new_base, self.order_by, offset=0, limit=None)
+        return None
+
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_slice(self)
-
-    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        # Docstring inherited.
-        base = self.base
-        if recursive:
-            base = base.checked_and_simplified(recursive=True)
-        if not self.order_by and not self.offset and self.limit is None:
-            return base
-        if self.order_by and not self.engine.options.can_sort:
-            raise EngineError(f"Engine {self.engine} does not support sorting.")
-        for o in self.order_by:
-            if not o.supports_engine(self.engine):
-                raise EngineError(f"Order-by term {o} does not support engine {self.engine}.")
-            if not o.columns_required <= self.base.columns:
-                raise ColumnError(
-                    f"Order-by term {o} for base relation {self.base} needs "
-                    f"columns {o.columns_required - self.base.columns}."
-                )
-        if base is self.base:
-            return self
-        else:
-            return Slice(base, self.order_by, self.offset, self.limit)
-
-    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
-        # Docstring inherited.
-        return None
-
-    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
-        # Docstring inherited.
-        if self.offset or self.limit is not None:
-            return None
-        if (new_base := self.base.try_insert_selection(predicate)) is not None:
-            return Slice(
-                new_base, self.order_by, offset=self.offset, limit=self.limit
-            ).assert_checked_and_simplified(recursive=False)
-        return None

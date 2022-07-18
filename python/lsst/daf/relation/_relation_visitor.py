@@ -30,8 +30,8 @@ from ._columns import _T
 
 if TYPE_CHECKING:
     from . import operations
-    from ._relation import Identity, Null
     from ._leaf import Leaf
+    from ._relation import Identity, Zero
 
 _U = TypeVar("_U", covariant=True)
 
@@ -62,8 +62,8 @@ class RelationVisitor(Generic[_T, _U]):
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_null(self, visited: Null[_T]) -> _U:
-        """Hook for processing `~Null` leaf relations."""
+    def visit_zero(self, visited: Zero[_T]) -> _U:
+        """Hook for processing `~Zero` leaf relations."""
         raise NotImplementedError()
 
     @abstractmethod

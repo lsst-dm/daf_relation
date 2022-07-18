@@ -133,3 +133,7 @@ def drop_covered_internal_unique_keys(keys: Set[UniqueKey]) -> set[UniqueKey]:
             keys.difference_update(to_drop)
         else:
             return keys
+
+
+def compute_join_unique_keys(lhs_keys: Set[UniqueKey], rhs_keys: Set[UniqueKey]) -> set[UniqueKey]:
+    return {key1.union(key2) for key1, key2 in itertools.product(lhs_keys, rhs_keys)}

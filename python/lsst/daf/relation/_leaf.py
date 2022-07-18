@@ -28,7 +28,7 @@ from collections.abc import Set
 from typing import TYPE_CHECKING, Any
 
 from ._columns import _T, UniqueKey, check_unique_keys_in_columns, drop_covered_internal_unique_keys
-from ._engines import EngineTag, EngineTree
+from ._engines import EngineTag
 from ._relation import Relation
 
 if TYPE_CHECKING:
@@ -59,12 +59,13 @@ class Leaf(Relation[_T]):
         columns: Set[_T],
         unique_keys: Set[UniqueKey[_T]],
     ):
-        self._engine = EngineTree.build_if_needed(engine)
+        self._engine = engine
         self._columns = columns
         self._unique_keys = drop_covered_internal_unique_keys(unique_keys)
+        check_unique_keys_in_columns(self)
 
     @property
-    def engines(self) -> EngineTree:
+    def engine(self) -> EngineTag:
         # Docstring inherited.
         return self._engine
 
@@ -81,15 +82,10 @@ class Leaf(Relation[_T]):
         # Docstring inherited.
         return visitor.visit_leaf(self)
 
-    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        # Docstring inherited.
-        check_unique_keys_in_columns(self)
-        return self
-
     @abstractmethod
     def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
         return {
-            "engine": writer.write_engine(self.engines.destination),
+            "engine": writer.write_engine(self.engine),
             "columns": writer.write_column_set(self.columns),
             "unique_keys": writer.write_unique_keys(self.unique_keys),
         }

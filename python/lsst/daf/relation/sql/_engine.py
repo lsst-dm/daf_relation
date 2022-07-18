@@ -25,12 +25,11 @@ __all__ = ("Engine",)
 
 import dataclasses
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, ClassVar, final
+from typing import TYPE_CHECKING, final
 
 import sqlalchemy
 
 from .._columns import _T
-from .._engines import EngineOptions
 from .._exceptions import EngineError
 from ._to_executable import ToExecutable
 
@@ -56,14 +55,6 @@ class Engine:
 
     def __repr__(self) -> str:
         return f"lsst.daf.relation.sql.Engine({self.name!r})"
-
-    options: ClassVar[EngineOptions] = EngineOptions(
-        flatten_joins=True,
-        flatten_unions=True,
-        pairwise_joins_only=False,
-        pairwise_unions_only=False,
-        can_sort=True,
-    )
 
     def to_executable(
         self,
@@ -105,7 +96,5 @@ class Engine:
             the tree contains any transfers.
         """
         if relation.engine != self:
-            raise EngineError(
-                f"Iteration engine cannot execute relation with engine {relation.engine}."
-            )
+            raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine}.")
         return relation.visit(ToExecutable(column_types, distinct, order_by, offset, limit))

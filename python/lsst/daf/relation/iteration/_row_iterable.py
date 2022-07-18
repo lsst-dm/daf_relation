@@ -118,11 +118,11 @@ class RowIterable(Generic[_T]):
 
     def try_join(
         self,
-        self_relation: Relation[_T],
-        base: RowIterable[_T],
-        base_relation: Relation[_T],
-        conditions: Set[JoinCondition[_T]],
-    ) -> tuple[RowIterable[_T] | None, Set[JoinCondition[_T]]]:
+        rhs_relation: Relation[_T],
+        lhs: RowIterable[_T],
+        lhs_relation: Relation[_T],
+        condition: JoinCondition[_T] | None,
+    ) -> tuple[RowIterable[_T] | None, bool]:
         """Hook for performing custom joins on this iterable.
 
         This can be overridden by subclasses to customize how join operations
@@ -131,30 +131,27 @@ class RowIterable(Generic[_T]):
 
         Parameters
         ----------
-        self_relation : `.Relation`
+        rhs_relation : `.Relation`
             The relation associated with this set of rows.  This is always the
-            *second* member in a join operation's two relations.
-        base : `RowIterable`
+            "right-hand side" member in a join operation's two relations.
+        lhs : `RowIterable`
             The row iterable this object is being joined to.
-        base_relation : `.Relation`
-            The relation associated with `base`.
-        conditions : `~collections.abc.Set` [ `.JoinCondition` ]
-            Custom join conditions for which ``required_columns[0]`` is a
-            subset of ``base_relation.columns`` and `required_columns[1]`` is a
-            subset of ``self_relation.columns``.
+        lhs_relation : `.Relation`
+            The relation associated with ``lhs``.
+        condition : `.JoinCondition`
+            Custom join condition for which ``required_columns[0]`` is a
+            subset of ``lhs_relation.columns`` and `required_columns[1]`` is a
+            subset of ``rhs_relation.columns``.
 
         Returns
         -------
         join_rows : `RowIterable` or `None`
             A `RowIterable` that implements this join, or `None` if there is no
             special handling for this join.
-        matched_conditions : `~collections.abc.Set` [ `.JoinCondition` ]
-            Join conditions included in ``join_rows``.  Any that remain will
-            be applied by assuming they have `JoinCondition.engine_state` for
-            this engine set to a callable with the  `JoinConditionState`
-            signature.
+        was_condition_applied : `bool`
+            Whether the given join condition was used in the result.
         """
-        return None, frozenset()
+        return None, False
 
     def try_slice(
         self, order_by: Sequence[OrderByTerm[_T]], offset: int, limit: int | None

@@ -24,6 +24,7 @@ from __future__ import annotations
 __all__ = (
     "Identity",
     "Relation",
+    "Zero",
 )
 
 import json
@@ -34,7 +35,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar, final
 from lsst.utils.classes import cached_getter, immutable
 
 from ._columns import _T, UniqueKey
-from ._exceptions import EngineError
+from ._exceptions import ColumnError, EngineError
 
 if TYPE_CHECKING:
     from ._engines import EngineTag
@@ -130,6 +131,10 @@ class Relation(Generic[_T]):
         """
         raise NotImplementedError()
 
+    @property
+    def is_identity(self) -> bool:
+        return False
+
     def distinct(self, unique_keys: Set[UniqueKey[_T]] | None = None) -> Relation[_T]:
         """Construct a relation with the same rows and columns as ``self``, but
         with rows guaranteed to be unique.
@@ -165,84 +170,84 @@ class Relation(Generic[_T]):
         """
         if unique_keys is None:
             unique_keys = self.unique_keys if self.unique_keys else {UniqueKey(self.columns)}
-
+        if unique_keys == self.unique_keys:
+            return self
         from .operations import Distinct
 
-        return Distinct(self, unique_keys).checked_and_simplified(recursive=False)
+        return Distinct(self, unique_keys)
 
     def join(
         self,
-        other: Relation[_T],
-        conditions: Iterable[JoinCondition[_T]] = (),
-        *,
-        before_existing_transfer: bool = True,
+        rhs: Relation[_T],
+        condition: JoinCondition[_T] | None = None,
     ) -> Relation[_T]:
         """Construct a relation that performs a natural join operation.
 
         Parameters
         ----------
-        others : `Relation`
-            Relation to join to self.  If ``self`` or ``other`` is itself a
-            join, and the engine sets `EngineOptions.flatten_joins`, the
-            relations and conditions will be flattened out into the returned
-            join.  Unit relations are always flattened.
-        conditions : `Iterable` [ `JoinCondition` ], optional
-            Objects that represent boolean conditions other than equality
-            comparison for pairs of column sets.
-        before_existing_transfer : `bool`, optional
-            If `True` (default), and ``other.engine != self.engine``, attempt
-            to insert the join to ``other`` prior to an existing transfer out
-            of ``other.engine``.  This can fail even if such a transfer exists
-            if that transfer occurs before a `slice` or `distinct` operation,
-            an existing `join` for which no single operand can be joined to
-            ``other`` with the same columns and conditions that ``self`` would
-            be, or a `union` for which any operand does not have the desired
-            engine in its tree.
+        # TODO
 
         Returns
         -------
         relation : `Relation`
-            A relation that performs a natural join.  Will be ``self`` or a
-            member of ``others`` if all other relation arguments are the unit
-            relation.
-
-        Raises
-        ------
-        EngineError
-            Raised if the join includes more than two relations but this is not
-            supported by the engine (`EngineOptions.pairwise_joins_only`).
-            Also raised if the destination engines of the relations in the join
-            are not the same and ``before_existing_transfer`` is either `False`
-            or fails.
-        RelationalAlgebraError
-            Raised if a join condition's required columns cannot be satisfied
-            by any possible ordering of the join, or if any join condition has
-            `~JoinCondition.was_flipped` set to `True`.
-
-        Notes
-        -----
-        This operation is symmetric in ``self`` and ``other`` only when they
-        have the same destination engine.
+            A relation that performs a natural join.
 
         See Also
         --------
-        operations.Join JoinCondition EngineOptions.flatten_joins
-        EngineOptions.pairwise_joins_only
+        operations.Join
+        JoinCondition
         """
+        if condition is not None:
+            if not condition.supports_engine(rhs.engine):
+                raise EngineError(f"Join condition {condition} does not support engine {rhs.engine}.")
+            condition = condition.flipped_if_needed(self.columns, rhs.columns)
+        if (result := self._try_join(rhs, condition)) is not None:
+            return result
+        raise EngineError(
+            f"Inconsistent engines in join; {self.engine} != {rhs.engine} "
+            f"and insertion before transfer to {self.engine} was not possible."
+        )
+
+    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+        """Attempt to join a new relation to this one, recursing into base
+        relations when necessary and possible.
+
+        Parameters
+        ----------
+        rhs : `Relation`
+            Right-hand side operand in the join.
+        condition : `JoinCondition`, optional
+            Explicit condition that must be satisfied by returned join rows, in
+            addition to the common-column equality constraints that are always
+            included.
+
+        Returns
+        -------
+        join : `Relation` or `None`
+            Relation that implements the join, or `None` if the join could not
+            be inserted.
+
+        Notes
+        -----
+        Implementations should only recurse to insert the join into a base
+        relation when doing so does not change the definition of the join (e.g.
+        the set of common columns that are used in equality constraints), and
+        when this relation's engine is not the same as the ``rhs`` engine's.
+        They may assume (and callers must guarantee) that the column and join
+        condition criteria are satisfied for ``self`` (but not necessarily any
+        nested relation), while this method is responsible for checking for
+        engine consistency.
+        """
+        if self.is_identity:
+            return rhs
+        if rhs.is_identity:
+            return self
+        if self.engine != rhs.engine:
+            return None
+
         from .operations import Join
 
-        if before_existing_transfer and self.engine != other.engine:
-            # TODO: this could insert above a Projection and satisfy a join
-            # condition only with those additional columns, which breaks our
-            # rule that moving things for engine can't change a relation.
-
-            if (result := self.try_insert_join(other, frozenset(conditions))) is None:
-                raise EngineError(f"Could not insert join to {other} before transfer in {self}.")
-            return result
-
-        return Join(self.engine, (self, other), conditions=frozenset(conditions)).checked_and_simplified(
-            recursive=False
-        )
+        return Join(self, rhs, condition)
 
     def projection(self, columns: Set[_T]) -> Relation[_T]:
         """Construct a relation whose columns are a subset of this relation's.
@@ -267,47 +272,59 @@ class Relation(Generic[_T]):
         --------
         operations.Projection
         """
+        if columns == self.columns:
+            return self
+
         from .operations import Projection
 
-        return Projection(self, frozenset(columns)).checked_and_simplified(recursive=False)
+        return Projection(self, frozenset(columns))
 
-    def selection(self, *predicates: Predicate[_T], before_existing_transfer: bool = True) -> Relation[_T]:
+    def selection(
+        self,
+        predicate: Predicate[_T],
+    ) -> Relation[_T]:
         """Construct a relation that filters out rows by applying predicates.
 
         Parameters
         ----------
-        *predicates : `Predicate`
-            Objects that represent conceptual functions (not *necessarily*
-            Python callables) that are invoked to determine whether each row
+        predicate : `Predicate`
+            Object that represents a conceptual functios (not necessarily
+            a Python callable) that is invoked to determine whether each row
             should be included in the result relation.
-        before_existing_transfer : `bool`, optional
-            If `True` (default), and any predicate does not support this
-            relation's engine, but some does support some other engine in its
-            engine tree, attempt to apply that predicates prior to a transfer
-            out of the last supported engine.  This can fail even if that
-            transfer exists if it occurs before a `slice` or `distinct`
-            operation, a `join` for which no operand has all columns needed by
-            the predicate, or a `union` with any operand that lacks such a
-            transfer.
 
         Returns
         -------
         relation : `Relation`
             A relation whose rows are filtered according to the given
-            ``predicates``.  Will be ``self`` if ``predicates`` is empty.
+            ``predicate``.
 
         Raises
         ------
         ColumnError
-            Raised if any predicate's required columns are not in the relation.
+            Raised if the predicate's required columns are not in the relation.
         EngineError
-            Raised if any predicate does not support the relation's engine.
+            Raised if the predicate does not support the relation's engine.
 
         See Also
         --------
-        operations.Selection Predicate
+        operations.Selection
+        Predicate
         """
-        raise NotImplementedError("TODO")
+        if not predicate.columns_required <= self.columns:
+            raise ColumnError(
+                f"Predicate {predicate} for base relation {self} needs "
+                f"columns {set(predicate.columns_required) - self.columns}."
+            )
+        if (result := self._try_selection(predicate)) is not None:
+            return result
+        raise EngineError(f"Predicate {predicate} does not support engine {self.engine}.")
+
+    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        if not predicate.supports_engine(self.engine):
+            return None
+        from .operations import Selection
+
+        return Selection(self, predicate)
 
     def slice(
         self, order_by: Iterable[OrderByTerm[_T]], offset: int = 0, limit: int | None = None
@@ -364,9 +381,12 @@ class Relation(Generic[_T]):
         OrderByTerm
         EngineOptions.can_sort
         """
+        if not order_by and not offset and limit is None:
+            return self
+
         from .operations import Slice
 
-        return Slice(self, tuple(order_by), offset, limit).checked_and_simplified(recursive=False)
+        return Slice(self, tuple(order_by), offset, limit)
 
     def transfer(self, destination: EngineTag) -> Relation[_T]:
         """Construct a relation that represents transferring rows from one
@@ -390,22 +410,20 @@ class Relation(Generic[_T]):
         --------
         operations.Transfer
         """
+        if destination == self.engine:
+            return self
+
         from .operations import Transfer
 
-        return Transfer(self, destination).checked_and_simplified(recursive=False)
+        return Transfer(self, destination)
 
-    def union(self, *others: Relation[_T], unique_keys: Set[UniqueKey[_T]] = frozenset()) -> Relation[_T]:
+    def union(self, second: Relation[_T], unique_keys: Set[UniqueKey[_T]] = frozenset()) -> Relation[_T]:
         """Construct a relation that contains all of the rows from a collection
         of other relations.
 
         Parameters
         ----------
-        *others : `Relation`
-            Relations to union with self.  If any of these is itself a union,
-            and the engine sets `EngineOptions.flatten_unions`, the relations
-            will be flattened out into the returned union.  Zero relations
-            (unions with no mested relations) are always flattened.  All
-            relations must have the same columns.
+        TODO
         unique_keys : `~collections.abc.Set` [ `UniqueKey` ], optional
             Set of sets that represent multi-column unique constraints that
             will be *naturally* satisfied by this union, even if the engine
@@ -446,14 +464,12 @@ class Relation(Generic[_T]):
         EngineOptions.flatten_unions
         EngineOptions.pairwise_unions_only
         """
-        from .operations import Union
+        if self.engine == second.engine:
+            from .operations import Union
 
-        return Union(
-            self.engine,
-            self.columns,
-            (self,) + others,
-            unique_keys=unique_keys,
-        ).checked_and_simplified(recursive=False)
+            return Union(self, second, unique_keys)
+        else:
+            raise NotImplementedError("TODO")
 
     @abstractmethod
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
@@ -470,81 +486,6 @@ class Relation(Generic[_T]):
         object
             Defined by ``visitor``.
         """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        """Check and simplify this relation, returning one that satisfies both
-        the relation derived type's invariants and those of its engine.
-
-        Parameters
-        ----------
-        recursive : `bool`, optional
-            If `True`, descend into nested relations to check and simplify them
-            as well.
-
-        Returns
-        -------
-        relation : `Relation`
-            Relation that satisfies all invariants and combines most
-            back-to-back operations of the same type into single equivalent
-            operations.  Guaranteed to be ``self`` (not just a relation
-            equivalent to self) when no simplification is performed).
-
-        Raises
-        ------
-        ColumnError
-            Raised when relation operations are inconsistent in ways that
-            involve their columns and/or unique keys.  See the `Relation`
-            class factory methods for details.
-        RelationalAlgebraError
-            Raised when relation operations are inconsistent in ways that do
-            not involve their columns and/or unique keys.  See the `Relation`
-            class factory methods for details.
-        EngineError
-            Raised when engines are inconsistent or operations are define in a
-            way an engine does not support.
-        """
-        raise NotImplementedError()
-
-    def assert_checked_and_simplified(self: _S, *, recursive: bool = True) -> _S:
-        """Assert that this relation is checked and does not need any
-        simplification.
-
-        This simply runs `checked_and_simplified` in an `assert` statement,
-        asserting that the result is ``self``.
-
-        Parameters
-        ----------
-        recursive : `bool`, optional
-            If `True`, descend into nested relations to check and simplify them
-            as well.
-
-        Returns
-        -------
-        self : `Relation`
-            Always exactly ``self``.
-
-        Raises
-        ------
-        ColumnError
-        RelationalAlgebraError
-        EngineError
-            See `checked_and_simplified` or relation factory methods.
-        AssertionError
-            Raised if simplification occurs.
-        """
-        assert (
-            self.checked_and_simplified(recursive=recursive) is self
-        ), f"Relation {self} expected to be already checked and simplified."
-        return self
-
-    @abstractmethod
-    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
         raise NotImplementedError()
 
 
@@ -580,28 +521,21 @@ class Identity(Relation[_T]):
     @property
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
-        return frozenset()
+        return {frozenset()}
+
+    @property
+    def is_identity(self) -> bool:
+        # Docstring inherited.
+        return True
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_identity(self)
 
-    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        # Docstring inherited.
-        return self
-
-    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
-        # Docstring inherited.
-        return None
-
-    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
-        # Docstring inherited.
-        return None
-
 
 @final
 @immutable
-class Null(Relation[_T]):
+class Zero(Relation[_T]):
     """A leaf `Relation` with no rows.
 
     Joining any relation to the null relation yields the null relation.
@@ -637,22 +571,8 @@ class Null(Relation[_T]):
     @cached_getter
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
-        # There are no rows, so the unique keys are maximal: each column is
-        # itself a unique constraint.
-        return {frozenset([c]) for c in self._columns}
+        return {frozenset()}
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
-        return visitor.visit_null(self)
-
-    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        # Docstring inherited.
-        return self
-
-    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
-        # Docstring inherited.
-        return None
-
-    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
-        # Docstring inherited.
-        return None
+        return visitor.visit_zero(self)

@@ -51,19 +51,14 @@ class Projection(Relation[_T]):
         Relation this operation acts upon.
     columns : `frozenset` [ `.ColumnTag` ]
         Columns to propagate.
-
-    Notes
-    -----
-    Like other operations, `Projection` objects should only be constructed
-    directly by code that can easily guarantee their `checked_and_simplified`
-    invariants; in all other contexts, the `.Relation.projection` factory
-    should be used instead.
-
-    See `.Relation.projection` for the `checked_and_simplified` behavior for
-    this class.
     """
 
     def __init__(self, base: Relation[_T], columns: frozenset[_T]):
+        if not (columns <= base.columns):
+            raise ColumnError(
+                f"Cannot project column(s) {set(columns) - base.columns} "
+                f"that are not present in the base relation {base}."
+            )
         self.base = base
         self._columns = columns
 
@@ -89,35 +84,34 @@ class Projection(Relation[_T]):
         # Docstring inherited.
         return {keys for keys in self.base.unique_keys if keys.issubset(self._columns)}
 
+    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (result := super()._try_join(rhs, condition)) is not None:
+            return result
+        if self.columns & rhs.columns != self.base.columns & rhs.columns:
+            # Inserting new join before the projection changes the the
+            # automatic part of the join condition.
+            # Note the explicit join condition (if there is one) can't be
+            # affected because a projection's columns are always a subset of
+            # it's base's.
+            return None
+        if (new_base := self.base._try_join(rhs, condition)) is not None:
+            return Projection(new_base, self.columns)
+        return None
+
+    def projection(self, columns: Set[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        # Override exists to avoid back-to-back Projections.
+        return Projection(self.base, frozenset(columns))
+
+    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+        # Docstring inherited.
+        if (result := super()._try_selection(predicate)) is not None:
+            return result
+        if (new_base := self.base._try_selection(predicate)) is not None:
+            return Projection(new_base, self.columns)
+        return None
+
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_projection(self)
-
-    def checked_and_simplified(self, *, recursive: bool = True) -> Relation[_T]:
-        # Docstring inherited.
-        base = self.base
-        if recursive:
-            base = base.checked_and_simplified(recursive=True)
-        if not (self.columns <= self.base.columns):
-            raise ColumnError(
-                f"Cannot project column(s) {set(self.columns) - self.base.columns} "
-                f"that are not present in the base relation {self.base}."
-            )
-        match base:
-            case Projection(base=nested_base):
-                base = nested_base
-        if base is self.base:
-            return self
-        return Projection(base, self.columns)
-
-    def try_insert_join(self, other: Relation[_T], conditions: Set[JoinCondition[_T]]) -> Relation[_T] | None:
-        # Docstring inherited.
-        if (new_base := self.base.try_insert_join(other, conditions)) is not None:
-            return Projection(new_base, self._columns)
-        return None
-
-    def try_insert_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
-        # Docstring inherited.
-        if (new_base := self.base.try_insert_selection(predicate)) is not None:
-            return Projection(new_base, self._columns).assert_checked_and_simplified(recursive=False)
-        return None

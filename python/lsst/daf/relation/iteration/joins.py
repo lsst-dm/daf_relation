@@ -27,7 +27,7 @@ __all__ = (
     "make_join_row_iterable",
 )
 
-from collections.abc import Iterator, Set
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, cast
 
 from .._columns import _T, is_unique_key_covered
@@ -43,78 +43,77 @@ if TYPE_CHECKING:
 
 
 def make_join_row_iterable(
-    base_rows: RowIterable[_T],
-    next_rows: RowIterable[_T],
-    base_relation: Relation[_T],
-    next_relation: Relation[_T],
-    conditions: Set[JoinCondition[_T]],
+    lhs_rows: RowIterable[_T],
+    rhs_rows: RowIterable[_T],
+    lhs_relation: Relation[_T],
+    rhs_relation: Relation[_T],
+    condition: JoinCondition[_T] | None,
 ) -> RowIterable[_T]:
     """Return a `RowIterable` that implements a natural join operation.
 
     Parameters
     ----------
-    base_rows : `RowIterable`
+    lhs_rows : `RowIterable`
         The first iterable being joined.  This iterable's order will be
         preserved and it will always be iterated over lazily (rather than
         copied into an in-memory container), but it is not given an opportunity
         to specialize the join behavior via `RowIterable.try_join`.
-    next_rows : `RowIterable`
+    rhs_rows : `RowIterable`
         The second iterable being joined.  This iterable's order will not
         necessarily be preserved and it may be copied into an in-memory
-        container in order to construct an index mapping to perform a
-        hash join.  It is given an opportunity to specialize the join behavior
-        first via a call to `RowIterable.try_join`.
-    base_relation : `.Relation`
-        Relation corresponding to ``base_rows``.
-    next_relation : `.Relation`
-        Relation corresponding to ``next_rows``.
-    conditions : `~collections.abc.Set` [ `.JoinCondition` ]
-        Special join conditions to apply.  Any not handled by
-        `RowIterable.try_join` will be applied as if they were predicates, i.e.
-        by filtering rows after they have already been joined on any common
-        columns between the rows.
+        container in order to construct an index mapping to perform a hash
+        join.  It is given an opportunity to specialize the join behavior first
+        via a call to `RowIterable.try_join`.
+    lhs_relation : `.Relation`
+        Relation corresponding to ``lhs_rows``.
+    rhs_relation : `.Relation`
+        Relation corresponding to ``rhs_rows``.
+    condition : `.JoinCondition` or None
+        Special join condition to apply.  If not handled by
+        `RowIterable.try_join` this will be applied as if it was a predicates,
+        i.e.  by filtering rows after they have already been joined on any
+        common columns between the rows.  Expected to already be flipped if
+        needed to match the ``(lhs, rhs)`` order.
 
     Returns
     -------
     join_rows : `RowIterable`
         New iterable that implements the join operation.
     """
-    flipped_conditions = JoinCondition.find_matching(base_relation.columns, next_relation.columns, conditions)
-    assert flipped_conditions == conditions, "Expect same contents, but maybe some flipped."
-    join_rows, matched_conditions = next_rows.try_join(
-        next_relation, base_rows, base_relation, flipped_conditions
-    )
+    join_rows, was_condition_applied = rhs_rows.try_join(rhs_relation, lhs_rows, lhs_relation, condition)
     if join_rows is not None:
-        return _finish_join_row_iterable(base_relation.engine, join_rows, conditions - matched_conditions)
-    common_columns = frozenset(base_relation.columns & next_relation.columns)
-    if is_unique_key_covered(common_columns, next_relation.unique_keys):
-        next_rows_with_unique_index = next_rows.with_unique_index(common_columns)
         return _finish_join_row_iterable(
-            base_relation.engine,
+            lhs_relation.engine, join_rows, None if was_condition_applied else condition
+        )
+    common_columns = frozenset(lhs_relation.columns & rhs_relation.columns)
+    if is_unique_key_covered(common_columns, rhs_relation.unique_keys):
+        rhs_rows_with_unique_index = rhs_rows.with_unique_index(common_columns)
+        return _finish_join_row_iterable(
+            lhs_relation.engine,
             UniqueIndexJoinRowIterable(
-                base_rows,
-                next_rows_with_unique_index.get_unique_index(common_columns),
+                lhs_rows,
+                rhs_rows_with_unique_index.get_unique_index(common_columns),
                 on_key=common_columns,
             ),
-            conditions,
+            condition,
         )
     else:
-        next_rows_with_general_index = next_rows.with_general_index(common_columns)
+        rhs_rows_with_general_index = rhs_rows.with_general_index(common_columns)
         return _finish_join_row_iterable(
-            base_relation.engine,
+            lhs_relation.engine,
             GeneralJoinRowIterable(
-                base_rows,
-                next_rows_with_general_index.get_general_index(common_columns),
+                lhs_rows,
+                rhs_rows_with_general_index.get_general_index(common_columns),
                 on_key=common_columns,
             ),
-            conditions,
+            condition,
         )
 
 
 def _finish_join_row_iterable(
     engine: EngineTag,
     base: RowIterable[_T],
-    missing_conditions: Set[JoinCondition[_T]],
+    condition: JoinCondition[_T] | None,
 ) -> RowIterable[_T]:
     """Helper function that handles any missing join conditions by applying
     them as predicates.
@@ -129,9 +128,8 @@ def _finish_join_row_iterable(
     base : `RowIterable`
         Row iterable that implements the join, but does not necessarily utilize
         all matching join conditions.
-    missing_conditions : `~collections.abc.Set` [ `.JoinCondition` ]
-        `.JoinCondition` objects that match this join but have not been
-        applied.
+    condition : `.JoinCondition` or `None`
+        `.JoinCondition` object to apply.
 
     Returns
     -------
@@ -139,9 +137,9 @@ def _finish_join_row_iterable(
         Row iterable that fully implements the join, including all join
         conditions.
     """
-    if not missing_conditions:
+    if condition is None:
         return base
-    return SelectionRowIterable(base, tuple(cast(JoinConditionInterface, c) for c in missing_conditions))
+    return SelectionRowIterable(base, cast(JoinConditionInterface, condition))
 
 
 class UniqueIndexJoinRowIterable(RowIterable[_T]):
