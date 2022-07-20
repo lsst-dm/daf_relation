@@ -47,6 +47,14 @@ class Engine(metaclass=Singleton):
 
     __slots__ = ()
 
+    @property
+    def is_sql(self) -> bool:
+        return False
+
+    @property
+    def is_iteration(self) -> bool:
+        return True
+
     def __hash__(self) -> int:
         return hash(self.__class__)
 

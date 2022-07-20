@@ -56,6 +56,14 @@ class Engine:
     def __repr__(self) -> str:
         return f"lsst.daf.relation.sql.Engine({self.name!r})"
 
+    @property
+    def is_sql(self) -> bool:
+        return True
+
+    @property
+    def is_iteration(self) -> bool:
+        return False
+
     def to_executable(
         self,
         relation: Relation[_T],

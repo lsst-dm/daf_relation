@@ -47,6 +47,14 @@ class EngineTag(Hashable, Protocol):
     def __str__(self) -> str:
         ...
 
+    @property
+    def is_sql(self) -> bool:
+        return False
+
+    @property
+    def is_iteration(self) -> bool:
+        return False
+
 
 @dataclasses.dataclass(frozen=True)
 class EngineTree:
