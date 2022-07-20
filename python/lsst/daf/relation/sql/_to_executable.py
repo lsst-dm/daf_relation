@@ -89,6 +89,12 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
         # Docstring inherited.
         return self._use_select_parts(visited)
 
+    def visit_materialization(
+        self, visited: operations.Materialization[_T]
+    ) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
+        return self._use_select_parts(visited)
+
     def visit_join(self, visited: operations.Join[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         return self._use_select_parts(visited)

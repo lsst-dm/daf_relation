@@ -220,7 +220,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     def visit_distinct(self, visited: operations.Distinct[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(
-            self._use_executable(visited),
+            self._to_executable(visited).subquery(),
             [],
             None,
         )
@@ -236,6 +236,14 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return cast(SelectPartsLeaf[_T, _L], visited).select_parts
+
+    def visit_materialization(self, visited: operations.Materialization[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
+        return SelectParts(
+            self._to_executable(visited.base).cte(),
+            [],
+            None,
+        )
 
     def visit_join(self, visited: operations.Join[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
@@ -271,14 +279,6 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             columns_available={**lhs_parts.columns_available, **rhs_parts.columns_available},
         )
 
-    def visit_zero(self, visited: Zero[_T]) -> SelectParts[_T, _L]:
-        # Docstring inherited.
-        return SelectParts(
-            self._use_executable(visited),
-            [],
-            None,
-        )
-
     def visit_projection(self, visited: operations.Projection[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         # We can just delegate to base because projection only affects
@@ -304,7 +304,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     def visit_slice(self, visited: operations.Slice[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(
-            self._use_executable(visited),
+            self._to_executable(visited).subquery(),
             [],
             None,
         )
@@ -316,12 +316,20 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     def visit_union(self, visited: operations.Union[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(
-            self._use_executable(visited),
+            self._to_executable(visited).subquery(),
             [],
             None,
         )
 
-    def _use_executable(self, relation: Relation[_T]) -> sqlalchemy.sql.FromClause:
+    def visit_zero(self, visited: Zero[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
+        return SelectParts(
+            self._to_executable(visited).subquery(),
+            [],
+            None,
+        )
+
+    def _to_executable(self, relation: Relation[_T]) -> sqlalchemy.sql.expression.SelectBase:
         """Delegate to `ToExecutable` to implement visitation for a relation.
 
         Parameters
@@ -331,12 +339,12 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
         Returns
         -------
-        select : `sqlalchemy.sql.FromClause`
-            SQL FROM clause.
+        select : `sqlalchemy.sql.expression.SelectBase`
+            SQL executable statement.
         """
         from ._to_executable import ToExecutable
 
-        return relation.visit(ToExecutable(self.column_types)).subquery()
+        return relation.visit(ToExecutable(self.column_types))
 
     def _join_select_parts(
         self,

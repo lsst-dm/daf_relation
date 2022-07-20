@@ -65,13 +65,17 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         rhs_rows = visited.rhs.visit(self)
         return make_join_row_iterable(lhs_rows, rhs_rows, visited.lhs, visited.rhs, visited.condition)
 
+    def visit_materialization(self, visited: operations.Materialization[_T]) -> RowIterable[_T]:
+        # Docstring inherited.
+        base_rows = visited.base.visit(self)
+        if visited.unique_keys:
+            return RowCollection.build_with_unique_index(base_rows, next(iter(visited.unique_keys)))
+        else:
+            return RowCollection(list(base_rows))
+
     def visit_leaf(self, visited: Leaf[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         return cast(RowIterableLeaf[_T], visited).rows
-
-    def visit_zero(self, visited: Zero[_T]) -> RowIterable[_T]:
-        # Docstring inherited.
-        return RowCollection[_T]([])
 
     def visit_projection(self, visited: operations.Projection[_T]) -> RowIterable[_T]:
         # Docstring inherited.
@@ -109,3 +113,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
     def visit_union(self, visited: operations.Union[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         return ChainRowIterable([visited.first.visit(self), visited.second.visit(self)])
+
+    def visit_zero(self, visited: Zero[_T]) -> RowIterable[_T]:
+        # Docstring inherited.
+        return RowCollection[_T]([])

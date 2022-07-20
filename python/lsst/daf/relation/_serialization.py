@@ -388,6 +388,13 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             **visited.serialize(self),
         }
 
+    def visit_materialization(self, visited: operations.Materialization[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {
+            "type": "materialization",
+            "base": visited.base.visit(self),
+        }
+
     def visit_join(self, visited: operations.Join[_T]) -> dict[str, Any]:
         # Docstring inherited.
         return {
@@ -396,10 +403,6 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "rhs": visited.rhs.visit(self),
             "condition": visited.condition.serialize(self) if visited.condition is not None else None,
         }
-
-    def visit_zero(self, visited: Zero[_T]) -> dict[str, Any]:
-        # Docstring inherited.
-        return {"type": "null", "columns": self.write_column_set(visited.columns)}
 
     def visit_projection(self, visited: operations.Projection[_T]) -> dict[str, Any]:
         # Docstring inherited.
@@ -443,6 +446,10 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "second": visited.second.visit(self),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
         }
+
+    def visit_zero(self, visited: Zero[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "null", "columns": self.write_column_set(visited.columns)}
 
     def write_column(self, column: _T) -> Any:
         """Convert a single column tag to a serializable type.

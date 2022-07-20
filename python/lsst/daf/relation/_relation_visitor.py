@@ -47,11 +47,6 @@ class RelationVisitor(Generic[_T, _U]):
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_identity(self, visited: Identity[_T]) -> _U:
-        """Hook for processing `Identity` operations."""
-        raise NotImplementedError()
-
-    @abstractmethod
     def visit_leaf(self, visited: Leaf[_T]) -> _U:
         """Hook for processing `Leaf` relations."""
         raise NotImplementedError()
@@ -62,8 +57,8 @@ class RelationVisitor(Generic[_T, _U]):
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_zero(self, visited: Zero[_T]) -> _U:
-        """Hook for processing `~Zero` leaf relations."""
+    def visit_materialization(self, visited: operations.Materialization[_T]) -> _U:
+        """Hook for processing `~operations.Materialization` operations."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -89,4 +84,14 @@ class RelationVisitor(Generic[_T, _U]):
     @abstractmethod
     def visit_union(self, visited: operations.Union[_T]) -> _U:
         """Hook for processing `~operations.Union` operations."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_identity(self, visited: Identity[_T]) -> _U:
+        """Hook for processing `Identity` leaf relations."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_zero(self, visited: Zero[_T]) -> _U:
+        """Hook for processing `~Zero` leaf relations."""
         raise NotImplementedError()
