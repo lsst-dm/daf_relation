@@ -21,7 +21,15 @@
 
 from __future__ import annotations
 
-__all__ = ()
+__all__ = (
+    "Predicate",
+    "PredicateVisitor",
+    "PredicateLiteral",
+    "PredicateReference",
+    "LogicalNot",
+    "LogicalAnd",
+    "LogicalOr",
+)
 
 import dataclasses
 from abc import abstractmethod
@@ -32,15 +40,15 @@ from lsst.utils.classes import cached_getter
 
 from .._columns import _T
 from .._engine import Engine
-from .base import BaseColumnExpression, BaseColumnLiteral, BaseColumnReference
+from .base import BaseExpression, BaseLiteral, BaseReference
 
 if TYPE_CHECKING:
-    from ._expression import BooleanColumnFunction
+    from ._expression import PredicateFunction
 
 _U = TypeVar("_U")
 
 
-class Predicate(BaseColumnExpression[_T]):
+class Predicate(BaseExpression[_T]):
     @abstractmethod
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         raise NotImplementedError()
@@ -57,15 +65,15 @@ class Predicate(BaseColumnExpression[_T]):
 
 class PredicateVisitor(Generic[_T, _U]):
     @abstractmethod
-    def visit_boolean_column_literal(self, visited: BooleanColumnLiteral[_T]) -> _U:
+    def visit_predicate_literal(self, visited: PredicateLiteral[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_boolean_column_reference(self, visited: BooleanColumnReference[_T]) -> _U:
+    def visit_predicate_reference(self, visited: PredicateReference[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_boolean_column_function(self, visited: BooleanColumnFunction[_T]) -> _U:
+    def visit_predicate_function(self, visited: PredicateFunction[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
@@ -82,15 +90,15 @@ class PredicateVisitor(Generic[_T, _U]):
 
 
 @dataclasses.dataclass
-class BooleanColumnLiteral(BaseColumnLiteral[_T, bool], Predicate[_T]):
+class PredicateLiteral(BaseLiteral[_T, bool], Predicate[_T]):
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
-        return visitor.visit_boolean_column_literal(self)
+        return visitor.visit_predicate_literal(self)
 
 
 @dataclasses.dataclass
-class BooleanColumnReference(BaseColumnReference[_T], Predicate[_T]):
+class PredicateReference(BaseReference[_T], Predicate[_T]):
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
-        return visitor.visit_boolean_column_reference(self)
+        return visitor.visit_predicate_reference(self)
 
 
 @dataclasses.dataclass

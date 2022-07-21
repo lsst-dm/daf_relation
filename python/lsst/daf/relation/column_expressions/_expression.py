@@ -22,11 +22,11 @@
 from __future__ import annotations
 
 __all__ = (
-    "ColumnExpression",
-    "ColumnExpressionVisitor",
-    "ColumnLiteral",
-    "ColumnReference",
-    "ColumnFunction",
+    "Expression",
+    "ExpressionVisitor",
+    "Literal",
+    "Reference",
+    "Function",
 )
 
 from abc import abstractmethod
@@ -35,69 +35,69 @@ from typing import Any, Generic, TypeVar
 
 from .._columns import _T
 
-from .base import BaseColumnExpression, BaseColumnLiteral, BaseColumnReference, BaseColumnFunction
+from .base import BaseExpression, BaseLiteral, BaseReference, BaseFunction
 from ._predicate import Predicate, PredicateVisitor
 
 _U = TypeVar("_U")
 
 
-class ColumnExpression(BaseColumnExpression[_T]):
+class Expression(BaseExpression[_T]):
     @abstractmethod
-    def visit(self, visitor: ColumnExpressionVisitor[_T, _U]) -> _U:
+    def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
         ...
 
-    def eq(self, other: ColumnExpression[_T]) -> Predicate[_T]:
-        return BooleanColumnFunction[_T]("__eq__", (self, other))
+    def eq(self, other: Expression[_T]) -> Predicate[_T]:
+        return PredicateFunction[_T]("__eq__", (self, other))
 
-    def ne(self, other: ColumnExpression[_T]) -> Predicate[_T]:
-        return BooleanColumnFunction[_T]("__ne__", (self, other))
+    def ne(self, other: Expression[_T]) -> Predicate[_T]:
+        return PredicateFunction[_T]("__ne__", (self, other))
 
-    def lt(self, other: ColumnExpression[_T]) -> Predicate[_T]:
-        return BooleanColumnFunction[_T]("__lt__", (self, other))
+    def lt(self, other: Expression[_T]) -> Predicate[_T]:
+        return PredicateFunction[_T]("__lt__", (self, other))
 
-    def gt(self, other: ColumnExpression[_T]) -> Predicate[_T]:
-        return BooleanColumnFunction[_T]("__gt__", (self, other))
+    def gt(self, other: Expression[_T]) -> Predicate[_T]:
+        return PredicateFunction[_T]("__gt__", (self, other))
 
-    def le(self, other: ColumnExpression[_T]) -> Predicate[_T]:
-        return BooleanColumnFunction[_T]("__le__", (self, other))
+    def le(self, other: Expression[_T]) -> Predicate[_T]:
+        return PredicateFunction[_T]("__le__", (self, other))
 
-    def ge(self, other: ColumnExpression[_T]) -> Predicate[_T]:
-        return BooleanColumnFunction[_T]("__ge__", (self, other))
+    def ge(self, other: Expression[_T]) -> Predicate[_T]:
+        return PredicateFunction[_T]("__ge__", (self, other))
 
 
-class ColumnExpressionVisitor(Generic[_T, _U]):
+class ExpressionVisitor(Generic[_T, _U]):
     @abstractmethod
-    def visit_column_literal(self, visited: ColumnLiteral[_T]) -> _U:
+    def visit_literal(self, visited: Literal[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_column_reference(self, visited: ColumnReference[_T]) -> _U:
+    def visit_reference(self, visited: Reference[_T]) -> _U:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_column_function(self, visited: ColumnFunction[_T]) -> _U:
+    def visit_function(self, visited: Function[_T]) -> _U:
         raise NotImplementedError()
 
 
 @dataclasses.dataclass
-class ColumnLiteral(BaseColumnLiteral[_T, Any], ColumnExpression[_T]):
-    def visit(self, visitor: ColumnExpressionVisitor[_T, _U]) -> _U:
-        return visitor.visit_column_literal(self)
+class Literal(BaseLiteral[_T, Any], Expression[_T]):
+    def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
+        return visitor.visit_literal(self)
 
 
 @dataclasses.dataclass
-class ColumnReference(BaseColumnReference[_T], ColumnExpression[_T]):
-    def visit(self, visitor: ColumnExpressionVisitor[_T, _U]) -> _U:
-        return visitor.visit_column_reference(self)
+class Reference(BaseReference[_T], Expression[_T]):
+    def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
+        return visitor.visit_reference(self)
 
 
 @dataclasses.dataclass
-class ColumnFunction(BaseColumnFunction[_T, ColumnExpression[_T]]):
-    def visit(self, visitor: ColumnExpressionVisitor[_T, _U]) -> _U:
-        return visitor.visit_column_function(self)
+class Function(BaseFunction[_T, Expression[_T]]):
+    def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
+        return visitor.visit_function(self)
 
 
 @dataclasses.dataclass
-class BooleanColumnFunction(BaseColumnFunction[_T, ColumnExpression[_T]], Predicate[_T]):
+class PredicateFunction(BaseFunction[_T, Expression[_T]], Predicate[_T]):
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
-        return visitor.visit_boolean_column_function(self)
+        return visitor.visit_predicate_function(self)

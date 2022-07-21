@@ -29,11 +29,11 @@ from typing import TYPE_CHECKING, Generic
 from .._columns import _T
 
 if TYPE_CHECKING:
-    from ._expression import ColumnExpression
+    from ._expression import Expression
 
 
 @dataclasses.dataclass
 class OrderByTerm(Generic[_T]):
 
-    expression: ColumnExpression[_T]
+    expression: Expression[_T]
     ascending: bool = True

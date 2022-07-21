@@ -22,10 +22,10 @@
 from __future__ import annotations
 
 __all__ = (
-    "BaseColumnExpression",
-    "BaseColumnLiteral",
-    "BaseColumnReference",
-    "BaseColumnFunction",
+    "BaseExpression",
+    "BaseLiteral",
+    "BaseReference",
+    "BaseFunction",
 )
 
 import dataclasses
@@ -38,11 +38,11 @@ from lsst.utils.classes import cached_getter
 from .._columns import _T
 from .._engine import Engine
 
-_A = TypeVar("_A", bound="BaseColumnExpression")
+_A = TypeVar("_A", bound="BaseExpression")
 _V = TypeVar("_V")
 
 
-class BaseColumnExpression(Generic[_T]):
+class BaseExpression(Generic[_T]):
     @property
     @abstractmethod
     def columns_required(self) -> Set[_T]:
@@ -54,7 +54,7 @@ class BaseColumnExpression(Generic[_T]):
 
 
 @dataclasses.dataclass
-class BaseColumnLiteral(BaseColumnExpression[_T], Generic[_T, _V]):
+class BaseLiteral(BaseExpression[_T], Generic[_T, _V]):
     value: _V
 
     @property
@@ -66,7 +66,7 @@ class BaseColumnLiteral(BaseColumnExpression[_T], Generic[_T, _V]):
 
 
 @dataclasses.dataclass
-class BaseColumnReference(BaseColumnExpression[_T]):
+class BaseReference(BaseExpression[_T]):
     tag: _T
 
     @property
@@ -78,7 +78,7 @@ class BaseColumnReference(BaseColumnExpression[_T]):
 
 
 @dataclasses.dataclass
-class BaseColumnFunction(BaseColumnExpression[_T], Generic[_T, _A]):
+class BaseFunction(BaseExpression[_T], Generic[_T, _A]):
 
     name: str
     args: tuple[_A, ...]
