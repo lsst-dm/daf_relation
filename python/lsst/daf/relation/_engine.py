@@ -53,3 +53,19 @@ class Engine(ABC):
     @abstractmethod
     def evaluate_leaf(self, leaf: Leaf[_T]) -> Any:
         ...
+
+    @abstractmethod
+    def get_unary_function(self, name: str) -> Any | None:
+        ...
+
+    @abstractmethod
+    def get_binary_function(self, name: str) -> Any | None:
+        ...
+
+    @abstractmethod
+    def get_unary_predicate(self, name: str) -> Any | None:
+        ...
+
+    @abstractmethod
+    def get_binary_predicate(self, name: str) -> Any | None:
+        ...
