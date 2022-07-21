@@ -33,7 +33,7 @@ from ._columns import _T
 from ._exceptions import RelationalAlgebraError
 
 if TYPE_CHECKING:
-    from ._engines import Engine
+    from ._engine import Engine
     from ._serialization import DictWriter
 
 

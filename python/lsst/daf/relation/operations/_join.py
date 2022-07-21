@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, final
 from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey, compute_join_unique_keys
-from .._engines import Engine
+from .._engine import Engine
 from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 

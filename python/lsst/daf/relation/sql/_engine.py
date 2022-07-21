@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar, cast
 import sqlalchemy
 
 from .._columns import _T
-from .._engines import Engine as BaseEngine
+from .._engine import Engine as BaseEngine
 from .._exceptions import EngineError
 from ._to_executable import ToExecutable
 

@@ -38,7 +38,7 @@ from ._relation import Identity, Relation, Zero
 from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
-    from ._engines import Engine
+    from ._engine import Engine
 
 
 def is_str_mapping(mapping: Any) -> TypeGuard[Mapping[str, Any]]:

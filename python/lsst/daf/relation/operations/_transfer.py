@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, final
 from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey
-from .._engines import Engine
+from .._engine import Engine
 from .._relation import Relation
 
 if TYPE_CHECKING:

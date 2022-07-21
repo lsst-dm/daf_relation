@@ -33,7 +33,7 @@ from .._exceptions import ColumnError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._engines import Engine
+    from .._engine import Engine
     from .._join_condition import JoinCondition
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor

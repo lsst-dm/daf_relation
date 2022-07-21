@@ -37,7 +37,7 @@ from ._row_iterable import RowIterable
 from .selection import SelectionRowIterable
 
 if TYPE_CHECKING:
-    from .._engines import Engine
+    from .._engine import Engine
     from .._relation import Relation
     from .typing import GeneralIndex, Row, UniqueIndex
 

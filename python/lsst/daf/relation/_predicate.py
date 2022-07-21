@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Generic
 from ._columns import _T
 
 if TYPE_CHECKING:
-    from ._engines import Engine
+    from ._engine import Engine
     from ._serialization import DictWriter
 
 

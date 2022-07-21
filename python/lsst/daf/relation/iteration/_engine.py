@@ -31,7 +31,7 @@ __all__ = (
 from typing import TYPE_CHECKING, Protocol
 
 from .._columns import _T
-from .._engines import Engine as BaseEngine
+from .._engine import Engine as BaseEngine
 from .._exceptions import EngineError
 from ._row_iterable import RowIterable
 

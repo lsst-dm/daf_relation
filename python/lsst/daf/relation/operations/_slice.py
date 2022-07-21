@@ -33,7 +33,7 @@ from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._engines import Engine
+    from .._engine import Engine
     from .._order_by_term import OrderByTerm
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor

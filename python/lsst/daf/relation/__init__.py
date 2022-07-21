@@ -21,7 +21,7 @@
 
 from . import expressions, operations
 from ._columns import *
-from ._engines import *
+from ._engine import *
 from ._exceptions import *
 from ._join_condition import *
 from ._leaf import *

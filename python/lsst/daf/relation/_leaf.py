@@ -27,7 +27,7 @@ from collections.abc import Set
 from typing import TYPE_CHECKING, Any, final
 
 from ._columns import _T, UniqueKey, check_unique_keys_in_columns, drop_covered_internal_unique_keys
-from ._engines import Engine
+from ._engine import Engine
 from ._relation import Relation
 
 if TYPE_CHECKING:

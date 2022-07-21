@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, final
 from lsst.utils.classes import immutable
 
 from .._columns import _T, UniqueKey, check_unique_keys_in_columns
-from .._engines import Engine
+from .._engine import Engine
 from .._exceptions import RelationalAlgebraError
 from .._relation import Relation
 

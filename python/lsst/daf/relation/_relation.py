@@ -38,7 +38,7 @@ from ._columns import _T, UniqueKey
 from ._exceptions import ColumnError, EngineError
 
 if TYPE_CHECKING:
-    from ._engines import Engine
+    from ._engine import Engine
     from ._join_condition import JoinCondition
     from ._order_by_term import OrderByTerm
     from ._predicate import Predicate

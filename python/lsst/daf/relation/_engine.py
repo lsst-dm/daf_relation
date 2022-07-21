@@ -21,36 +21,35 @@
 
 from __future__ import annotations
 
-__all__ = ("OrderByTerm",)
+__all__ = ("Engine",)
 
-from abc import abstractmethod
-from collections.abc import Set
-from typing import TYPE_CHECKING, Any, Generic
-
-from ._columns import _T
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ._engine import Engine
-    from ._serialization import DictWriter
+    from ._columns import _T
+    from ._leaf import Leaf
 
 
-class OrderByTerm(Generic[_T]):
-    @property
+class Engine(ABC):
+    """An interface for objects that serve as identifiers for engines.
+
+    Notes
+    -----
+    The "engines" used to evaluate relation trees do not have a common
+    interface, because they all do different things.  This class defines what
+    they must have in common: a hashable, equality-comparable class (preferably
+    lightweight with a concise `str` representation) used to identify the
+    engine in relations and the various helper objects that are also part of a
+    relation tree (`Predicate`, `JoinCondition`, `OrderByTerm`).
+
+    It is recommended that an engine's tag class also serve as the primary
+    entry point for its most important operations.
+    """
+
+    def __str__(self) -> str:
+        ...
+
     @abstractmethod
-    def columns_required(self) -> Set[_T]:
-        """The columns required to compute this expression
-        (`~collections.abc.Set`).
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def supports_engine(self, engine: Engine) -> bool:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def reversed(self) -> OrderByTerm[_T]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
-        raise NotImplementedError()
+    def evaluate_leaf(self, leaf: Leaf[_T]) -> Any:
+        ...
