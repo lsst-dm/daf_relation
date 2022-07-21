@@ -25,29 +25,27 @@ __all__ = ()
 
 import dataclasses
 from abc import abstractmethod
-from collections.abc import Sequence, Set
-from typing import TYPE_CHECKING, Generic, TypeVar
+from collections.abc import Set
+from typing import Generic, TypeVar, TYPE_CHECKING
 
-from lsst.utils.classes import Singleton, cached_getter
+from lsst.utils.classes import cached_getter
 
 from .._columns import _T
+from .._engine import Engine
+from .base import BaseColumnExpression, BaseColumnLiteral, BaseColumnReference
 
 if TYPE_CHECKING:
-    from ._expression import ColumnExpression
-
+    from ._expression import BooleanColumnFunction
 
 _U = TypeVar("_U")
 
 
-class Predicate(Generic[_T]):
-    __slots__ = ()
-
-    @property
+class Predicate(BaseColumnExpression[_T]):
     @abstractmethod
-    def columns_required(self) -> Set[_T]:
+    def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         raise NotImplementedError()
 
-    def logical_not(self: Predicate[_T]) -> Predicate[_T]:
+    def logical_not(self) -> Predicate[_T]:
         return LogicalNot(self)
 
     def logical_and(*operands: Predicate[_T]) -> Predicate[_T]:
@@ -56,99 +54,43 @@ class Predicate(Generic[_T]):
     def logical_or(*operands: Predicate[_T]) -> Predicate[_T]:
         return LogicalOr(operands)
 
-    @abstractmethod
-    def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
-        raise NotImplementedError()
-
 
 class PredicateVisitor(Generic[_T, _U]):
-    def visit_true_literal(self, visited: TrueLiteral[_T]) -> _U:
+    @abstractmethod
+    def visit_boolean_column_literal(self, visited: BooleanColumnLiteral[_T]) -> _U:
         raise NotImplementedError()
 
-    def visit_false_literal(self, visited: FalseLiteral[_T]) -> _U:
-        raise NotImplementedError()
-
+    @abstractmethod
     def visit_boolean_column_reference(self, visited: BooleanColumnReference[_T]) -> _U:
         raise NotImplementedError()
 
-    def visit_unary_predicate(self, visited: UnaryPredicate[_T]) -> _U:
+    @abstractmethod
+    def visit_boolean_column_function(self, visited: BooleanColumnFunction[_T]) -> _U:
         raise NotImplementedError()
 
-    def visit_binary_predicate(self, visited: BinaryPredicate[_T]) -> _U:
-        raise NotImplementedError()
-
+    @abstractmethod
     def visit_logical_not(self, visited: LogicalNot[_T]) -> _U:
         raise NotImplementedError()
 
+    @abstractmethod
     def visit_logical_and(self, visited: LogicalAnd[_T]) -> _U:
         raise NotImplementedError()
 
+    @abstractmethod
     def visit_logical_or(self, visited: LogicalOr[_T]) -> _U:
         raise NotImplementedError()
 
 
-class TrueLiteral(Predicate[_T], metaclass=Singleton):
-    __slots__ = ()
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return frozenset()
-
+@dataclasses.dataclass
+class BooleanColumnLiteral(BaseColumnLiteral[_T, bool], Predicate[_T]):
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
-        return visitor.visit_true_literal(self)
+        return visitor.visit_boolean_column_literal(self)
 
 
-class FalseLiteral(Predicate[_T], metaclass=Singleton):
-    __slots__ = ()
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return frozenset()
-
-    def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
-        return visitor.visit_false_literal(self)
-
-
-@dataclasses.dataclass(slots=True)
-class BooleanColumnReference(Predicate[_T]):
-
-    tag: _T
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return {self.tag}
-
+@dataclasses.dataclass
+class BooleanColumnReference(BaseColumnReference[_T], Predicate[_T]):
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_boolean_column_reference(self)
-
-
-@dataclasses.dataclass(slots=True)
-class UnaryPredicate(Predicate[_T]):
-
-    base: ColumnExpression[_T]
-    name: str
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return self.base.columns_required
-
-    def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
-        return visitor.visit_unary_predicate(self)
-
-
-@dataclasses.dataclass(slots=True)
-class BinaryPredicate(Predicate[_T]):
-
-    lhs: ColumnExpression[_T]
-    rhs: ColumnExpression[_T]
-    name: str
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return self.lhs.columns_required | self.rhs.columns_required
-
-    def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
-        return visitor.visit_binary_predicate(self)
 
 
 @dataclasses.dataclass
@@ -159,14 +101,17 @@ class LogicalNot(Predicate[_T]):
     def columns_required(self) -> Set[_T]:
         return self.base.columns_required
 
+    def is_supported_by(self, engine: Engine) -> bool:
+        return self.base.is_supported_by(engine)
+
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_logical_not(self)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class LogicalAnd(Predicate[_T]):
 
-    operands: Sequence[Predicate[_T]]
+    operands: tuple[Predicate[_T], ...]
 
     @property  # type: ignore
     @cached_getter
@@ -175,15 +120,18 @@ class LogicalAnd(Predicate[_T]):
         for operand in self.operands:
             result.update(operand.columns_required)
         return result
+
+    def is_supported_by(self, engine: Engine) -> bool:
+        return all(operand.is_supported_by(engine) for operand in self.operands)
 
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_logical_and(self)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class LogicalOr(Predicate[_T]):
 
-    operands: Sequence[Predicate[_T]]
+    operands: tuple[Predicate[_T], ...]
 
     @property  # type: ignore
     @cached_getter
@@ -192,6 +140,9 @@ class LogicalOr(Predicate[_T]):
         for operand in self.operands:
             result.update(operand.columns_required)
         return result
+
+    def is_supported_by(self, engine: Engine) -> bool:
+        return all(operand.is_supported_by(engine) for operand in self.operands)
 
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_logical_or(self)

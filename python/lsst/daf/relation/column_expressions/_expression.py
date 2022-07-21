@@ -21,116 +21,83 @@
 
 from __future__ import annotations
 
-__all__ = ()
+__all__ = (
+    "ColumnExpression",
+    "ColumnExpressionVisitor",
+    "ColumnLiteral",
+    "ColumnReference",
+    "ColumnFunction",
+)
 
-import dataclasses
 from abc import abstractmethod
-from collections.abc import Set
+import dataclasses
 from typing import Any, Generic, TypeVar
 
-from lsst.utils.sets.unboundable import FrozenUnboundableSet, UnboundableSet
-
 from .._columns import _T
-from .._engine import Engine
+
+from .base import BaseColumnExpression, BaseColumnLiteral, BaseColumnReference, BaseColumnFunction
+from ._predicate import Predicate, PredicateVisitor
 
 _U = TypeVar("_U")
 
 
-class ColumnExpression(Generic[_T]):
-
-    __slots__ = ()
-
-    @property
-    @abstractmethod
-    def columns_required(self) -> Set[_T]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def is_supported_by(self, engine: Engine) -> bool:
-        raise NotImplementedError()
-
+class ColumnExpression(BaseColumnExpression[_T]):
     @abstractmethod
     def visit(self, visitor: ColumnExpressionVisitor[_T, _U]) -> _U:
-        raise NotImplementedError()
+        ...
+
+    def eq(self, other: ColumnExpression[_T]) -> Predicate[_T]:
+        return BooleanColumnFunction[_T]("__eq__", (self, other))
+
+    def ne(self, other: ColumnExpression[_T]) -> Predicate[_T]:
+        return BooleanColumnFunction[_T]("__ne__", (self, other))
+
+    def lt(self, other: ColumnExpression[_T]) -> Predicate[_T]:
+        return BooleanColumnFunction[_T]("__lt__", (self, other))
+
+    def gt(self, other: ColumnExpression[_T]) -> Predicate[_T]:
+        return BooleanColumnFunction[_T]("__gt__", (self, other))
+
+    def le(self, other: ColumnExpression[_T]) -> Predicate[_T]:
+        return BooleanColumnFunction[_T]("__le__", (self, other))
+
+    def ge(self, other: ColumnExpression[_T]) -> Predicate[_T]:
+        return BooleanColumnFunction[_T]("__ge__", (self, other))
 
 
 class ColumnExpressionVisitor(Generic[_T, _U]):
+    @abstractmethod
     def visit_column_literal(self, visited: ColumnLiteral[_T]) -> _U:
         raise NotImplementedError()
 
+    @abstractmethod
     def visit_column_reference(self, visited: ColumnReference[_T]) -> _U:
         raise NotImplementedError()
 
-    def visit_unary_column_expression(self, visited: UnaryColumnExpression[_T]) -> _U:
-        raise NotImplementedError()
-
-    def visit_binary_column_expression(self, visited: BinaryColumnExpression[_T]) -> _U:
+    @abstractmethod
+    def visit_column_function(self, visited: ColumnFunction[_T]) -> _U:
         raise NotImplementedError()
 
 
 @dataclasses.dataclass
-class ColumnLiteral(ColumnExpression[_T]):
-    value: Any
-    engines_supported: UnboundableSet[Engine] = FrozenUnboundableSet.full
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return frozenset()
-
-    def is_supported_by(self, engine: Engine) -> bool:
-        return engine in self.engines_supported
-
+class ColumnLiteral(BaseColumnLiteral[_T, Any], ColumnExpression[_T]):
     def visit(self, visitor: ColumnExpressionVisitor[_T, _U]) -> _U:
         return visitor.visit_column_literal(self)
 
 
-class ColumnReference(ColumnExpression[_T]):
-    def __init__(self, tag: _T):
-        self.tag = tag
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return {self.tag}
-
-    def is_supported_by(self, engine: Engine) -> bool:
-        return True
-
+@dataclasses.dataclass
+class ColumnReference(BaseColumnReference[_T], ColumnExpression[_T]):
     def visit(self, visitor: ColumnExpressionVisitor[_T, _U]) -> _U:
         return visitor.visit_column_reference(self)
 
 
-class UnaryColumnExpression(ColumnExpression[_T]):
-
-    name: str
-    base: ColumnExpression[_T]
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return self.base.columns_required
-
-    def is_supported_by(self, engine: Engine) -> bool:
-        return engine.get_unary_function(self.name) is not None and self.base.is_supported_by(engine)
-
+@dataclasses.dataclass
+class ColumnFunction(BaseColumnFunction[_T, ColumnExpression[_T]]):
     def visit(self, visitor: ColumnExpressionVisitor[_T, _U]) -> _U:
-        return visitor.visit_unary_column_expression(self)
+        return visitor.visit_column_function(self)
 
 
-class BinaryColumnExpression(ColumnExpression[_T]):
-
-    name: str
-    lhs: ColumnExpression[_T]
-    rhs: ColumnExpression[_T]
-
-    @property
-    def columns_required(self) -> Set[_T]:
-        return self.lhs.columns_required | self.rhs.columns_required
-
-    def is_supported_by(self, engine: Engine) -> bool:
-        return (
-            engine.get_binary_function(self.name) is not None
-            and self.lhs.is_supported_by(engine)
-            and self.rhs.is_supported_by(engine)
-        )
-
-    def visit(self, visitor: ColumnExpressionVisitor[_T, _U]) -> _U:
-        return visitor.visit_binary_column_expression(self)
+@dataclasses.dataclass
+class BooleanColumnFunction(BaseColumnFunction[_T, ColumnExpression[_T]], Predicate[_T]):
+    def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
+        return visitor.visit_boolean_column_function(self)

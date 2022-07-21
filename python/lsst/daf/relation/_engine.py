@@ -55,17 +55,5 @@ class Engine(ABC):
         ...
 
     @abstractmethod
-    def get_unary_function(self, name: str) -> Any | None:
-        ...
-
-    @abstractmethod
-    def get_binary_function(self, name: str) -> Any | None:
-        ...
-
-    @abstractmethod
-    def get_unary_predicate(self, name: str) -> Any | None:
-        ...
-
-    @abstractmethod
-    def get_binary_predicate(self, name: str) -> Any | None:
+    def get_function(self, name: str) -> Any | None:
         ...
