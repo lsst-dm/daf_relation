@@ -38,7 +38,7 @@ from ._columns import _T, UniqueKey
 from ._exceptions import ColumnError, EngineError
 
 if TYPE_CHECKING:
-    from ._engines import EngineTag
+    from ._engines import Engine
     from ._join_condition import JoinCondition
     from ._order_by_term import OrderByTerm
     from ._predicate import Predicate
@@ -98,7 +98,7 @@ class Relation(Generic[_T]):
 
     @property
     @abstractmethod
-    def engine(self) -> EngineTag:
+    def engine(self) -> Engine:
         """The engine that this relation is evaluated by (`EngineTag`)."""
         raise NotImplementedError()
 
@@ -388,7 +388,7 @@ class Relation(Generic[_T]):
 
         return Slice(self, tuple(order_by), offset, limit)
 
-    def transfer(self, destination: EngineTag) -> Relation[_T]:
+    def transfer(self, destination: Engine) -> Relation[_T]:
         """Construct a relation that represents transferring rows from one
         engine to another.
 
@@ -502,14 +502,14 @@ class Identity(Relation[_T]):
         Engine that evaluates this relation.
     """
 
-    def __init__(self, engine: EngineTag):
+    def __init__(self, engine: Engine):
         self._engine = engine
 
     def __str__(self) -> str:
         return "I"
 
     @property
-    def engine(self) -> EngineTag:
+    def engine(self) -> Engine:
         # Docstring inherited.
         return self._engine
 
@@ -550,7 +550,7 @@ class Zero(Relation[_T]):
         Set of columns for this relation.
     """
 
-    def __init__(self, engine: EngineTag, columns: Set[_T]):
+    def __init__(self, engine: Engine, columns: Set[_T]):
         self._engine = engine
         self._columns = columns
 
@@ -558,7 +558,7 @@ class Zero(Relation[_T]):
         return "∅"
 
     @property
-    def engine(self) -> EngineTag:
+    def engine(self) -> Engine:
         # Docstring inherited.
         return self._engine
 

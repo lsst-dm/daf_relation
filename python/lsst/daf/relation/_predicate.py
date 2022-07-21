@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Generic
 from ._columns import _T
 
 if TYPE_CHECKING:
-    from ._engines import EngineTag
+    from ._engines import Engine
     from ._serialization import DictWriter
 
 
@@ -45,7 +45,7 @@ class Predicate(Generic[_T]):
         raise NotImplementedError()
 
     @abstractmethod
-    def supports_engine(self, engine: EngineTag) -> bool:
+    def supports_engine(self, engine: Engine) -> bool:
         raise NotImplementedError()
 
     @abstractmethod

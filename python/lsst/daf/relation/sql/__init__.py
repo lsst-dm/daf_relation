@@ -19,7 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from ._column_type_info import *
 from ._engine import *
 from ._interfaces import *
 from ._select_parts import *

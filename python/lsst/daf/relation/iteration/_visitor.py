@@ -29,7 +29,7 @@ from .._columns import _T
 from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
 from ._engine import OrderByTermInterface, PredicateInterface
-from ._row_iterable import RowCollection, RowIterable, RowIterableLeaf
+from ._row_iterable import RowCollection, RowIterable
 from .chain import ChainRowIterable
 from .joins import make_join_row_iterable
 from .projection import ProjectionRowIterable
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from .. import operations
     from .._leaf import Leaf
     from .._relation import Identity, Zero
+    from ._engine import Engine
 
 
 class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
@@ -48,6 +49,9 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
     useful as a base class when specialized execution of native iteration is
     needed.
     """
+
+    def __init__(self, engine: Engine):
+        self.engine = engine
 
     def visit_distinct(self, visited: operations.Distinct[_T]) -> RowIterable[_T]:
         # Docstring inherited.
@@ -75,7 +79,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
 
     def visit_leaf(self, visited: Leaf[_T]) -> RowIterable[_T]:
         # Docstring inherited.
-        return cast(RowIterableLeaf[_T], visited).rows
+        return self.engine.evaluate_leaf(visited)
 
     def visit_projection(self, visited: operations.Projection[_T]) -> RowIterable[_T]:
         # Docstring inherited.

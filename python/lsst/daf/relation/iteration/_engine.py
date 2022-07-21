@@ -28,38 +28,32 @@ __all__ = (
     "PredicateInterface",
 )
 
-from typing import TYPE_CHECKING, Protocol, final
-
-from lsst.utils.classes import Singleton
+from typing import TYPE_CHECKING, Protocol
 
 from .._columns import _T
+from .._engines import Engine as BaseEngine
 from .._exceptions import EngineError
 from ._row_iterable import RowIterable
 
 if TYPE_CHECKING:
+    from .._leaf import Leaf
     from .._relation import Relation
     from .typing import Row, Sortable
 
 
-@final
-class Engine(metaclass=Singleton):
-    """Singleton engine class that for relations as iterables of mappings."""
+class Engine(BaseEngine):
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.leaf_cache: dict[Leaf, RowIterable] = {}
 
-    __slots__ = ()
-
-    @property
-    def is_sql(self) -> bool:
-        return False
-
-    @property
-    def is_iteration(self) -> bool:
-        return True
-
-    def __hash__(self) -> int:
-        return hash(self.__class__)
+    def __str__(self) -> str:
+        return self.name
 
     def __repr__(self) -> str:
-        return "lsst.daf.relation.iteration.engine"
+        return f"lsst.daf.relation.iteration.Engine({self.name!r})"
+
+    def evaluate_leaf(self, leaf: Leaf[_T]) -> RowIterable[_T]:
+        return self.leaf_cache[leaf]
 
     def execute(self, relation: Relation[_T]) -> RowIterable[_T]:
         """Execute a native iteration relation, returning a Python iterable.
@@ -76,9 +70,11 @@ class Engine(metaclass=Singleton):
         """
         from ._visitor import IterationVisitor
 
-        if relation.engine != self:
-            raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine}.")
-        return relation.visit(IterationVisitor())
+        if relation.engine is not self:
+            raise EngineError(
+                f"Engine {self!r} cannot operate on relation {relation} with engine {relation.engine!r}."
+            )
+        return relation.visit(IterationVisitor(self))
 
 
 class PredicateInterface(Protocol[_T]):

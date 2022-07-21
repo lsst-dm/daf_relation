@@ -24,9 +24,9 @@ relational algebra operations."""
 
 from ._distinct import *
 from ._join import *
+from ._materialization import *
 from ._projection import *
 from ._selection import *
 from ._slice import *
 from ._transfer import *
 from ._union import *
-from ._materialization import *

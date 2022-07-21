@@ -32,7 +32,7 @@ from ._relation import Identity, Relation, Zero
 from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
-    from ._engines import EngineTag
+    from ._engines import Engine
     from ._leaf import Leaf
 
 
@@ -42,7 +42,7 @@ class TransferFunction(Protocol[_T]):
 
 
 class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
-    def __init__(self, transfer_functions: Mapping[tuple[EngineTag, EngineTag], TransferFunction]):
+    def __init__(self, transfer_functions: Mapping[tuple[Engine, Engine], TransferFunction]):
         self.transfer_functions = transfer_functions
 
     def visit_distinct(self, visited: operations.Distinct[_T]) -> Relation[_T]:

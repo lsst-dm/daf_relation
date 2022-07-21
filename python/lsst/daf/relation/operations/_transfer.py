@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, final
 from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey
-from .._engines import EngineTag
+from .._engines import Engine
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -62,7 +62,7 @@ class Transfer(Relation[_T]):
     class.
     """
 
-    def __init__(self, base: Relation[_T], destination: EngineTag):
+    def __init__(self, base: Relation[_T], destination: Engine):
         self.base = base
         self._destination = destination
 
@@ -75,7 +75,7 @@ class Transfer(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def engine(self) -> EngineTag:
+    def engine(self) -> Engine:
         # Docstring inherited.
         return self._destination
 

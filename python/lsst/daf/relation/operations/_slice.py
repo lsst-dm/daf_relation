@@ -33,7 +33,7 @@ from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._engines import EngineTag
+    from .._engines import Engine
     from .._order_by_term import OrderByTerm
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
@@ -101,7 +101,7 @@ class Slice(Relation[_T]):
         )
 
     @property
-    def engine(self) -> EngineTag:
+    def engine(self) -> Engine:
         # Docstring inherited.
         return self.base.engine
 

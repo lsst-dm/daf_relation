@@ -33,7 +33,7 @@ from .._exceptions import ColumnError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._engines import EngineTag
+    from .._engines import Engine
     from .._join_condition import JoinCondition
     from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
@@ -70,7 +70,7 @@ class Projection(Relation[_T]):
         return f"Π({self.base!s}, {{{', '.join(str(c) for c in self.columns)}}})"
 
     @property
-    def engine(self) -> EngineTag:
+    def engine(self) -> Engine:
         return self.base.engine
 
     @property

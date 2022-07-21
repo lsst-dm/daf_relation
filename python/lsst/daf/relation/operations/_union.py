@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, final
 from lsst.utils.classes import immutable
 
 from .._columns import _T, UniqueKey, compute_join_unique_keys, is_unique_key_covered
-from .._engines import EngineTag
+from .._engines import Engine
 from .._exceptions import ColumnError
 from .._relation import Relation
 
@@ -84,7 +84,7 @@ class Union(Relation[_T]):
         return f"({self.first} ∪ {self.second})"
 
     @property
-    def engine(self) -> EngineTag:
+    def engine(self) -> Engine:
         # Docstring inherited.
         return self.first.engine if self.first.engine is not None else self.second.engine
 

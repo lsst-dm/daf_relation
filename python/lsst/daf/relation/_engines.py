@@ -21,14 +21,19 @@
 
 from __future__ import annotations
 
-__all__ = ("EngineTag", "EngineTree")
+__all__ = ("Engine", "EngineTree")
 
 import dataclasses
-from collections.abc import Hashable, Iterator, Set
-from typing import Protocol
+from abc import ABC, abstractmethod
+from collections.abc import Iterator, Set
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ._columns import _T
+    from ._leaf import Leaf
 
 
-class EngineTag(Hashable, Protocol):
+class Engine(ABC):
     """An interface for objects that serve as identifiers for engines.
 
     Notes
@@ -47,13 +52,9 @@ class EngineTag(Hashable, Protocol):
     def __str__(self) -> str:
         ...
 
-    @property
-    def is_sql(self) -> bool:
-        return False
-
-    @property
-    def is_iteration(self) -> bool:
-        return False
+    @abstractmethod
+    def evaluate_leaf(self, leaf: Leaf[_T]) -> Any:
+        ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -64,7 +65,7 @@ class EngineTree:
     Iteration over an `EngineTree` is depth-first.
     """
 
-    destination: EngineTag
+    destination: Engine
     """Tag for the final engine htat evaluates this tree.
     (`EngineTag`).
     """
@@ -76,7 +77,7 @@ class EngineTree:
     """
 
     @classmethod
-    def build_if_needed(cls, destination: EngineTag, sources: Set[EngineTree] = frozenset()) -> EngineTree:
+    def build_if_needed(cls, destination: Engine, sources: Set[EngineTree] = frozenset()) -> EngineTree:
         """Construct a new tree or return an existing one.
 
         Parameters
@@ -104,13 +105,13 @@ class EngineTree:
         """The number of levels in the tree (`int`)."""
         return 1 + max((source.depth for source in self.sources), default=0)
 
-    def __contains__(self, tag: EngineTag) -> bool:
+    def __contains__(self, tag: Engine) -> bool:
         if tag == self.destination:
             return True
         else:
             return any(tag in source for source in self.sources)
 
-    def __iter__(self) -> Iterator[EngineTag]:
+    def __iter__(self) -> Iterator[Engine]:
         for source in self.sources:
             yield from source
         yield self.destination

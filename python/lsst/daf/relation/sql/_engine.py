@@ -23,32 +23,32 @@ from __future__ import annotations
 
 __all__ = ("Engine",)
 
-import dataclasses
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, final
+from collections.abc import Iterable, Sequence, Set
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 import sqlalchemy
 
 from .._columns import _T
+from .._engines import Engine as BaseEngine
 from .._exceptions import EngineError
 from ._to_executable import ToExecutable
 
 if TYPE_CHECKING:
+    from .._leaf import Leaf
     from .._order_by_term import OrderByTerm
     from .._relation import Relation
-    from ._column_type_info import _L, ColumnTypeInfo
+    from ._select_parts import SelectParts
 
 
-@final
-@dataclasses.dataclass(frozen=True, slots=True)
-class Engine:
-    """Engine tag class for converting relation trees to SQLAlchemy
-    executables.
-    """
+_L = TypeVar("_L")
 
-    name: str
-    """Name that identifies this engine relative to others of the same type.
-    """
+
+class Engine(BaseEngine, Generic[_L]):
+    """Engine class for converting relation trees to SQLAlchemy executables."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self.leaf_cache: dict[Leaf, SelectParts] = {}
 
     def __str__(self) -> str:
         return self.name
@@ -56,18 +56,13 @@ class Engine:
     def __repr__(self) -> str:
         return f"lsst.daf.relation.sql.Engine({self.name!r})"
 
-    @property
-    def is_sql(self) -> bool:
-        return True
-
-    @property
-    def is_iteration(self) -> bool:
-        return False
+    def evaluate_leaf(self, leaf: Leaf[_T]) -> SelectParts[_T, _L]:
+        assert leaf.engine is self, f"Incorrect engine for evaluation: {leaf.engine!r} != {self!r}."
+        return self.leaf_cache[leaf]
 
     def to_executable(
         self,
         relation: Relation[_T],
-        column_types: ColumnTypeInfo[_T, _L],
         *,
         distinct: bool = False,
         order_by: Sequence[OrderByTerm[_T]] = (),
@@ -96,13 +91,125 @@ class Engine:
         -------
         select : `sqlalchemy.sql.expression.SelectBase`
             A SQLAlchemy SELECT or compound SELECT query.
-
-        Raises
-        ------
-        EngineError
-            Raised if the relation's engine is not the same as ``self``, or if
-            the tree contains any transfers.
         """
-        if relation.engine != self:
-            raise EngineError(f"Iteration engine cannot execute relation with engine {relation.engine}.")
-        return relation.visit(ToExecutable(column_types, distinct, order_by, offset, limit))
+        if relation.engine is not self:
+            raise EngineError(
+                f"Engine {self!r} cannot operate on relation {relation} with engine {relation.engine!r}."
+            )
+        return relation.visit(ToExecutable(self, distinct, order_by, offset, limit))
+
+    def extract_mapping(self, tags: Set[_T], sql_columns: sqlalchemy.sql.ColumnCollection) -> dict[_T, _L]:
+        """Extract a mapping with `.ColumnTag` keys and logical column values
+        from a SQLAlchemy column collection.
+
+        Parameters
+        ----------
+        tags : `~collections.abc.Set`
+            Set of `.ColumnTag` objects whose logical columns should be
+            extracted.
+        sql_columns : `sqlalchemy.sql.ColumnCollection`
+            SQLAlchemy collection of columns, such as
+            `sqlalchemy.sql.FromClause.columns`.
+
+        Returns
+        -------
+        logical_columns : `dict`
+            Dictionary mapping `.ColumnTag` to logical column type.
+        """
+        return {tag: cast(_L, sql_columns[str(tag)]) for tag in tags}
+
+    def select_items(
+        self,
+        items: Iterable[tuple[_T, _L]],
+        sql_from: sqlalchemy.sql.FromClause,
+        *extra: sqlalchemy.sql.ColumnElement,
+    ) -> sqlalchemy.sql.Select:
+        """Construct a SQLAlchemy representation of a SELECT query.
+
+        Parameters
+        ----------
+        items : `Iterable` [ `tuple` ]
+            Iterable of (`.ColumnTag`, logical column) pairs.  This is
+            typically the ``items()`` of a mapping returned by
+            `extract_mapping` or obtained from `SelectParts.columns_available`.
+        sql_from : `sqlalchemy.sql.FromClause`
+            SQLAlchemy representation of a FROM clause, such as a single table,
+            aliased subquery, or join expression.  Must provide all columns
+            referenced by ``items``.
+        *extra : `sqlalchemy.sql.ColumnElement`
+            Additional SQL column expressions to include.
+
+        Returns
+        -------
+        select : `sqlalchemy.sql.Select`
+            SELECT query.
+
+        Notes
+        -----
+        This method is responsible for handling the case where ``items`` is
+        empty, typically by delegating to `handle_empty_columns`.
+        """
+        select_columns = [
+            cast(sqlalchemy.sql.ColumnElement, logical_column).label(str(tag))
+            for tag, logical_column in items
+        ]
+        select_columns.extend(extra)
+        self.handle_empty_columns(select_columns)
+        return sqlalchemy.sql.select(*select_columns).select_from(sql_from)
+
+    def make_zero_select(self, tags: Set[_T]) -> sqlalchemy.sql.Select:
+        """Construct a SQLAlchemy SELECT query that yields no rows.
+
+        Parameters
+        ----------
+        tags : `~collections.abc.Set`
+            Set of tags for the columns the query should have.
+
+        Returns
+        -------
+        zero_select : `sqlalchemy.sql.Select`
+            SELECT query that yields no rows.
+
+        Notes
+        -----
+        This method is responsible for handling the case where ``items`` is
+        empty, typically by delegating to `handle_empty_columns`.
+        """
+        select_columns = [sqlalchemy.sql.literal(None).label(str(tag)) for tag in tags]
+        self.handle_empty_columns(select_columns)
+        return sqlalchemy.sql.select(*select_columns).where(sqlalchemy.sql.literal(False))
+
+    def make_identity_subquery(self) -> sqlalchemy.sql.FromClause:
+        """Construct a SQLAlchemy FROM clause with one row and no (meaningful)
+        columns.
+
+        Returns
+        -------
+        identity_from : `sqlalchemy.sql.FromClause`
+            FROM clause with one column and no meaningful columns.
+
+        Notes
+        -----
+        SQL SELECT queries and similar queries are not permitted to actually
+        have no columns, but we can add a literal column that isn't associated
+        with any `.ColumnTag`, making it appear to the relation system as if
+        there are no columns.  The default implementation does this by
+        delegating to `handle_empty_columns`.
+        """
+        select_columns: list[sqlalchemy.sql.ColumnElement] = []
+        self.handle_empty_columns(select_columns)
+        return sqlalchemy.sql.select(*select_columns).subquery()
+
+    def handle_empty_columns(self, columns: list[sqlalchemy.sql.ColumnElement]) -> None:
+        """Handle the edge case where a SELECT statement has no columns, by
+        adding a literal column that should be ignored.
+
+        Parameters
+        ----------
+        columns : `list` [ `sqlalchemy.sql.ColumnElement` ]
+            List of SQLAlchemy column objects.  This may have no elements when
+            this method is called, and must always have at least one element
+            when it returns.
+        """
+        if not columns:
+            columns.append(sqlalchemy.sql.literal(True).label("IGNORED"))

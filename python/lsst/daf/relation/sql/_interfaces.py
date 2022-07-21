@@ -35,14 +35,14 @@ import sqlalchemy
 from .._columns import _T
 
 if TYPE_CHECKING:
-    from ._column_type_info import ColumnTypeInfo
+    from ._engine import Engine
 
 _L = TypeVar("_L")
 
 
 class PredicateInterface(Protocol[_T, _L]):
     def to_sql_boolean(
-        self, logical_columns: Mapping[_T, _L], column_types: ColumnTypeInfo[_T, _L]
+        self, logical_columns: Mapping[_T, _L], engine: Engine[_L]
     ) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing the predicate.
 
@@ -52,7 +52,7 @@ class PredicateInterface(Protocol[_T, _L]):
             Mapping from `.ColumnTag` to logical column, containing all columns
             available to the predicate.  This will typically involve columns
             beyond those in ``columns_required``.
-        column_types : `ColumnTypeInfo`
+        engine : `Engine`
             Object that relates column tags to logical columns.
 
         Returns
@@ -66,7 +66,7 @@ class PredicateInterface(Protocol[_T, _L]):
 
 class OrderByTermInterface(Protocol[_T, _L]):
     def to_sql_sort_column(
-        self, logical_columns: Mapping[_T, _L], column_types: ColumnTypeInfo[_T, _L]
+        self, logical_columns: Mapping[_T, _L], engine: Engine[_L]
     ) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing the order-by term.
 
@@ -76,7 +76,7 @@ class OrderByTermInterface(Protocol[_T, _L]):
             Mapping from `.ColumnTag` to logical column, containing all columns
             available to the order-by-term.  This will typically involve
             columns beyond those in ``columns_required``.
-        column_types : `ColumnTypeInfo`
+        engine : `Engine`
             Object that relates column tags to logical columns.
 
         Returns
@@ -92,7 +92,7 @@ class JoinConditionInterface(Protocol[_T, _L]):
     def to_sql_join_on(
         self,
         logical_columns: tuple[Mapping[_T, _L], Mapping[_T, _L]],
-        column_types: ColumnTypeInfo[_T, _L],
+        engine: Engine[_L],
     ) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing the join condition.
 
@@ -103,7 +103,7 @@ class JoinConditionInterface(Protocol[_T, _L]):
             all columns available to the condition from each relation.  This
             will typically involve columns beyond those in
             ``columns_required``.
-        column_types : `ColumnTypeInfo`
+        engine : `Engine`
             Object that relates column tags to logical columns.
 
         Returns

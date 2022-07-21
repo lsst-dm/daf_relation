@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, final
 from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey
-from .._engines import EngineTag
+from .._engines import Engine
 from .._relation import Relation
 
 if TYPE_CHECKING:
@@ -57,7 +57,7 @@ class Materialization(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def engine(self) -> EngineTag:
+    def engine(self) -> Engine:
         # Docstring inherited.
         return self.base.engine
 

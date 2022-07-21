@@ -21,28 +21,26 @@
 
 from __future__ import annotations
 
-__all__ = ("MutableSelectParts", "SelectParts", "SelectPartsLeaf", "ToSelectParts")
+__all__ = ("MutableSelectParts", "SelectParts", "ToSelectParts")
 
 import dataclasses
-from collections.abc import Iterable, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, Any, Generic, cast
+from collections.abc import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Generic, cast
 
 import sqlalchemy
 
 from .. import operations
-from .._columns import _T, UniqueKey
+from .._columns import _T
 from .._exceptions import EngineError
 from .._leaf import Leaf
 from .._relation_visitor import RelationVisitor
-from ._column_type_info import _L, ColumnTypeInfo
+from ._engine import _L, Engine
 from ._interfaces import JoinConditionInterface, OrderByTermInterface, PredicateInterface
 
 if TYPE_CHECKING:
     from .._join_condition import JoinCondition
     from .._order_by_term import OrderByTerm
     from .._relation import Identity, Relation, Zero
-    from .._serialization import DictWriter
-    from ._engine import Engine
 
 
 @dataclasses.dataclass(slots=True, eq=False)
@@ -67,14 +65,14 @@ class SelectParts(Generic[_T, _L]):
     If `None`, the columns available are just the columns provided by the
     relation these parts represent, and they can be obtained as needed by
     calling `ColumnTypeInfo.extract_mapping` on `from_clause`.  This is an
-    optimization that avoids calls to `ColumnTypeInfo.extract_mapping` when
+    optimization that avoids calls to `Engine.extract_mapping` when
     `columns_available` isn't actually needed.
     """
 
     def to_executable(
         self,
         relation: Relation[_T],
-        column_types: ColumnTypeInfo[_T, _L],
+        engine: Engine[_L],
         *,
         distinct: bool = False,
         order_by: Sequence[OrderByTerm[_T]] = (),
@@ -104,16 +102,16 @@ class SelectParts(Generic[_T, _L]):
         select : `sqlalchemy.sql.Select`
             SQL SELECT statement.
         """
-        select_parts = relation.visit(ToSelectParts(column_types))
+        select_parts = relation.visit(ToSelectParts(engine))
         if select_parts.columns_available is None:
-            columns_available: Mapping[_T, _L] = column_types.extract_mapping(
+            columns_available: Mapping[_T, _L] = engine.extract_mapping(
                 relation.columns, select_parts.from_clause.columns
             )
             columns_projected = columns_available
         else:
             columns_available = select_parts.columns_available
             columns_projected = {tag: columns_available[tag] for tag in relation.columns}
-        select = column_types.select_items(columns_projected.items(), select_parts.from_clause)
+        select = engine.select_items(columns_projected.items(), select_parts.from_clause)
         if len(select_parts.where) == 1:
             select = select.where(select_parts.where[0])
         elif select_parts.where:
@@ -123,7 +121,7 @@ class SelectParts(Generic[_T, _L]):
         if order_by:
             select = select.order_by(
                 *[
-                    cast(OrderByTermInterface[_T, _L], o).to_sql_sort_column(columns_available, column_types)
+                    cast(OrderByTermInterface[_T, _L], o).to_sql_sort_column(columns_available, engine)
                     for o in order_by
                 ]
             )
@@ -148,59 +146,6 @@ class MutableSelectParts(SelectParts[_T, _L]):
     columns_available: dict[_T, _L] = dataclasses.field(default_factory=dict)
 
 
-class SelectPartsLeaf(Leaf[_T], Generic[_T, _L]):
-    """The leaf relation type for the SQL engine.
-
-    Parameters
-    ----------
-    engine : `Engine`
-        Identifier for the engine this relation belongs to.
-    select_parts : `SelectParts`
-        The `SelectParts` struct that backs this relation.
-    columns : `~collections.abc.Set`. optional
-        Set of columns in the relation.  If not provided,
-        ``select_parts.columns_available`` is used and must not be `None`.
-    unique_keys : `~collections.abc.Set` [ `UniqueKey` ], optional
-        The set of unique constraints this relation is guaranteed to satisfy.
-        See `Relation.unique_keys` for details.
-    extra : `Mapping`, optional
-        Extra information to serialize with this relation.
-
-    Notes
-    -----
-    This class never attempts to serialize its `SelectParts` state, and cannot
-    be fully deserialized without a custom implementation of `.MappingReader`
-    that knows how to construct a `SelectParts` instance from ``extra``.
-    """
-
-    def __init__(
-        self,
-        engine: Engine,
-        select_parts: SelectParts[_T, _L],
-        *,
-        columns: Set[_T] | None = None,
-        unique_keys: Set[UniqueKey[_T]] = frozenset(),
-        extra: Mapping[str, Any] | None = None,
-    ):
-        if columns is None:
-            if select_parts.columns_available is None:
-                raise RuntimeError(
-                    "SelectParts used to construct leaf must have explicit "
-                    "columns_available unless columns is provided."
-                )
-            else:
-                columns = select_parts.columns_available.keys()
-        super().__init__(engine, columns, unique_keys)
-        self.select_parts = select_parts
-        self.extra = extra if extra is not None else {}
-
-    def serialize(self, writer: DictWriter) -> dict[str, Any]:
-        # Docstring inherited.
-        result = super().serialize(writer)
-        result.update(self.extra)
-        return result
-
-
 @dataclasses.dataclass(eq=False, slots=True)
 class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     """A `.RelationVisitor` implemention that converts a `.Relation` tree into
@@ -212,10 +157,8 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     all.
     """
 
-    column_types: ColumnTypeInfo[_T, _L]
-    """Object that relates column tags to logical columns for this visitor
-    (`ColumnTypeInfo`).
-    """
+    engine: Engine[_L]
+    # TODO: docs
 
     def visit_distinct(self, visited: operations.Distinct[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
@@ -228,14 +171,14 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     def visit_identity(self, visited: Identity[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(
-            self.column_types.make_identity_subquery(),
+            self.engine.make_identity_subquery(),
             [],
             None,
         )
 
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        return cast(SelectPartsLeaf[_T, _L], visited).select_parts
+        return self.engine.evaluate_leaf(visited)
 
     def visit_materialization(self, visited: operations.Materialization[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
@@ -249,12 +192,12 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         # Docstring inherited.
         lhs_parts = visited.lhs.visit(self)
         if lhs_parts.columns_available is None:
-            lhs_parts.columns_available = self.column_types.extract_mapping(
+            lhs_parts.columns_available = self.engine.extract_mapping(
                 visited.lhs.columns, lhs_parts.from_clause.columns
             )
         rhs_parts = visited.rhs.visit(self)
         if rhs_parts.columns_available is None:
-            rhs_parts.columns_available = self.column_types.extract_mapping(
+            rhs_parts.columns_available = self.engine.extract_mapping(
                 visited.rhs.columns, rhs_parts.from_clause.columns
             )
         on_terms: list[sqlalchemy.sql.ColumnElement] = []
@@ -263,7 +206,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         if visited.condition is not None:
             on_terms.append(
                 cast(JoinConditionInterface, visited.condition).to_sql_join_on(
-                    (lhs_parts.columns_available, rhs_parts.columns_available), self.column_types
+                    (lhs_parts.columns_available, rhs_parts.columns_available), self.engine
                 )
             )
         on_clause: sqlalchemy.sql.ColumnElement
@@ -290,11 +233,11 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         # Docstring inherited.
         base_parts = visited.base.visit(self)
         if base_parts.columns_available is None:
-            base_parts.columns_available = self.column_types.extract_mapping(
+            base_parts.columns_available = self.engine.extract_mapping(
                 visited.base.columns, base_parts.from_clause
             )
         new_where = cast(PredicateInterface, visited.predicate).to_sql_boolean(
-            base_parts.columns_available, self.column_types
+            base_parts.columns_available, self.engine
         )
         return dataclasses.replace(
             base_parts,
@@ -344,7 +287,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         """
         from ._to_executable import ToExecutable
 
-        return relation.visit(ToExecutable(self.column_types))
+        return relation.visit(ToExecutable(self.engine))
 
     def _join_select_parts(
         self,
@@ -372,7 +315,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         assert base_parts.columns_available is not None
         next_parts = next_relation.visit(self)
         if next_parts.columns_available is None:
-            next_parts.columns_available = self.column_types.extract_mapping(
+            next_parts.columns_available = self.engine.extract_mapping(
                 next_relation.columns, next_parts.from_clause.columns
             )
         on_terms: list[sqlalchemy.sql.ColumnElement] = []
@@ -381,7 +324,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         for condition in conditions:
             on_terms.append(
                 cast(JoinConditionInterface, condition).to_sql_join_on(
-                    (base_parts.columns_available, next_parts.columns_available), self.column_types
+                    (base_parts.columns_available, next_parts.columns_available), self.engine
                 )
             )
         on_clause: sqlalchemy.sql.ColumnElement

@@ -25,25 +25,20 @@ __all__ = (
     "IndexedRowIterable",
     "RowCollection",
     "RowIterable",
-    "RowIterableLeaf",
-    "SerializableRowIterableLeaf",
 )
 
 import itertools
 from abc import abstractmethod
 from collections import defaultdict
-from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, Any, Generic
+from collections.abc import Collection, Iterable, Iterator, Sequence
+from typing import TYPE_CHECKING, Generic
 
 from .._columns import _T, UniqueKey
 from .._join_condition import JoinCondition
-from .._leaf import Leaf
 from .._order_by_term import OrderByTerm
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._engines import EngineTag
-    from .._serialization import DictWriter
     from .typing import GeneralIndex, IndexKey, Row, UniqueIndex
 
 
@@ -360,95 +355,3 @@ class RowCollection(IndexedRowIterable[_T]):
         else:
             self._build_unique_index(self, index_columns, new_index)
             return new_index
-
-
-class RowIterableLeaf(Leaf[_T]):
-    """A `Leaf` relation for the native iteration engine, backed by a lazy
-    iterable.
-
-    Parameters
-    ----------
-    name : `str`
-        Name for the relation.  This is used to implement `str` and is part of
-        the serialized form of a relation (and hence `repr` as well), but is
-        otherwise ignored.
-    engine : `EngineTag`
-        Identifier for the engine this relation belongs to.
-    columns : `~collections.abc.Set`
-        Set of columns in the relation.
-    unique_keys : `~collections.abc.Set` [ `UniqueKey` ]
-        The set of unique constraints this relation is guaranteed to satisfy.
-        See `Relation.unique_keys` for details.
-    rows : `RowIterable`
-        Iterable over mappings that backs this leaf relation.
-
-    Notes
-    -----
-    `RowIterableLeaf` differs from its subclass, `SerializableRowIterable`, in
-    that it does not save its rows when written to a dictionary for
-    serialization; instead it is assumed that the name and other state are
-    sufficient for a `MappingReader` to construct the iterable.
-    """
-
-    def __init__(
-        self,
-        engine: EngineTag,
-        columns: Set[_T],
-        unique_keys: Set[UniqueKey[_T]],
-        rows: RowIterable,
-    ):
-        super().__init__(
-            engine,
-            columns,
-            unique_keys=unique_keys,
-        )
-        self.rows = rows
-
-    def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
-        # Docstring inherited.
-        return super().serialize(writer)
-
-
-class SerializableRowIterableLeaf(RowIterableLeaf[_T]):
-    """A `Leaf` relation for the native iteration engine, backed by a lazy
-    iterable.
-
-    Notes
-    -----
-    `SerializableRowIterableLeaf` differs from its base class in that it saves
-    its rows when written to a dictionary for serialization.  The
-    `MappingReader` must be specialized to call
-    `SerializeableRowIterableLeaf.from_extra_mapping` appropriately for these
-    to be read.
-    """
-
-    @classmethod
-    def from_extra_mapping(
-        cls,
-        engine: EngineTag,
-        columns: Set[_T],
-        unique_keys: Set[UniqueKey[_T]],
-        extra: Mapping[str, Any],
-    ) -> Leaf[_T]:
-        # Docstring inherited.
-        columns_sorted = list(columns)
-        columns_sorted.sort(key=str)
-
-        def deserialize_rows() -> Iterator[Row[_T]]:
-            for list_row in extra["rows"]:
-                yield {tag: value for tag, value in zip(columns_sorted, list_row)}
-
-        if unique_keys:
-            index_columns = next(iter(unique_keys))
-            rows = RowCollection.build_with_unique_index(deserialize_rows(), index_columns)
-        else:
-            rows = RowCollection(list(deserialize_rows()))
-        return cls(engine, columns, unique_keys, rows=rows)
-
-    def serialize(self, writer: DictWriter[_T]) -> dict[str, Any]:
-        # Docstring inherited.
-        result = super().serialize(writer)
-        columns = list(self.columns)
-        columns.sort(key=str)
-        result["rows"] = [[row[t] for t in columns] for row in self.rows]
-        return result

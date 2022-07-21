@@ -38,7 +38,7 @@ from ._relation import Identity, Relation, Zero
 from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
-    from ._engines import EngineTag
+    from ._engines import Engine
 
 
 def is_str_mapping(mapping: Any) -> TypeGuard[Mapping[str, Any]]:
@@ -180,7 +180,7 @@ class MappingReader(Generic[_T]):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_engine(self, serialized: Any) -> EngineTag:
+    def read_engine(self, serialized: Any) -> Engine:
         """Read an engine tag.
 
         Parameters
@@ -385,7 +385,10 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         # Docstring inherited.
         return {
             "type": "leaf",
-            **visited.serialize(self),
+            "name": visited.name,
+            "columns": self.write_column_set(visited.columns),
+            "engine": self.write_engine(visited.engine),
+            "unique_keys": self.write_unique_keys(visited.unique_keys),
         }
 
     def visit_materialization(self, visited: operations.Materialization[_T]) -> dict[str, Any]:
@@ -485,7 +488,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         """
         return sorted(self.write_column(t) for t in columns)
 
-    def write_engine(self, engine: EngineTag) -> Any:
+    def write_engine(self, engine: Engine) -> Any:
         """Convert an engine tag to a serializable type.
 
         Parameters

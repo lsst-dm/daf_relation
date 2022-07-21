@@ -23,8 +23,3 @@ from . import typing
 from ._engine import *
 from ._row_iterable import *
 from ._visitor import *
-
-engine = Engine()
-"""Singleton engine instance that treats relations as iterables of mappings
-(`Engine`).
-"""

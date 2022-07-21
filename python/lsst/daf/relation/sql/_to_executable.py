@@ -33,7 +33,7 @@ from .. import operations
 from .._columns import _T
 from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
-from ._column_type_info import _L, ColumnTypeInfo
+from ._engine import _L, Engine
 from ._interfaces import OrderByTermInterface
 from ._select_parts import ToSelectParts
 
@@ -54,10 +54,8 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     the others to `ToSelectParts`.  It does not handle transfers at all.
     """
 
-    column_types: ColumnTypeInfo[_T, _L]
-    """Object that relates column tags to logical columns for this visitor
-    (`ColumnTypeInfo`).
-    """
+    engine: Engine[_L]
+    # TODO docs.
 
     distinct: bool = False
     """Whether to force the rows of the final SQL executable returned to be
@@ -101,7 +99,7 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
 
     def visit_zero(self, visited: Zero[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
-        return self.column_types.make_zero_select(visited.columns)
+        return self.engine.make_zero_select(visited.columns)
 
     def visit_projection(self, visited: operations.Projection[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
@@ -147,13 +145,13 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
             else sqlalchemy.sql.union_all(new_first, new_second)
         )
         if self.order_by:
-            columns_available = self.column_types.extract_mapping(
+            columns_available = self.engine.extract_mapping(
                 visited.columns,
                 executable.selected_columns,
             )
             executable = executable.order_by(
                 *[
-                    cast(OrderByTermInterface, o).to_sql_sort_column(columns_available, self.column_types)
+                    cast(OrderByTermInterface, o).to_sql_sort_column(columns_available, self.engine)
                     for o in self.order_by
                 ]
             )
@@ -176,10 +174,10 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
         select : `sqlalchemy.sql.Select`
             SQL SELECT statement.
         """
-        select_parts = relation.visit(ToSelectParts(self.column_types))
+        select_parts = relation.visit(ToSelectParts(self.engine))
         return select_parts.to_executable(
             relation,
-            self.column_types,
+            self.engine,
             distinct=self.distinct,
             order_by=self.order_by,
             offset=self.offset,

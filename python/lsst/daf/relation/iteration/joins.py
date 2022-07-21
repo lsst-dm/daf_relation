@@ -37,7 +37,7 @@ from ._row_iterable import RowIterable
 from .selection import SelectionRowIterable
 
 if TYPE_CHECKING:
-    from .._engines import EngineTag
+    from .._engines import Engine
     from .._relation import Relation
     from .typing import GeneralIndex, Row, UniqueIndex
 
@@ -111,7 +111,7 @@ def make_join_row_iterable(
 
 
 def _finish_join_row_iterable(
-    engine: EngineTag,
+    engine: Engine,
     base: RowIterable[_T],
     condition: JoinCondition[_T] | None,
 ) -> RowIterable[_T]:
