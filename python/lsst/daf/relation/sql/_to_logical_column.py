@@ -27,11 +27,11 @@ import dataclasses
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, TypeVar
 
+from .. import column_expressions
 from .._columns import _T
 from .._exceptions import EngineError
 
 if TYPE_CHECKING:
-    from .. import column_expressions
     from ._engine import Engine
 
 

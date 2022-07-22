@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("Engine",)
 
+import dataclasses
 import operator
 from collections.abc import Callable, Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
@@ -46,13 +47,15 @@ if TYPE_CHECKING:
 _L = TypeVar("_L")
 
 
+@dataclasses.dataclass(eq=False, frozen=True, kw_only=True)
 class Engine(BaseEngine[_T], Generic[_T, _L]):
     """Engine class for converting relation trees to SQLAlchemy executables."""
 
-    def __init__(self, name: str):
-        self.name = name
-        self.leaf_cache: dict[Leaf, SelectParts] = {}
-        self.column_function_cache: dict[str, Callable[..., sqlalchemy.sql.ColumnElement]] = {}
+    name: str = "sql"
+    leaf_cache: dict[Leaf[_T], SelectParts[_T, _L]] = dataclasses.field(default_factory=dict)
+    column_function_cache: dict[str, Callable[..., sqlalchemy.sql.ColumnElement]] = dataclasses.field(
+        default_factory=dict
+    )
 
     def __str__(self) -> str:
         return self.name
@@ -82,7 +85,7 @@ class Engine(BaseEngine[_T], Generic[_T, _L]):
         ----------
         relation : `.Relation`
             Root of the relation tree to convert.
-        column_types : `ColumnTypeInfo`
+        sql_engine : `ButlerSqlEngine`
             Object that relates column tags to logical columns.
         distinct : `bool`
             Whether to generate an expression whose rows are forced to be

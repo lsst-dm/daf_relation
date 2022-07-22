@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 class Engine(BaseEngine[_T]):
     def __init__(self, name: str) -> None:
         self.name = name
-        self.leaf_cache: dict[Leaf, RowIterable] = {}
+        self.leaf_cache: dict[Leaf, RowIterable[_T]] = {}
         self.column_function_cache: dict[str, Callable[..., Any]] = {}
 
     def __str__(self) -> str:

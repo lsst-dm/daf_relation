@@ -31,10 +31,10 @@ from .. import column_expressions
 from .._columns import _T
 from .._exceptions import EngineError
 from ._to_callable import ToCallable
+from .typing import Row
 
 if TYPE_CHECKING:
     from ._engine import Engine
-    from .typing import Row
 
 
 @dataclasses.dataclass(eq=False, slots=True)
