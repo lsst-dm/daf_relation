@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from .._relation import Relation
 
 
-class Engine(BaseEngine):
+class Engine(BaseEngine[_T]):
     def __init__(self, name: str) -> None:
         self.name = name
         self.leaf_cache: dict[Leaf, RowIterable] = {}

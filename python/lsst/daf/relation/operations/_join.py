@@ -86,7 +86,7 @@ class Join(Relation[_T]):
         return f"({self.lhs} ⋈ {self.rhs})"
 
     @property
-    def engine(self) -> Engine:
+    def engine(self) -> Engine[_T]:
         # Docstring inherited.
         return self.lhs.engine
 

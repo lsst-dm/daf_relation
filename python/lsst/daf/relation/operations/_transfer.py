@@ -61,7 +61,7 @@ class Transfer(Relation[_T]):
     class.
     """
 
-    def __init__(self, base: Relation[_T], destination: Engine):
+    def __init__(self, base: Relation[_T], destination: Engine[_T]):
         self.base = base
         self._destination = destination
 
@@ -74,7 +74,7 @@ class Transfer(Relation[_T]):
 
     @property  # type: ignore
     @cached_getter
-    def engine(self) -> Engine:
+    def engine(self) -> Engine[_T]:
         # Docstring inherited.
         return self._destination
 

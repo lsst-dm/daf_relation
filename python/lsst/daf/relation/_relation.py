@@ -96,8 +96,8 @@ class Relation(Generic[_T]):
 
     @property
     @abstractmethod
-    def engine(self) -> Engine:
-        """The engine that this relation is evaluated by (`EngineTag`)."""
+    def engine(self) -> Engine[_T]:
+        """The engine that this relation is evaluated by (`Engine`)."""
         raise NotImplementedError()
 
     @property

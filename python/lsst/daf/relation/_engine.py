@@ -23,15 +23,16 @@ from __future__ import annotations
 
 __all__ = ("Engine",)
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Any, Generic
+
+from ._columns import _T
 
 if TYPE_CHECKING:
-    from ._columns import _T
     from ._leaf import Leaf
 
 
-class Engine(ABC):
+class Engine(Generic[_T]):
     """An interface for objects that serve as identifiers for engines.
 
     Notes

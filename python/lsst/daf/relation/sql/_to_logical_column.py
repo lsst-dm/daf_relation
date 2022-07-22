@@ -41,7 +41,7 @@ _L = TypeVar("_L")
 @dataclasses.dataclass(eq=False, slots=True)
 class ToLogicalColumn(column_expressions.ExpressionVisitor[_T, _L]):
 
-    engine: Engine[_L]
+    engine: Engine[_T, _L]
     columns_available: Mapping[_T, _L]
 
     def visit_literal(self, visited: column_expressions.Literal[_T]) -> _L:

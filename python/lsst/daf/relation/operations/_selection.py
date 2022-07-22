@@ -73,7 +73,7 @@ class Selection(Relation[_T]):
         return f"σ({self.base!s}, {self.predicate})"
 
     @property
-    def engine(self) -> Engine:
+    def engine(self) -> Engine[_T]:
         # Docstring inherited.
         return self.base.engine
 

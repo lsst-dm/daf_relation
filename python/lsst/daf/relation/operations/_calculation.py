@@ -73,7 +73,7 @@ class Calculation(Relation[_T]):
         return f"({self.base!s} + {self.tag}={self.expression!s})"
 
     @property
-    def engine(self) -> Engine:
+    def engine(self) -> Engine[_T]:
         return self.base.engine
 
     @property  # type: ignore

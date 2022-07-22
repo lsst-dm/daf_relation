@@ -26,7 +26,7 @@ __all__ = ("Materialization",)
 from collections.abc import Set
 from typing import TYPE_CHECKING, final
 
-from lsst.utils.classes import cached_getter, immutable
+from lsst.utils.classes import immutable
 
 from .._columns import _T, UniqueKey
 from .._engine import Engine
@@ -55,9 +55,8 @@ class Materialization(Relation[_T]):
     def __str__(self) -> str:
         return f"materialize({self.base!s}" + f" as {self.name!r})" if self.name is not None else ")"
 
-    @property  # type: ignore
-    @cached_getter
-    def engine(self) -> Engine:
+    @property
+    def engine(self) -> Engine[_T]:
         # Docstring inherited.
         return self.base.engine
 

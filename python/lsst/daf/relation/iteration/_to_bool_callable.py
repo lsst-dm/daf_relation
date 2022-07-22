@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(eq=False, slots=True)
 class ToBoolCallable(column_expressions.PredicateVisitor[_T, Callable[[Row[_T]], bool]]):
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: Engine[_T]):
         self.to_callable = ToCallable(engine)
 
     to_callable: ToCallable[_T]

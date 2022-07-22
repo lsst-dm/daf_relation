@@ -106,7 +106,7 @@ class Slice(Relation[_T]):
         )
 
     @property
-    def engine(self) -> Engine:
+    def engine(self) -> Engine[_T]:
         # Docstring inherited.
         return self.base.engine
 

@@ -52,7 +52,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
     needed.
     """
 
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: Engine[_T]):
         self.engine = engine
 
     def visit_calculation(self, visited: operations.Calculation[_T]) -> RowIterable[_T]:

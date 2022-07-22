@@ -73,7 +73,7 @@ class SelectParts(Generic[_T, _L]):
     def to_executable(
         self,
         relation: Relation[_T],
-        engine: Engine[_L],
+        engine: Engine[_T, _L],
         *,
         distinct: bool = False,
         order_by: Sequence[column_expressions.OrderByTerm[_T]] = (),
@@ -153,7 +153,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     all.
     """
 
-    engine: Engine[_L]
+    engine: Engine[_T, _L]
     # TODO: docs
 
     def visit_calculation(self, visited: operations.Calculation[_T]) -> SelectParts[_T, _L]:

@@ -56,7 +56,7 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     the others to `ToSelectParts`.  It does not handle transfers at all.
     """
 
-    engine: Engine[_L]
+    engine: Engine[_T, _L]
     # TODO docs.
 
     distinct: bool = False

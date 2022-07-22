@@ -69,7 +69,7 @@ class Projection(Relation[_T]):
         return f"Π({self.base!s}, {{{', '.join(str(c) for c in self.columns)}}})"
 
     @property
-    def engine(self) -> Engine:
+    def engine(self) -> Engine[_T]:
         return self.base.engine
 
     @property

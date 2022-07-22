@@ -83,7 +83,7 @@ class Union(Relation[_T]):
         return f"({self.first} ∪ {self.second})"
 
     @property
-    def engine(self) -> Engine:
+    def engine(self) -> Engine[_T]:
         # Docstring inherited.
         return self.first.engine if self.first.engine is not None else self.second.engine
 

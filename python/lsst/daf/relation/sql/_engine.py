@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 _L = TypeVar("_L")
 
 
-class Engine(BaseEngine, Generic[_L]):
+class Engine(BaseEngine[_T], Generic[_T, _L]):
     """Engine class for converting relation trees to SQLAlchemy executables."""
 
     def __init__(self, name: str):

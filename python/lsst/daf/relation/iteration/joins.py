@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 
 def make_join_row_iterable(
-    engine: Engine,
+    engine: Engine[_T],
     lhs_rows: RowIterable[_T],
     rhs_rows: RowIterable[_T],
     lhs_relation: Relation[_T],
@@ -112,7 +112,7 @@ def make_join_row_iterable(
 
 
 def _finish_join_row_iterable(
-    engine: Engine,
+    engine: Engine[_T],
     base: RowIterable[_T],
     predicate: column_expressions.Predicate[_T] | None,
 ) -> RowIterable[_T]:

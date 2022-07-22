@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 @dataclasses.dataclass(eq=False, slots=True)
 class ToCallable(column_expressions.ExpressionVisitor[_T, Callable[[Row[_T]], Any]]):
 
-    engine: Engine
+    engine: Engine[_T]
 
     def visit_literal(self, visited: column_expressions.Literal[_T]) -> Callable[[Row[_T]], Any]:
         return lambda row: visited.value

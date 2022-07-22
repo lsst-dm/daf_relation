@@ -44,7 +44,7 @@ _L = TypeVar("_L")
 class ToSqlBooleans(
     column_expressions.PredicateVisitor[_T, Iterable[sqlalchemy.sql.ColumnElement]], Generic[_T, _L]
 ):
-    def __init__(self, engine: Engine[_L], columns_available: Mapping[_T, _L]):
+    def __init__(self, engine: Engine[_T, _L], columns_available: Mapping[_T, _L]):
         self.to_logical_column = ToLogicalColumn(engine, columns_available)
 
     to_logical_column: ToLogicalColumn[_T, _L]
