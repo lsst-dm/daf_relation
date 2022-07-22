@@ -42,6 +42,11 @@ class RelationVisitor(Generic[_T, _U]):
     """
 
     @abstractmethod
+    def visit_calculation(self, visited: operations.Calculation[_T]) -> _U:
+        """Hook for processing `~operations.Calculation` operations."""
+        raise NotImplementedError()
+
+    @abstractmethod
     def visit_distinct(self, visited: operations.Distinct[_T]) -> _U:
         """Hook for processing `~operations.Distinct` operations."""
         raise NotImplementedError()

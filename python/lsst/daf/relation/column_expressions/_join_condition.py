@@ -49,7 +49,9 @@ class JoinCondition(Generic[_T]):
         return self.lhs_columns & self.rhs_columns
 
     @staticmethod
-    def build(predicate: Predicate[_T] | None, all_lhs_columns: Set[_T], all_rhs_columns: Set[_T]) -> JoinCondition[_T]:
+    def build(
+        predicate: Predicate[_T] | None, all_lhs_columns: Set[_T], all_rhs_columns: Set[_T]
+    ) -> JoinCondition[_T]:
         raise NotImplementedError("TODO")
 
     def __post_init__(self) -> None:

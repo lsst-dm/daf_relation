@@ -31,6 +31,7 @@ from .._relation_visitor import RelationVisitor
 from ._row_iterable import RowCollection, RowIterable
 from ._to_bool_callable import ToBoolCallable
 from ._to_callable import ToCallable
+from .calculation import CalculationRowIterable
 from .chain import ChainRowIterable
 from .joins import make_join_row_iterable
 from .projection import ProjectionRowIterable
@@ -53,6 +54,10 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
 
     def __init__(self, engine: Engine):
         self.engine = engine
+
+    def visit_calculation(self, visited: operations.Calculation[_T]) -> RowIterable[_T]:
+        callable = visited.expression.visit(ToCallable(self.engine))
+        return CalculationRowIterable(visited.base.visit(self), visited.tag, callable)
 
     def visit_distinct(self, visited: operations.Distinct[_T]) -> RowIterable[_T]:
         # Docstring inherited.

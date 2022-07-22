@@ -77,6 +77,9 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     """Maximum number of rows returned by the query (`int` or `None`).
     """
 
+    def visit_calculation(self, visited: operations.Calculation[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        return self._use_select_parts(visited)
+
     def visit_distinct(self, visited: operations.Distinct[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         return visited.base.visit(dataclasses.replace(self, distinct=True))

@@ -22,6 +22,7 @@
 """Concrete `~lsst.daf.relation.Relation` derived types that represent
 relational algebra operations."""
 
+from ._calculation import *
 from ._distinct import *
 from ._join import *
 from ._materialization import *

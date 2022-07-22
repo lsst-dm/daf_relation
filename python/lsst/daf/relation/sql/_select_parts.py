@@ -156,6 +156,20 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     engine: Engine[_L]
     # TODO: docs
 
+    def visit_calculation(self, visited: operations.Calculation[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
+        base_parts = visited.base.visit(self)
+        if base_parts.columns_available is None:
+            columns_available = self.engine.extract_mapping(visited.base.columns, base_parts.from_clause)
+        else:
+            columns_available = dict(base_parts.columns_available)
+        columns_available[visited.tag] = self.engine.convert_expression(visited.expression, columns_available)
+        return SelectParts(
+            base_parts.from_clause,
+            base_parts.where,
+            columns_available,
+        )
+
     def visit_distinct(self, visited: operations.Distinct[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(

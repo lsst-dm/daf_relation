@@ -45,27 +45,6 @@ def is_str_mapping(mapping: Any) -> TypeGuard[Mapping[str, Any]]:
 
 
 class MappingReader(Generic[_T]):
-    """An abstract base class for deserializing `Relation` trees from nested
-    mappings of builtin types.
-
-    Notes
-    -----
-    This base class provides a complete implementation of the main entry point
-    for deserialization, `read_relation`.  That delegates to seven abstract
-    methods that must be implemented by derived classes:
-
-    - `read_columns`
-    - `read_engine`
-    - `read_leaf`
-    - `read_predicate`
-    - `read_join_condition`
-    - `read_order_by_term`
-
-    See Also
-    --------
-    DictWriter
-    """
-
     def read_relation(self, mapping: Any) -> Relation[_T]:
         """Read a relation that has been serialized as a mapping.
 
@@ -89,6 +68,12 @@ class MappingReader(Generic[_T]):
             Raised if the given mapping is not a correctly serialized relation.
         """
         match mapping:
+            case {"type": "calculation", "base": base, "tag": tag, "expression": expression}:
+                return operations.Calculation(
+                    self.read_relation(base),
+                    tag=self.read_column(tag),
+                    expression=self.read_expression(expression),
+                )
             case {"type": "distinct", "base": base, "unique_keys": unique_keys}:
                 return operations.Distinct(self.read_relation(base), self.read_unique_keys(unique_keys))
             case {
@@ -106,7 +91,7 @@ class MappingReader(Generic[_T]):
                 return Leaf(
                     name,
                     self.read_engine(engine),
-                    self.read_columns(columns),
+                    self.read_column_set(columns),
                     self.read_unique_keys(unique_keys),
                     dict(parameters),
                 )
@@ -123,7 +108,7 @@ class MappingReader(Generic[_T]):
             case {"type": "projection", "base": base, "columns": columns}:
                 return operations.Projection(
                     self.read_relation(base),
-                    columns=frozenset(self.read_columns(columns)),
+                    columns=frozenset(self.read_column_set(columns)),
                 )
             case {"type": "selection", "base": base, "predicate": predicate}:
                 return operations.Selection(
@@ -155,14 +140,30 @@ class MappingReader(Generic[_T]):
             }:
                 return operations.Union(first, second, unique_keys=self.read_unique_keys(unique_keys))
             case {"type": "zero", "engine": engine, "columns": columns}:
-                return Zero(self.read_engine(engine), self.read_columns(columns))
+                return Zero(self.read_engine(engine), self.read_column_set(columns))
             case _:
                 raise RelationSerializationError(
                     f"Expected mapping representing a relation, got {mapping!r}."
                 )
 
-    @abstractmethod
-    def read_columns(self, serialized: Any) -> Set[_T]:
+    def read_column(self, serialized: Any) -> _T:
+        """Read a single column tag.
+
+        Parameters
+        ----------
+        serialized
+            Serialized form of a column tag.  The default `DictWriter`
+            implementation writes this as a `str`, but custom reader/writers
+            pairs are free to use any type compatible with their serialization
+            format.
+
+        Returns
+        -------
+        column : `.ColumnTag`
+            Set of column tag objects.
+        """
+
+    def read_column_set(self, serialized: Any) -> Set[_T]:
         """Read a set of column tags.
 
         Parameters
@@ -178,7 +179,10 @@ class MappingReader(Generic[_T]):
         columns : `~collections.abc.Set` [ `.ColumnTag` ]
             Set of column tag objects.
         """
-        raise NotImplementedError()
+        return {
+            self.read_column(t)
+            for t in self._iter(serialized, "Expected an iterable of column tags, got {!r}")
+        }
 
     @abstractmethod
     def read_engine(self, serialized: Any) -> Engine:
@@ -221,7 +225,7 @@ class MappingReader(Generic[_T]):
         This method delegates to `read_columns` and should rarely need to be
         overridden itself.
         """
-        return {UniqueKey(self.read_columns(k)) for k in serialized}
+        return {UniqueKey(self.read_column_set(k)) for k in serialized}
 
     def read_expression(self, serialized: Any) -> column_expressions.Expression[_T]:
         """Read a column expression.
@@ -246,7 +250,7 @@ class MappingReader(Generic[_T]):
                     name,
                     tuple(
                         self.read_expression(arg)
-                        for arg in self._iter(args, "Expected a sequence of column expressions, got {}.")
+                        for arg in self._iter(args, "Expected a sequence of column expressions, got {!r}.")
                     ),
                 )
             case _:
@@ -277,7 +281,7 @@ class MappingReader(Generic[_T]):
                     name,
                     tuple(
                         self.read_expression(arg)
-                        for arg in self._iter(args, "Expected a sequence of column expressions, got {}.")
+                        for arg in self._iter(args, "Expected a sequence of column expressions, got {!r}.")
                     ),
                 )
             case {"type": "logical_not", "base": base}:
@@ -287,7 +291,7 @@ class MappingReader(Generic[_T]):
                     tuple(
                         self.read_predicate(operand)
                         for operand in self._iter(
-                            operands, "Expected a sequence of column predicates, got {}."
+                            operands, "Expected a sequence of column predicates, got {!r}."
                         )
                     ),
                 )
@@ -296,7 +300,7 @@ class MappingReader(Generic[_T]):
                     tuple(
                         self.read_predicate(operand)
                         for operand in self._iter(
-                            operands, "Expected a sequence of column predicates, got {}."
+                            operands, "Expected a sequence of column predicates, got {!r}."
                         )
                     ),
                 )
@@ -341,8 +345,8 @@ class MappingReader(Generic[_T]):
                     predicate = self.read_predicate(predicate)
                 return column_expressions.JoinCondition(
                     predicate,
-                    lhs_columns=self.read_columns(lhs_columns),
-                    rhs_columns=self.read_columns(rhs_columns),
+                    lhs_columns=self.read_column_set(lhs_columns),
+                    rhs_columns=self.read_column_set(rhs_columns),
                 )
             case _:
                 raise RelationSerializationError(
@@ -366,9 +370,7 @@ class MappingReader(Generic[_T]):
             Tuple of `OrderByTerm`objects.
         """
         result: list[column_expressions.OrderByTerm[_T]] = []
-        for mapping in self._iter(
-            raw, f"Expected an iterable of serialized OrderByTerm mappings, got {raw!r}."
-        ):
+        for mapping in self._iter(raw, "Expected an iterable of serialized OrderByTerm mappings, got {!r}."):
             match mapping:
                 case {"expression": expression, "ascending": bool(ascending)}:
                     result.append(column_expressions.OrderByTerm(self.read_expression(expression), ascending))
@@ -408,6 +410,15 @@ class DictWriter(
     --------
     MappingReader
     """
+
+    def visit_calculation(self, visited: operations.Calculation[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {
+            "type": "calculation",
+            "base": visited.base.visit(self),
+            "tag": self.write_column(visited.tag),
+            "expression": visited.expression.visit(self),
+        }
 
     def visit_distinct(self, visited: operations.Distinct[_T]) -> dict[str, Any]:
         # Docstring inherited.

@@ -223,6 +223,11 @@ class Engine(BaseEngine, Generic[_L]):
         if not columns:
             columns.append(sqlalchemy.sql.literal(True).label("IGNORED"))
 
+    def convert_expression(
+        self, expression: column_expressions.Expression[_T], columns_available: Mapping[_T, _L]
+    ) -> _L:
+        return expression.visit(ToLogicalColumn(self, columns_available))
+
     def convert_expression_literal(self, value: Any) -> _L:
         return sqlalchemy.sql.literal(value)
 
@@ -235,8 +240,9 @@ class Engine(BaseEngine, Generic[_L]):
         self, term: column_expressions.OrderByTerm[_T], columns_available: Mapping[_T, _L]
     ) -> sqlalchemy.sql.ColumnElement:
         # TODO docs
-        visitor = ToLogicalColumn(self, columns_available)
-        result = cast(sqlalchemy.sql.ColumnElement, term.expression.visit(visitor))
+        result = cast(
+            sqlalchemy.sql.ColumnElement, self.convert_expression(term.expression, columns_available)
+        )
         if term.ascending:
             return result
         else:

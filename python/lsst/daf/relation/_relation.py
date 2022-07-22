@@ -133,6 +133,11 @@ class Relation(Generic[_T]):
     def is_identity(self) -> bool:
         return False
 
+    def calculation(self, tag: _T, expression: column_expressions.Expression[_T]) -> Relation[_T]:
+        from . import operations
+
+        return operations.Calculation(self, tag, expression)
+
     def distinct(self, unique_keys: Set[UniqueKey[_T]] | None = None) -> Relation[_T]:
         """Construct a relation with the same rows and columns as ``self``, but
         with rows guaranteed to be unique.
