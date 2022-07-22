@@ -45,6 +45,11 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
     def __init__(self, transfer_functions: Mapping[tuple[Engine, Engine], TransferFunction]):
         self.transfer_functions = transfer_functions
 
+    def visit_calculation(self, visited: operations.Calculation[_T]) -> Relation[_T]:
+        if (base := visited.base.visit(self)) is not visited.base:
+            return operations.Calculation(base, visited.tag, visited.expression)
+        return visited
+
     def visit_distinct(self, visited: operations.Distinct[_T]) -> Relation[_T]:
         if (base := visited.base.visit(self)) is not visited.base:
             return operations.Distinct(base, visited.unique_keys)
@@ -54,6 +59,11 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
         return visited
 
     def visit_leaf(self, visited: Leaf[_T]) -> Relation[_T]:
+        return visited
+
+    def visit_materialization(self, visited: operations.Materialization[_T]) -> Relation[_T]:
+        if (base := visited.base.visit(self)) is not visited.base:
+            return operations.Materialization(base, name=visited.name)
         return visited
 
     def visit_join(self, visited: operations.Join[_T]) -> Relation[_T]:
