@@ -92,6 +92,6 @@ class BaseFunction(BaseExpression[_T], Generic[_T, _A]):
         return result
 
     def is_supported_by(self, engine: Engine) -> bool:
-        return engine.get_function(self.name) is not None and all(
+        return engine.get_column_function(self.name) is not None and all(
             arg.is_supported_by(engine) for arg in self.args
         )

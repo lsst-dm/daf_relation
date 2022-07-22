@@ -34,11 +34,10 @@ from collections.abc import Collection, Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Generic
 
 from .._columns import _T, UniqueKey
-from .._join_condition import JoinCondition
-from .._order_by_term import OrderByTerm
 from .._relation import Relation
 
 if TYPE_CHECKING:
+    from .. import column_expressions
     from .typing import GeneralIndex, IndexKey, Row, UniqueIndex
 
 
@@ -116,7 +115,7 @@ class RowIterable(Generic[_T]):
         rhs_relation: Relation[_T],
         lhs: RowIterable[_T],
         lhs_relation: Relation[_T],
-        condition: JoinCondition[_T] | None,
+        condition: column_expressions.JoinCondition[_T],
     ) -> tuple[RowIterable[_T] | None, bool]:
         """Hook for performing custom joins on this iterable.
 
@@ -133,23 +132,24 @@ class RowIterable(Generic[_T]):
             The row iterable this object is being joined to.
         lhs_relation : `.Relation`
             The relation associated with ``lhs``.
-        condition : `.JoinCondition`
-            Custom join condition for which ``required_columns[0]`` is a
-            subset of ``lhs_relation.columns`` and `required_columns[1]`` is a
-            subset of ``rhs_relation.columns``.
+        condition : `.column_expression.JoinCondition`
+            Explicit condition that must be satisfied by returned join rows,
+            including automatic common columns equality constraints and an
+            optional custom predicate.
 
         Returns
         -------
         join_rows : `RowIterable` or `None`
             A `RowIterable` that implements this join, or `None` if there is no
             special handling for this join.
-        was_condition_applied : `bool`
-            Whether the given join condition was used in the result.
+        was_predicate_applied : `bool`
+            Whether the given join condition's predicate was used in the
+            result.
         """
         return None, False
 
     def try_slice(
-        self, order_by: Sequence[OrderByTerm[_T]], offset: int, limit: int | None
+        self, order_by: Sequence[column_expressions.OrderByTerm[_T]], offset: int, limit: int | None
     ) -> RowIterable[_T] | None:
         """Hook for performing custom selections and sorting on this iterable.
 

@@ -33,9 +33,8 @@ from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
+    from .. import column_expressions
     from .._engine import Engine
-    from .._order_by_term import OrderByTerm
-    from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -66,14 +65,20 @@ class Slice(Relation[_T]):
     class.
     """
 
-    def __init__(self, base: Relation, order_by: tuple[OrderByTerm[_T], ...], offset: int, limit: int | None):
+    def __init__(
+        self,
+        base: Relation,
+        order_by: tuple[column_expressions.OrderByTerm[_T], ...],
+        offset: int,
+        limit: int | None,
+    ):
         for o in order_by:
-            if base.engine is not None and not o.supports_engine(base.engine):
+            if base.engine is not None and not o.expression.is_supported_by(base.engine):
                 raise EngineError(f"Order-by term {o} does not support engine {base.engine}.")
-            if not o.columns_required <= base.columns:
+            if not o.expression.columns_required <= base.columns:
                 raise ColumnError(
                     f"Order-by term {o} for base relation {self.base} needs "
-                    f"columns {o.columns_required - self.base.columns}."
+                    f"columns {o.expression.columns_required - self.base.columns}."
                 )
         self.base = base
         self.order_by = order_by
@@ -84,7 +89,7 @@ class Slice(Relation[_T]):
     """Relation this operation acts upon (`.Relation`).
     """
 
-    order_by: tuple[OrderByTerm[_T], ...]
+    order_by: tuple[column_expressions.OrderByTerm[_T], ...]
     """Criteria for sorting rows (`tuple` [ `.OrderByTerm`, ... ])."""
 
     offset: int
@@ -115,7 +120,7 @@ class Slice(Relation[_T]):
         # Docstring inherited.
         return self.base.unique_keys
 
-    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+    def _try_selection(self, predicate: column_expressions.Predicate[_T]) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_selection(predicate)) is not None:
             return result

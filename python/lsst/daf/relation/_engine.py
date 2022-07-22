@@ -55,5 +55,5 @@ class Engine(ABC):
         ...
 
     @abstractmethod
-    def get_function(self, name: str) -> Any | None:
+    def get_column_function(self, name: str) -> Any | None:
         ...

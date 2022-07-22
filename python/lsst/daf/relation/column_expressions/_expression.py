@@ -27,16 +27,16 @@ __all__ = (
     "Literal",
     "Reference",
     "Function",
+    "PredicateFunction",
 )
 
-from abc import abstractmethod
 import dataclasses
+from abc import abstractmethod
 from typing import Any, Generic, TypeVar
 
 from .._columns import _T
-
-from .base import BaseExpression, BaseLiteral, BaseReference, BaseFunction
 from ._predicate import Predicate, PredicateVisitor
+from .base import BaseExpression, BaseFunction, BaseLiteral, BaseReference
 
 _U = TypeVar("_U")
 
@@ -92,7 +92,7 @@ class Reference(BaseReference[_T], Expression[_T]):
 
 
 @dataclasses.dataclass
-class Function(BaseFunction[_T, Expression[_T]]):
+class Function(BaseFunction[_T, Expression[_T]], Expression[_T]):
     def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
         return visitor.visit_function(self)
 

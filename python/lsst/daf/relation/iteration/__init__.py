@@ -21,5 +21,5 @@
 
 from . import typing
 from ._engine import *
+from ._iteration_visitor import *
 from ._row_iterable import *
-from ._visitor import *

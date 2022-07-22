@@ -34,7 +34,7 @@ __all__ = (
 import dataclasses
 from abc import abstractmethod
 from collections.abc import Set
-from typing import Generic, TypeVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from lsst.utils.classes import cached_getter
 

@@ -34,14 +34,12 @@ from typing import TYPE_CHECKING, Generic, TypeVar, final
 
 from lsst.utils.classes import cached_getter, immutable
 
+from . import column_expressions
 from ._columns import _T, UniqueKey
 from ._exceptions import ColumnError, EngineError
 
 if TYPE_CHECKING:
     from ._engine import Engine
-    from ._join_condition import JoinCondition
-    from ._order_by_term import OrderByTerm
-    from ._predicate import Predicate
     from ._relation_visitor import _U, RelationVisitor
 
 
@@ -179,13 +177,17 @@ class Relation(Generic[_T]):
     def join(
         self,
         rhs: Relation[_T],
-        condition: JoinCondition[_T] | None = None,
+        predicate: column_expressions.Predicate[_T] | None = None,
     ) -> Relation[_T]:
         """Construct a relation that performs a natural join operation.
 
         Parameters
         ----------
-        # TODO
+        rhs : `Relation`
+            Right-hand side operand in the join.
+        predicate : `column_expressions.Predicate`, optional
+            Explicit condition that must be satisfied by returned join rows,
+            in addition to automatic equality constraints on common columns.
 
         Returns
         -------
@@ -195,12 +197,11 @@ class Relation(Generic[_T]):
         See Also
         --------
         operations.Join
-        JoinCondition
+        column_expressions.Predicate
         """
-        if condition is not None:
-            if not condition.supports_engine(rhs.engine):
-                raise EngineError(f"Join condition {condition} does not support engine {rhs.engine}.")
-            condition = condition.flipped_if_needed(self.columns, rhs.columns)
+        if predicate is not None and not predicate.is_supported_by(rhs.engine):
+            raise EngineError(f"Join predicate {predicate} does not support engine {rhs.engine}.")
+        condition = column_expressions.JoinCondition.build(predicate, self.columns, rhs.columns)
         if (result := self._try_join(rhs, condition)) is not None:
             return result
         raise EngineError(
@@ -208,7 +209,9 @@ class Relation(Generic[_T]):
             f"and insertion before transfer to {self.engine} was not possible."
         )
 
-    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+    def _try_join(
+        self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]
+    ) -> Relation[_T] | None:
         """Attempt to join a new relation to this one, recursing into base
         relations when necessary and possible.
 
@@ -216,10 +219,10 @@ class Relation(Generic[_T]):
         ----------
         rhs : `Relation`
             Right-hand side operand in the join.
-        condition : `JoinCondition`, optional
-            Explicit condition that must be satisfied by returned join rows, in
-            addition to the common-column equality constraints that are always
-            included.
+        condition : `column_expressions.JoinCondition`
+            Explicit condition that must be satisfied by returned join rows,
+            including automatic common columns equality constraints and an
+            optional custom predicate.
 
         Returns
         -------
@@ -281,14 +284,14 @@ class Relation(Generic[_T]):
 
     def selection(
         self,
-        predicate: Predicate[_T],
+        predicate: column_expressions.Predicate[_T],
     ) -> Relation[_T]:
         """Construct a relation that filters out rows by applying predicates.
 
         Parameters
         ----------
-        predicate : `Predicate`
-            Object that represents a conceptual functios (not necessarily
+        predicate : `column_expressions.Predicate`
+            Object that represents a conceptual functions (not necessarily
             a Python callable) that is invoked to determine whether each row
             should be included in the result relation.
 
@@ -319,22 +322,25 @@ class Relation(Generic[_T]):
             return result
         raise EngineError(f"Predicate {predicate} does not support engine {self.engine}.")
 
-    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
-        if not predicate.supports_engine(self.engine):
+    def _try_selection(self, predicate: column_expressions.Predicate[_T]) -> Relation[_T] | None:
+        if not predicate.is_supported_by(self.engine):
             return None
         from .operations import Selection
 
         return Selection(self, predicate)
 
     def slice(
-        self, order_by: Iterable[OrderByTerm[_T]], offset: int = 0, limit: int | None = None
+        self,
+        order_by: Iterable[column_expressions.OrderByTerm[_T]],
+        offset: int = 0,
+        limit: int | None = None,
     ) -> Relation[_T]:
         """Construct a relation that sorts rows and/or filters them based on
         their position in the relation.
 
         Parameters
         ----------
-        order_by : `Iterable` [ `OrderByTerm` ]
+        order_by : `Iterable` [ `column_expressions.OrderByTerm` ]
             Iterable of objects that specify a sort order.
         offset : `int`, optional
             Starting index for returned rows, with ``0`` as the first row.

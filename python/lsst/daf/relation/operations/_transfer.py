@@ -33,8 +33,7 @@ from .._engine import Engine
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._join_condition import JoinCondition
-    from .._predicate import Predicate
+    from .. import column_expressions
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -89,14 +88,16 @@ class Transfer(Relation[_T]):
         # Docstring inherited.
         return self.base.unique_keys
 
-    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+    def _try_join(
+        self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]
+    ) -> Relation[_T] | None:
         if (result := super()._try_join(rhs, condition)) is not None:
             return result
         if (new_base := self.base._try_join(rhs, condition)) is not None:
             return Transfer(new_base, self._destination)
         return None
 
-    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+    def _try_selection(self, predicate: column_expressions.Predicate[_T]) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_selection(predicate)) is not None:
             return result

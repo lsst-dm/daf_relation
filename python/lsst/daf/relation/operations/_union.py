@@ -34,8 +34,7 @@ from .._exceptions import ColumnError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._join_condition import JoinCondition
-    from .._predicate import Predicate
+    from .. import column_expressions
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -98,7 +97,9 @@ class Union(Relation[_T]):
         # Docstring inherited.
         return self._unique_keys
 
-    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+    def _try_join(
+        self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]
+    ) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_join(rhs, condition)) is not None:
             return result
@@ -108,7 +109,7 @@ class Union(Relation[_T]):
             return None
         return Union(new_first, new_second, compute_join_unique_keys(self.unique_keys, rhs.unique_keys))
 
-    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+    def _try_selection(self, predicate: column_expressions.Predicate[_T]) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_selection(predicate)) is not None:
             return result

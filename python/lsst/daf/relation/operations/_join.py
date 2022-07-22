@@ -30,12 +30,10 @@ from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey, compute_join_unique_keys
 from .._engine import Engine
-from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
-    from .._join_condition import JoinCondition
-    from .._predicate import Predicate
+    from .. import column_expressions
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -54,27 +52,18 @@ class Join(Relation[_T]):
         Left-hand side operand.
     rhs : `.Relation`
         Right-hand side operand.
-    condition : `.JoinCondition`, optional
-        A custom (generally non-equality) condition for the join, to be applied
-        in addition to common-column equality conditions.
+    condition : `.column_expressions.JoinCondition`
+        Explicit condition that must be satisfied by returned join rows,
+        including automatic common columns equality constraints and an optional
+        custom predicate.
     """
 
     def __init__(
         self,
         lhs: Relation[_T],
         rhs: Relation[_T],
-        condition: JoinCondition[_T] | None = None,
+        condition: column_expressions.JoinCondition[_T],
     ):
-        if lhs.engine != rhs.engine:
-            raise EngineError(f"Inconsistent engines for join: {lhs.engine} != {rhs.engine}.")
-        if condition is not None:
-            if not condition.matches(lhs.columns, rhs.columns):
-                raise ColumnError(
-                    f"Join condition {condition} does not match relation columns "
-                    f"{set(lhs.columns)}, {set(rhs.columns)}"
-                )
-            if not condition.supports_engine(rhs.engine):
-                raise EngineError(f"Join engine {rhs.engine} is not supported by condition {condition}.")
         self.lhs = lhs
         self.rhs = rhs
         self.condition = condition
@@ -87,10 +76,10 @@ class Join(Relation[_T]):
     """Right-hand side operand (`.Relation`).
     """
 
-    condition: JoinCondition[_T] | None
-    """A custom (generally non-equality) condition for the join, to be applied
-    in addition to common-column equality conditions (`.JoinCondition` or
-    `None`).
+    condition: column_expressions.JoinCondition[_T]
+    """Explicit condition that must be satisfied by returned join rows,
+    including automatic common columns equality constraints and an optional
+    custom predicate (`.column_expressions.JoinCondition`).
     """
 
     def __str__(self) -> str:
@@ -113,18 +102,15 @@ class Join(Relation[_T]):
         # Docstring inherited.
         return compute_join_unique_keys(self.lhs.unique_keys, self.rhs.unique_keys)
 
-    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+    def _try_join(
+        self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]
+    ) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_join(rhs, condition)) is not None:
             return result
 
         def try_branch_join(branch: Relation[_T]) -> Relation[_T] | None:
-            if not branch.columns >= self.columns & rhs.columns:
-                # Inserting new join at this existing join branch changes the
-                # automatic part of the join condition.
-                return None
-            if condition is not None and not condition.columns_required[0] <= branch.columns:
-                # Explicit join condition doesn't work on this branch, either.
+            if not condition.lhs_columns <= branch.columns:
                 return None
             return branch._try_join(rhs, condition)
 
@@ -134,7 +120,7 @@ class Join(Relation[_T]):
             return Join(self.lhs, new_rhs, self.condition)
         return None
 
-    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+    def _try_selection(self, predicate: column_expressions.Predicate[_T]) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_selection(predicate)) is not None:
             return result

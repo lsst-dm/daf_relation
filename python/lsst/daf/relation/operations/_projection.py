@@ -33,9 +33,8 @@ from .._exceptions import ColumnError
 from .._relation import Relation
 
 if TYPE_CHECKING:
+    from .. import column_expressions
     from .._engine import Engine
-    from .._join_condition import JoinCondition
-    from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -84,17 +83,12 @@ class Projection(Relation[_T]):
         # Docstring inherited.
         return {keys for keys in self.base.unique_keys if keys.issubset(self._columns)}
 
-    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+    def _try_join(
+        self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]
+    ) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_join(rhs, condition)) is not None:
             return result
-        if self.columns & rhs.columns != self.base.columns & rhs.columns:
-            # Inserting new join before the projection changes the the
-            # automatic part of the join condition.
-            # Note the explicit join condition (if there is one) can't be
-            # affected because a projection's columns are always a subset of
-            # it's base's.
-            return None
         if (new_base := self.base._try_join(rhs, condition)) is not None:
             return Projection(new_base, self.columns)
         return None
@@ -104,7 +98,7 @@ class Projection(Relation[_T]):
         # Override exists to avoid back-to-back Projections.
         return Projection(self.base, frozenset(columns))
 
-    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+    def _try_selection(self, predicate: column_expressions.Predicate[_T]) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_selection(predicate)) is not None:
             return result

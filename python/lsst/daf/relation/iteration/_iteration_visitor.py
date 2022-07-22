@@ -23,13 +23,14 @@ from __future__ import annotations
 
 __all__ = ("IterationVisitor",)
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from .._columns import _T
 from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
-from ._engine import OrderByTermInterface, PredicateInterface
 from ._row_iterable import RowCollection, RowIterable
+from ._to_bool_callable import ToBoolCallable
+from ._to_callable import ToCallable
 from .chain import ChainRowIterable
 from .joins import make_join_row_iterable
 from .projection import ProjectionRowIterable
@@ -67,7 +68,9 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         # Docstring inherited.
         lhs_rows = visited.lhs.visit(self)
         rhs_rows = visited.rhs.visit(self)
-        return make_join_row_iterable(lhs_rows, rhs_rows, visited.lhs, visited.rhs, visited.condition)
+        return make_join_row_iterable(
+            self.engine, lhs_rows, rhs_rows, visited.lhs, visited.rhs, visited.condition
+        )
 
     def visit_materialization(self, visited: operations.Materialization[_T]) -> RowIterable[_T]:
         # Docstring inherited.
@@ -89,7 +92,7 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
     def visit_selection(self, visited: operations.Selection[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         rows = visited.base.visit(self)
-        return SelectionRowIterable(rows, cast(PredicateInterface, visited.predicate))
+        return SelectionRowIterable(rows, visited.predicate.visit(ToBoolCallable(self.engine)))
 
     def visit_slice(self, visited: operations.Slice[_T]) -> RowIterable[_T]:
         # Docstring inherited.
@@ -98,10 +101,9 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
             return result
         rows_list = list(base_rows)
         for order_by_term in visited.order_by[::-1]:
-            order_by_term_interface = cast(OrderByTermInterface, order_by_term)
             rows_list.sort(
-                key=order_by_term_interface.get_iteration_row_sort_key,
-                reverse=order_by_term_interface.get_iteration_row_sort_reverse(),
+                key=order_by_term.expression.visit(ToCallable(self.engine)),
+                reverse=not order_by_term.ascending,
             )
         if visited.limit is not None:
             stop = visited.offset + visited.limit

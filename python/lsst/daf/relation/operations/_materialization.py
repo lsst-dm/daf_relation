@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 @final
 @immutable
 class Materialization(Relation[_T]):
-    def __init__(self, base: Relation[_T], name: str | None):
+    def __init__(self, base: Relation[_T], name: str):
         self.base = base
         self.name = name
 
@@ -47,9 +47,9 @@ class Materialization(Relation[_T]):
     """Relation this operation acts upon, in the source engine (`.Relation`).
     """
 
-    name: str | None
-    """Name for the permanent or semi-permantent storage of this relation's
-    rows in the engine that evaluates it (`str` or `None`).
+    name: str
+    """Name for the permanent or semi-permanent storage of this relation's
+    rows in the engine that evaluates it (`str`).
     """
 
     def __str__(self) -> str:

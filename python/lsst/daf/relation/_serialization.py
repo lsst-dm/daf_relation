@@ -27,13 +27,10 @@ from abc import abstractmethod
 from collections.abc import Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any, Generic, TypeGuard
 
-from . import operations
+from . import column_expressions, operations
 from ._columns import _T, UniqueKey
 from ._exceptions import RelationSerializationError
-from ._join_condition import JoinCondition
 from ._leaf import Leaf
-from ._order_by_term import OrderByTerm
-from ._predicate import Predicate
 from ._relation import Identity, Relation, Zero
 from ._relation_visitor import RelationVisitor
 
@@ -96,40 +93,42 @@ class MappingReader(Generic[_T]):
                 return operations.Distinct(self.read_relation(base), self.read_unique_keys(unique_keys))
             case {
                 "type": "leaf",
-                **kwargs,
+                "name": str(name),
+                "engine": engine,
+                "columns": columns,
+                "unique_keys": unique_keys,
+                "parameters": parameters,
             }:
-                if not is_str_mapping(kwargs):
+                if not is_str_mapping(parameters):
                     raise RelationSerializationError(
-                        f"Expected only string keys for serialized leaf relation, got {kwargs}."
+                        f"Expected only string keys for serialized leaf relation, got {parameters}."
                     )
-                return self.read_leaf(**kwargs)
+                return Leaf(
+                    name,
+                    self.read_engine(engine),
+                    self.read_columns(columns),
+                    self.read_unique_keys(unique_keys),
+                    dict(parameters),
+                )
             case {"type": "identity", "engine": engine}:
                 return Identity(self.read_engine(engine))
+            case {"type": "materialization", "base": base, "name": str(name)}:
+                return operations.Materialization(self.read_relation(base), name=name)
             case {"type": "join", "lhs": lhs, "rhs": rhs, "condition": condition}:
-                if not is_str_mapping(condition):
-                    raise RelationSerializationError(
-                        f"Expected mapping with string keys for serialized condition, got {condition}."
-                    )
                 return operations.Join(
                     lhs=self.read_relation(lhs),
                     rhs=self.read_relation(rhs),
-                    condition=self.read_join_condition(**condition) if condition is not None else None,
+                    condition=self._read_raw_join_condition(condition),
                 )
-            case {"type": "zero", "engine": engine, "columns": columns}:
-                return Zero(self.read_engine(engine), self.read_columns(columns))
             case {"type": "projection", "base": base, "columns": columns}:
                 return operations.Projection(
                     self.read_relation(base),
                     columns=frozenset(self.read_columns(columns)),
                 )
             case {"type": "selection", "base": base, "predicate": predicate}:
-                if not is_str_mapping(predicate):
-                    raise RelationSerializationError(
-                        f"Expected mapping with string keys for serialized predicate, got {predicate}."
-                    )
                 return operations.Selection(
                     self.read_relation(base),
-                    self.read_predicate(**predicate),
+                    self.read_predicate(predicate),
                 )
             case {
                 "type": "slice",
@@ -155,6 +154,8 @@ class MappingReader(Generic[_T]):
                 "unique_keys": unique_keys,
             }:
                 return operations.Union(first, second, unique_keys=self.read_unique_keys(unique_keys))
+            case {"type": "zero", "engine": engine, "columns": columns}:
+                return Zero(self.read_engine(engine), self.read_columns(columns))
             case _:
                 raise RelationSerializationError(
                     f"Expected mapping representing a relation, got {mapping!r}."
@@ -222,69 +223,87 @@ class MappingReader(Generic[_T]):
         """
         return {UniqueKey(self.read_columns(k)) for k in serialized}
 
-    @abstractmethod
-    def read_leaf(self, **kwargs: Any) -> Leaf[_T]:
-        """Read a leaf relation.
+    def read_expression(self, serialized: Any) -> column_expressions.Expression[_T]:
+        """Read a column expression.
 
         Parameters
         ----------
-        **kwargs
-            Keyword arguments derived from deserialized dictionary.
+        serialized
+            Serialized form of a column expression.
 
         Returns
         -------
-        leaf : `Leaf`
-            Leaf relation.
+        expression : `column_expressions.Expression`
+            Deserialized column expression.
         """
-        raise NotImplementedError()
+        match serialized:
+            case {"type": "literal", "value": value}:
+                return column_expressions.Literal(value)
+            case {"type": "reference", "tag": tag}:
+                return column_expressions.Reference(tag)
+            case {"type": "function", "name": str(name), "args": args}:
+                return column_expressions.Function(
+                    name,
+                    tuple(
+                        self.read_expression(arg)
+                        for arg in self._iter(args, "Expected a sequence of column expressions, got {}.")
+                    ),
+                )
+            case _:
+                raise RelationSerializationError(
+                    f"Expected mapping representing a column expression, got {serialized!r}."
+                )
 
-    @abstractmethod
-    def read_join_condition(self, **kwargs: Any) -> JoinCondition[_T]:
-        """Read a join condition.
-
-        Parameters
-        ----------
-        **kwargs
-            Keyword arguments derived from deserialized dictionary.
-
-        Returns
-        -------
-        condition : `JoinCondition`
-            Join condition.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def read_predicate(self, **kwargs: Any) -> Predicate[_T]:
+    def read_predicate(self, serialized: Any) -> column_expressions.Predicate[_T]:
         """Read a predicate.
 
         Parameters
         ----------
-        **kwargs
-            Keyword arguments derived from deserialized dictionary.
+        serialized
+            Serialized form of a predicate.
 
         Returns
         -------
-        predicate : `Predicate`
-            Predicate.
+        expression : `column_expressions.Predicate`
+            Deserialized predicate.
         """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def read_order_by_term(self, **kwargs: Any) -> OrderByTerm[_T]:
-        """Read an order-by term.
-
-        Parameters
-        ----------
-        **kwargs
-            Keyword arguments derived from deserialized dictionary.
-
-        Returns
-        -------
-        order_by_term : `OrderByTerm`
-            Order-by term.
-        """
-        raise NotImplementedError()
+        match serialized:
+            case {"type": "predicate_literal", "value": bool(value)}:
+                return column_expressions.PredicateLiteral(value)
+            case {"type": "predicate_reference", "tag": tag}:
+                return column_expressions.PredicateReference(tag)
+            case {"type": "predicate_function", "name": str(name), "args": args}:
+                return column_expressions.PredicateFunction(
+                    name,
+                    tuple(
+                        self.read_expression(arg)
+                        for arg in self._iter(args, "Expected a sequence of column expressions, got {}.")
+                    ),
+                )
+            case {"type": "logical_not", "base": base}:
+                return column_expressions.LogicalNot(self.read_predicate(base))
+            case {"type": "logical_and", "operands": operands}:
+                return column_expressions.LogicalAnd(
+                    tuple(
+                        self.read_predicate(operand)
+                        for operand in self._iter(
+                            operands, "Expected a sequence of column predicates, got {}."
+                        )
+                    ),
+                )
+            case {"type": "logical_or", "operands": operands}:
+                return column_expressions.LogicalOr(
+                    tuple(
+                        self.read_predicate(operand)
+                        for operand in self._iter(
+                            operands, "Expected a sequence of column predicates, got {}."
+                        )
+                    ),
+                )
+            case _:
+                raise RelationSerializationError(
+                    f"Expected mapping representing a predicate, got {serialized!r}."
+                )
 
     def _iter(self, raw: Any, message: str) -> Iterator[Any]:
         """Attempt to iterate over the given non-`str` object, handling any
@@ -309,13 +328,28 @@ class MappingReader(Generic[_T]):
             Raised if ``raw`` is a ``str`` instance or if it is not iterable.
         """
         if isinstance(raw, str):
-            raise RelationSerializationError(message)
+            raise RelationSerializationError(message.format(raw))
         try:
             return iter(raw)
         except TypeError:
-            raise RelationSerializationError(message) from None
+            raise RelationSerializationError(message.format(raw)) from None
 
-    def _read_raw_order_by(self, raw: Any) -> tuple[OrderByTerm[_T], ...]:
+    def _read_raw_join_condition(self, raw: Any) -> column_expressions.JoinCondition[_T]:
+        match raw:
+            case {"predicate": predicate, "lhs_columns": lhs_columns, "rhs_columns": rhs_columns}:
+                if predicate is not None:
+                    predicate = self.read_predicate(predicate)
+                return column_expressions.JoinCondition(
+                    predicate,
+                    lhs_columns=self.read_columns(lhs_columns),
+                    rhs_columns=self.read_columns(rhs_columns),
+                )
+            case _:
+                raise RelationSerializationError(
+                    f"Expecting mapping representing a JoinCondition, got {raw!r}."
+                )
+
+    def _read_raw_order_by(self, raw: Any) -> tuple[column_expressions.OrderByTerm[_T], ...]:
         """Read a set of `OrderByTerm` instances.
 
         This method delegates to `read_order_by_term` and should not be
@@ -331,19 +365,25 @@ class MappingReader(Generic[_T]):
         order_by : `tuple` [ `OrderByTerm`, ... ]
             Tuple of `OrderByTerm`objects.
         """
-        result: list[OrderByTerm[_T]] = []
+        result: list[column_expressions.OrderByTerm[_T]] = []
         for mapping in self._iter(
             raw, f"Expected an iterable of serialized OrderByTerm mappings, got {raw!r}."
         ):
-            if not is_str_mapping(mapping):
-                raise RelationSerializationError(
-                    f"Expecting mapping string keys representing an OrderByTerm, got {mapping!r}."
-                )
-            result.append(self.read_order_by_term(**mapping))
+            match mapping:
+                case {"expression": expression, "ascending": bool(ascending)}:
+                    result.append(column_expressions.OrderByTerm(self.read_expression(expression), ascending))
+                case _:
+                    raise RelationSerializationError(
+                        f"Expecting mapping representing an OrderByTerm, got {mapping!r}."
+                    )
         return tuple(result)
 
 
-class DictWriter(RelationVisitor[_T, dict[str, Any]]):
+class DictWriter(
+    RelationVisitor[_T, dict[str, Any]],
+    column_expressions.ExpressionVisitor[_T, dict[str, Any]],
+    column_expressions.PredicateVisitor[_T, dict[str, Any]],
+):
     """A visitor class that transforms a relation tree into a nested dictionary
     suitable for serialization via JSON, YAML, or similar formats.
 
@@ -396,6 +436,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         return {
             "type": "materialization",
             "base": visited.base.visit(self),
+            "name": visited.name,
         }
 
     def visit_join(self, visited: operations.Join[_T]) -> dict[str, Any]:
@@ -404,7 +445,13 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
             "type": "join",
             "lhs": visited.lhs.visit(self),
             "rhs": visited.rhs.visit(self),
-            "condition": visited.condition.serialize(self) if visited.condition is not None else None,
+            "condition": {
+                "predicate": (
+                    None if visited.condition.predicate is None else visited.condition.predicate.visit(self)
+                ),
+                "lhs_columns": self.write_column_set(visited.condition.lhs_columns),
+                "rhs_columns": self.write_column_set(visited.condition.rhs_columns),
+            },
         }
 
     def visit_projection(self, visited: operations.Projection[_T]) -> dict[str, Any]:
@@ -420,7 +467,7 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         return {
             "type": "selection",
             "base": visited.base.visit(self),
-            "predicate": visited.predicate.serialize(self),
+            "predicate": visited.predicate.visit(self),
         }
 
     def visit_slice(self, visited: operations.Slice[_T]) -> dict[str, Any]:
@@ -428,7 +475,9 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
         return {
             "type": "slice",
             "base": visited.base.visit(self),
-            "order_by": [o.serialize(self) for o in visited.order_by],
+            "order_by": [
+                {"expression": o.expression.visit(self), "ascending": o.ascending} for o in visited.order_by
+            ],
             "offset": visited.offset,
             "limit": visited.limit,
         }
@@ -453,6 +502,42 @@ class DictWriter(RelationVisitor[_T, dict[str, Any]]):
     def visit_zero(self, visited: Zero[_T]) -> dict[str, Any]:
         # Docstring inherited.
         return {"type": "null", "columns": self.write_column_set(visited.columns)}
+
+    def visit_literal(self, visited: column_expressions.Literal[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "literal", "value": visited.value}
+
+    def visit_reference(self, visited: column_expressions.Reference[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "reference", "tag": self.write_column(visited.tag)}
+
+    def visit_function(self, visited: column_expressions.Function[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "function", "name": visited.name, "args": [arg.visit(self) for arg in visited.args]}
+
+    def visit_predicate_literal(self, visited: column_expressions.PredicateLiteral[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "predicate_literal", "value": visited.value}
+
+    def visit_predicate_reference(self, visited: column_expressions.PredicateReference[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "predicate_reference", "tag": visited.tag}
+
+    def visit_predicate_function(self, visited: column_expressions.PredicateFunction[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "predicate_function", "name": str, "args": [arg.visit(self) for arg in visited.args]}
+
+    def visit_logical_not(self, visited: column_expressions.LogicalNot[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "logical_not", "base": visited.base.visit(self)}
+
+    def visit_logical_and(self, visited: column_expressions.LogicalAnd[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "logical_and", "operands": [operand.visit(self) for operand in visited.operands]}
+
+    def visit_logical_or(self, visited: column_expressions.LogicalOr[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "logical_or", "operands": [operand.visit(self) for operand in visited.operands]}
 
     def write_column(self, column: _T) -> Any:
         """Convert a single column tag to a serializable type.

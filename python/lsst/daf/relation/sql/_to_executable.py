@@ -25,7 +25,7 @@ __all__ = ("ToExecutable",)
 
 import dataclasses
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Generic, cast
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 import sqlalchemy
 
@@ -33,17 +33,19 @@ from .. import operations
 from .._columns import _T
 from .._exceptions import EngineError
 from .._relation_visitor import RelationVisitor
-from ._engine import _L, Engine
-from ._interfaces import OrderByTermInterface
 from ._select_parts import ToSelectParts
 
 if TYPE_CHECKING:
+    from .. import column_expressions
     from .._leaf import Leaf
-    from .._order_by_term import OrderByTerm
     from .._relation import Identity, Relation, Zero
+    from ._engine import Engine
 
 
-@dataclasses.dataclass(eq=False, slots=True)
+_L = TypeVar("_L")
+
+
+@dataclasses.dataclass(eq=False)
 class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Generic[_T, _L]):
     """A `.RelationVisitor` implemention that converts a `.Relation` tree into
     a SQLAlchemy (possibly-compound) SELECT query that can be directly
@@ -62,9 +64,9 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     unique, via SELECT DISTINCT or UNION (`bool`).
     """
 
-    order_by: Sequence[OrderByTerm[_T]] = ()
+    order_by: Sequence[column_expressions.OrderByTerm[_T]] = ()
     """Terms to sort the rows of the final SQL executable
-    (`Sequence` [ `.OrderByTerm` )."""
+    (`Sequence` [ `.column_expressions.OrderByTerm` )."""
 
     offset: int = 0
     """Offset of the first row returned from the query, starting from zero
@@ -150,10 +152,7 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
                 executable.selected_columns,
             )
             executable = executable.order_by(
-                *[
-                    cast(OrderByTermInterface, o).to_sql_sort_column(columns_available, self.engine)
-                    for o in self.order_by
-                ]
+                *[self.engine.convert_order_by(term, columns_available) for term in self.order_by]
             )
         if self.offset:
             executable = executable.offset(self.offset)

@@ -33,9 +33,8 @@ from .._exceptions import ColumnError, EngineError
 from .._relation import Relation
 
 if TYPE_CHECKING:
+    from .. import column_expressions
     from .._engine import Engine
-    from .._join_condition import JoinCondition
-    from .._predicate import Predicate
     from .._relation_visitor import _U, RelationVisitor
 
 
@@ -52,13 +51,13 @@ class Selection(Relation[_T]):
         Predicate to apply.
     """
 
-    def __init__(self, base: Relation[_T], predicate: Predicate[_T]):
+    def __init__(self, base: Relation[_T], predicate: column_expressions.Predicate[_T]):
         if not predicate.columns_required <= base.columns:
             raise ColumnError(
                 f"Predicate {predicate} for base relation {base} needs "
                 f"columns {predicate.columns_required - base.columns}."
             )
-        if not predicate.supports_engine(base.engine):
+        if not predicate.is_supported_by(base.engine):
             raise EngineError(f"Predicate {predicate} does not support engine {base.engine}.")
         self.base = base
         self.predicate = predicate
@@ -67,7 +66,7 @@ class Selection(Relation[_T]):
     """Relation this operation acts upon (`.Relation`).
     """
 
-    predicate: Predicate[_T]
+    predicate: column_expressions.Predicate[_T]
     """Predicate to apply (`.Predicate`)."""
 
     def __str__(self) -> str:
@@ -88,7 +87,9 @@ class Selection(Relation[_T]):
         # Docstring inherited.
         return self.base.unique_keys
 
-    def _try_join(self, rhs: Relation[_T], condition: JoinCondition[_T] | None) -> Relation[_T] | None:
+    def _try_join(
+        self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]
+    ) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_join(rhs, condition)) is not None:
             return result
@@ -96,7 +97,7 @@ class Selection(Relation[_T]):
             return Selection(new_base, self.predicate)
         return None
 
-    def _try_selection(self, predicate: Predicate[_T]) -> Relation[_T] | None:
+    def _try_selection(self, predicate: column_expressions.Predicate[_T]) -> Relation[_T] | None:
         # Docstring inherited.
         if (result := super()._try_selection(predicate)) is not None:
             return result

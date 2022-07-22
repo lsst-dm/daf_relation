@@ -23,13 +23,13 @@ from __future__ import annotations
 
 __all__ = ("SelectionRowIterable",)
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Iterator
 
 from .._columns import _T
 from ._row_iterable import RowIterable
 
 if TYPE_CHECKING:
-    from ._engine import PredicateInterface
     from .typing import Row
 
 
@@ -40,13 +40,13 @@ class SelectionRowIterable(RowIterable[_T]):
     ----------
     base : `RowIterable`
         Original iterable to filter rows from.
-    predicate : `PredicateInterface`
-        Objects that implement this engine's `PredicateInterface`.
+    callable : `Callable`
+        Callable that takes a single mapping argument and returns a `bool`.
     """
 
-    def __init__(self, base: RowIterable[_T], predicate: PredicateInterface[_T]):
+    def __init__(self, base: RowIterable[_T], callable: Callable[[Row[_T]], bool]):
         self.base = base
-        self.predicate = predicate
+        self.callable = callable
 
     def __iter__(self) -> Iterator[Row[_T]]:
-        return (row for row in self.base if self.predicate.test_iteration_row(row))
+        return (row for row in self.base if self.callable(row))

@@ -23,8 +23,9 @@ from __future__ import annotations
 
 __all__ = ("Engine",)
 
-from collections.abc import Iterable, Sequence, Set
-from typing import TYPE_CHECKING, Generic, TypeVar, cast
+import operator
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 import sqlalchemy
 
@@ -32,10 +33,12 @@ from .._columns import _T
 from .._engine import Engine as BaseEngine
 from .._exceptions import EngineError
 from ._to_executable import ToExecutable
+from ._to_logical_column import ToLogicalColumn
+from ._to_sql_booleans import ToSqlBooleans
 
 if TYPE_CHECKING:
+    from .. import column_expressions
     from .._leaf import Leaf
-    from .._order_by_term import OrderByTerm
     from .._relation import Relation
     from ._select_parts import SelectParts
 
@@ -49,6 +52,7 @@ class Engine(BaseEngine, Generic[_L]):
     def __init__(self, name: str):
         self.name = name
         self.leaf_cache: dict[Leaf, SelectParts] = {}
+        self.column_function_cache: dict[str, Callable[..., sqlalchemy.sql.ColumnElement]] = {}
 
     def __str__(self) -> str:
         return self.name
@@ -60,12 +64,15 @@ class Engine(BaseEngine, Generic[_L]):
         assert leaf.engine is self, f"Incorrect engine for evaluation: {leaf.engine!r} != {self!r}."
         return self.leaf_cache[leaf]
 
+    def get_column_function(self, name: str) -> Callable[..., sqlalchemy.sql.ColumnElement] | None:
+        return self.column_function_cache.get(name, getattr(operator, name, None))
+
     def to_executable(
         self,
         relation: Relation[_T],
         *,
         distinct: bool = False,
-        order_by: Sequence[OrderByTerm[_T]] = (),
+        order_by: Sequence[column_expressions.OrderByTerm[_T]] = (),
         offset: int = 0,
         limit: int | None = None,
     ) -> sqlalchemy.sql.expression.SelectBase:
@@ -80,7 +87,7 @@ class Engine(BaseEngine, Generic[_L]):
         distinct : `bool`
             Whether to generate an expression whose rows are forced to be
             unique.
-        order_by : `Iterable` [ `.OrderByTerm` ]
+        order_by : `Iterable` [ `.column_expressions.OrderByTerm` ]
             Iterable of objects that specify a sort order.
         offset : `int`, optional
             Starting index for returned rows, with ``0`` as the first row.
@@ -96,7 +103,9 @@ class Engine(BaseEngine, Generic[_L]):
             raise EngineError(
                 f"Engine {self!r} cannot operate on relation {relation} with engine {relation.engine!r}."
             )
-        return relation.visit(ToExecutable(self, distinct, order_by, offset, limit))
+        return relation.visit(
+            ToExecutable(self, distinct=distinct, order_by=order_by, offset=offset, limit=limit)
+        )
 
     def extract_mapping(self, tags: Set[_T], sql_columns: sqlalchemy.sql.ColumnCollection) -> dict[_T, _L]:
         """Extract a mapping with `.ColumnTag` keys and logical column values
@@ -213,3 +222,22 @@ class Engine(BaseEngine, Generic[_L]):
         """
         if not columns:
             columns.append(sqlalchemy.sql.literal(True).label("IGNORED"))
+
+    def convert_expression_literal(self, value: Any) -> _L:
+        return sqlalchemy.sql.literal(value)
+
+    def convert_predicate(
+        self, predicate: column_expressions.Predicate[_T], columns_available: Mapping[_T, _L]
+    ) -> sqlalchemy.sql.ColumnElement:
+        return predicate.visit(ToSqlBooleans(self, columns_available))
+
+    def convert_order_by(
+        self, term: column_expressions.OrderByTerm[_T], columns_available: Mapping[_T, _L]
+    ) -> sqlalchemy.sql.ColumnElement:
+        # TODO docs
+        visitor = ToLogicalColumn(self, columns_available)
+        result = cast(sqlalchemy.sql.ColumnElement, term.expression.visit(visitor))
+        if term.ascending:
+            return result
+        else:
+            return result.desc()

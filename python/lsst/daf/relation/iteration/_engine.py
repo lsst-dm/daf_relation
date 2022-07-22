@@ -21,14 +21,11 @@
 
 from __future__ import annotations
 
-__all__ = (
-    "Engine",
-    "JoinConditionInterface",
-    "OrderByTermInterface",
-    "PredicateInterface",
-)
+__all__ = ("Engine",)
 
-from typing import TYPE_CHECKING, Protocol
+import operator
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from .._columns import _T
 from .._engine import Engine as BaseEngine
@@ -38,13 +35,13 @@ from ._row_iterable import RowIterable
 if TYPE_CHECKING:
     from .._leaf import Leaf
     from .._relation import Relation
-    from .typing import Row, Sortable
 
 
 class Engine(BaseEngine):
     def __init__(self, name: str) -> None:
         self.name = name
         self.leaf_cache: dict[Leaf, RowIterable] = {}
+        self.column_function_cache: dict[str, Callable[..., Any]] = {}
 
     def __str__(self) -> str:
         return self.name
@@ -54,6 +51,9 @@ class Engine(BaseEngine):
 
     def evaluate_leaf(self, leaf: Leaf[_T]) -> RowIterable[_T]:
         return self.leaf_cache[leaf]
+
+    def get_column_function(self, name: str) -> Callable[..., Any] | None:
+        return self.column_function_cache.get(name, getattr(operator, name, None))
 
     def execute(self, relation: Relation[_T]) -> RowIterable[_T]:
         """Execute a native iteration relation, returning a Python iterable.
@@ -68,53 +68,10 @@ class Engine(BaseEngine):
         rows : `RowIterable`
             Iterable over rows, with each row a mapping keyed by `.ColumnTag`.
         """
-        from ._visitor import IterationVisitor
+        from ._iteration_visitor import IterationVisitor
 
         if relation.engine is not self:
             raise EngineError(
                 f"Engine {self!r} cannot operate on relation {relation} with engine {relation.engine!r}."
             )
         return relation.visit(IterationVisitor(self))
-
-
-class PredicateInterface(Protocol[_T]):
-    def test_iteration_row(self, row: Row[_T]) -> bool:
-        """Evaluate the predicate.
-
-        Parameters
-        ----------
-        row : `Mapping`
-            Mapping from `.ColumnTag` to actual column values, representing a
-            row in the relation.
-
-        Returns
-        -------
-        keep : `bool`
-            Whether to include this row in the new relation.
-        """
-        ...
-
-
-class OrderByTermInterface(Protocol[_T]):
-    def get_iteration_row_sort_key(self, row: Row[_T]) -> Sortable:
-        """Evaluate the order-by term.
-
-        Parameters
-        ----------
-        row : `Mapping`
-            Mapping from `.ColumnTag` to actual column values, representing a
-            row in the relation.
-
-        Returns
-        -------
-        key
-            Arbitrary Python object that implements at least less-than
-            comparison.
-        """
-        ...
-
-    def get_iteration_row_sort_reverse(self) -> bool:
-        ...
-
-
-JoinConditionInterface = PredicateInterface

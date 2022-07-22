@@ -24,8 +24,8 @@ from __future__ import annotations
 __all__ = ("MutableSelectParts", "SelectParts", "ToSelectParts")
 
 import dataclasses
-from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Generic, cast
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 import sqlalchemy
 
@@ -34,13 +34,14 @@ from .._columns import _T
 from .._exceptions import EngineError
 from .._leaf import Leaf
 from .._relation_visitor import RelationVisitor
-from ._engine import _L, Engine
-from ._interfaces import JoinConditionInterface, OrderByTermInterface, PredicateInterface
 
 if TYPE_CHECKING:
-    from .._join_condition import JoinCondition
-    from .._order_by_term import OrderByTerm
+    from .. import column_expressions
     from .._relation import Identity, Relation, Zero
+    from ._engine import Engine
+
+
+_L = TypeVar("_L")
 
 
 @dataclasses.dataclass(slots=True, eq=False)
@@ -75,7 +76,7 @@ class SelectParts(Generic[_T, _L]):
         engine: Engine[_L],
         *,
         distinct: bool = False,
-        order_by: Sequence[OrderByTerm[_T]] = (),
+        order_by: Sequence[column_expressions.OrderByTerm[_T]] = (),
         offset: int = 0,
         limit: int | None = None,
     ) -> sqlalchemy.sql.Select:
@@ -90,7 +91,7 @@ class SelectParts(Generic[_T, _L]):
         distinct : `bool`
             Whether to generate an expression whose rows are forced to be
             unique.
-        order_by : `Iterable` [ `.OrderByTerm` ]
+        order_by : `Iterable` [ `.column_expressions.OrderByTerm` ]
             Iterable of objects that specify a sort order.
         offset : `int`, optional
             Starting index for returned rows, with ``0`` as the first row.
@@ -119,12 +120,7 @@ class SelectParts(Generic[_T, _L]):
         if distinct:
             select = select.distinct()
         if order_by:
-            select = select.order_by(
-                *[
-                    cast(OrderByTermInterface[_T, _L], o).to_sql_sort_column(columns_available, engine)
-                    for o in order_by
-                ]
-            )
+            select = select.order_by(*[engine.convert_order_by(term, columns_available) for term in order_by])
         if offset:
             select = select.offset(offset)
         if limit is not None:
@@ -146,10 +142,10 @@ class MutableSelectParts(SelectParts[_T, _L]):
     columns_available: dict[_T, _L] = dataclasses.field(default_factory=dict)
 
 
-@dataclasses.dataclass(eq=False, slots=True)
+@dataclasses.dataclass(eq=False)
 class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
-    """A `.RelationVisitor` implemention that converts a `.Relation` tree into
-    a `SelectParts` struct.
+    """A `.RelationVisitor` implementation that converts a `.Relation` tree
+    into a `SelectParts` struct.
 
     This visitor directly handles `.Leaf`, `.Extension`, `.operations.Join`,
     `.operations.Projection`, and `.operations.Selection` relations, and
@@ -200,15 +196,13 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             rhs_parts.columns_available = self.engine.extract_mapping(
                 visited.rhs.columns, rhs_parts.from_clause.columns
             )
-        on_terms: list[sqlalchemy.sql.ColumnElement] = []
-        for tag in lhs_parts.columns_available.keys() & rhs_parts.columns_available.keys():
-            on_terms.append(lhs_parts.columns_available[tag] == rhs_parts.columns_available[tag])
-        if visited.condition is not None:
-            on_terms.append(
-                cast(JoinConditionInterface, visited.condition).to_sql_join_on(
-                    (lhs_parts.columns_available, rhs_parts.columns_available), self.engine
-                )
-            )
+        on_terms = [
+            lhs_parts.columns_available[tag] == rhs_parts.columns_available[tag]
+            for tag in visited.condition.common_columns
+        ]
+        columns_available = {**lhs_parts.columns_available, **rhs_parts.columns_available}
+        if visited.condition.predicate is not None:
+            on_terms.extend(self.engine.convert_predicate(visited.condition.predicate, columns_available))
         on_clause: sqlalchemy.sql.ColumnElement
         if not on_terms:
             on_clause = sqlalchemy.sql.literal(True)
@@ -219,7 +213,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         return SelectParts(
             from_clause=lhs_parts.from_clause.join(rhs_parts.from_clause, onclause=on_clause),
             where=tuple(lhs_parts.where) + tuple(rhs_parts.where),
-            columns_available={**lhs_parts.columns_available, **rhs_parts.columns_available},
+            columns_available=columns_available,
         )
 
     def visit_projection(self, visited: operations.Projection[_T]) -> SelectParts[_T, _L]:
@@ -236,9 +230,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             base_parts.columns_available = self.engine.extract_mapping(
                 visited.base.columns, base_parts.from_clause
             )
-        new_where = cast(PredicateInterface, visited.predicate).to_sql_boolean(
-            base_parts.columns_available, self.engine
-        )
+        new_where = self.engine.convert_predicate(visited.predicate, base_parts.columns_available)
         return dataclasses.replace(
             base_parts,
             where=tuple(base_parts.where) + (new_where,),
@@ -288,53 +280,3 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         from ._to_executable import ToExecutable
 
         return relation.visit(ToExecutable(self.engine))
-
-    def _join_select_parts(
-        self,
-        base_parts: SelectParts[_T, _L],
-        next_relation: Relation[_T],
-        conditions: Iterable[JoinCondition[_T]],
-    ) -> SelectParts[_T, _L]:
-        """Join two relations via their `SelectParts` representation.
-
-        Parameters
-        ----------
-        base_parts : `SelectParts`
-            Simple SELECT statement parts for the first operand.  Must not have
-            `SelectParts.columns_available` set to `None`.
-        next_relation : `.Relation`
-            `.Relation` for the other operand.
-        conditions : `Iterable` [ `.JoinCondition` ]
-            Join conditions that match this paticular join.
-
-        Returns
-        -------
-        join_parts : `SelectParts`
-            Simple SELECT statementparts representing the join.
-        """
-        assert base_parts.columns_available is not None
-        next_parts = next_relation.visit(self)
-        if next_parts.columns_available is None:
-            next_parts.columns_available = self.engine.extract_mapping(
-                next_relation.columns, next_parts.from_clause.columns
-            )
-        on_terms: list[sqlalchemy.sql.ColumnElement] = []
-        for tag in base_parts.columns_available.keys() & next_parts.columns_available.keys():
-            on_terms.append(base_parts.columns_available[tag] == next_parts.columns_available[tag])
-        for condition in conditions:
-            on_terms.append(
-                cast(JoinConditionInterface, condition).to_sql_join_on(
-                    (base_parts.columns_available, next_parts.columns_available), self.engine
-                )
-            )
-        on_clause: sqlalchemy.sql.ColumnElement
-        if not on_terms:
-            on_clause = sqlalchemy.sql.literal(True)
-        elif len(on_terms) == 1:
-            on_clause = on_terms[0]
-        else:
-            on_clause = sqlalchemy.sql.and_(*on_terms)
-        from_clause = base_parts.from_clause.join(next_parts.from_clause, onclause=on_clause)
-        where = tuple(base_parts.where) + tuple(next_parts.where)
-        columns_available = {**base_parts.columns_available, **next_parts.columns_available}
-        return SelectParts(from_clause, where, columns_available)

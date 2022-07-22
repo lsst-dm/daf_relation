@@ -20,5 +20,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from ._expression import *
-from ._predicate import *
+from ._join_condition import *
 from ._order_by_term import *
+from ._predicate import *

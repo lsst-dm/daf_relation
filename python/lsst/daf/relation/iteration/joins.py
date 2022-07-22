@@ -28,31 +28,34 @@ __all__ = (
 )
 
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from .._columns import _T, is_unique_key_covered
-from .._join_condition import JoinCondition
-from ._engine import JoinConditionInterface
 from ._row_iterable import RowIterable
+from ._to_bool_callable import ToBoolCallable
 from .selection import SelectionRowIterable
 
 if TYPE_CHECKING:
-    from .._engine import Engine
+    from .. import column_expressions
     from .._relation import Relation
+    from ._engine import Engine
     from .typing import GeneralIndex, Row, UniqueIndex
 
 
 def make_join_row_iterable(
+    engine: Engine,
     lhs_rows: RowIterable[_T],
     rhs_rows: RowIterable[_T],
     lhs_relation: Relation[_T],
     rhs_relation: Relation[_T],
-    condition: JoinCondition[_T] | None,
+    condition: column_expressions.JoinCondition[_T],
 ) -> RowIterable[_T]:
     """Return a `RowIterable` that implements a natural join operation.
 
     Parameters
     ----------
+    engine : `Engine`
+        Iteration engine.
     lhs_rows : `RowIterable`
         The first iterable being joined.  This iterable's order will be
         preserved and it will always be iterated over lazily (rather than
@@ -68,52 +71,50 @@ def make_join_row_iterable(
         Relation corresponding to ``lhs_rows``.
     rhs_relation : `.Relation`
         Relation corresponding to ``rhs_rows``.
-    condition : `.JoinCondition` or None
-        Special join condition to apply.  If not handled by
-        `RowIterable.try_join` this will be applied as if it was a predicates,
-        i.e.  by filtering rows after they have already been joined on any
-        common columns between the rows.  Expected to already be flipped if
-        needed to match the ``(lhs, rhs)`` order.
+    condition : `.column_expressions.JoinCondition` or None
+        Explicit condition that must be satisfied by returned join rows,
+        including automatic common columns equality constraints and an optional
+        custom predicate.
 
     Returns
     -------
     join_rows : `RowIterable`
         New iterable that implements the join operation.
     """
-    join_rows, was_condition_applied = rhs_rows.try_join(rhs_relation, lhs_rows, lhs_relation, condition)
+    join_rows, was_predicate_applied = rhs_rows.try_join(rhs_relation, lhs_rows, lhs_relation, condition)
     if join_rows is not None:
         return _finish_join_row_iterable(
-            lhs_relation.engine, join_rows, None if was_condition_applied else condition
+            engine, join_rows, None if was_predicate_applied else condition.predicate
         )
-    common_columns = frozenset(lhs_relation.columns & rhs_relation.columns)
+    common_columns = frozenset(condition.common_columns)
     if is_unique_key_covered(common_columns, rhs_relation.unique_keys):
         rhs_rows_with_unique_index = rhs_rows.with_unique_index(common_columns)
         return _finish_join_row_iterable(
-            lhs_relation.engine,
+            engine,
             UniqueIndexJoinRowIterable(
                 lhs_rows,
                 rhs_rows_with_unique_index.get_unique_index(common_columns),
                 on_key=common_columns,
             ),
-            condition,
+            condition.predicate,
         )
     else:
         rhs_rows_with_general_index = rhs_rows.with_general_index(common_columns)
         return _finish_join_row_iterable(
-            lhs_relation.engine,
+            engine,
             GeneralJoinRowIterable(
                 lhs_rows,
                 rhs_rows_with_general_index.get_general_index(common_columns),
                 on_key=common_columns,
             ),
-            condition,
+            condition.predicate,
         )
 
 
 def _finish_join_row_iterable(
     engine: Engine,
     base: RowIterable[_T],
-    condition: JoinCondition[_T] | None,
+    predicate: column_expressions.Predicate[_T] | None,
 ) -> RowIterable[_T]:
     """Helper function that handles any missing join conditions by applying
     them as predicates.
@@ -128,8 +129,10 @@ def _finish_join_row_iterable(
     base : `RowIterable`
         Row iterable that implements the join, but does not necessarily utilize
         all matching join conditions.
-    condition : `.JoinCondition` or `None`
-        `.JoinCondition` object to apply.
+    predicate : `column_expressions.Predicate`, optional
+        Explicit condition that must be satisfied by returned join rows, in
+        addition to automatic equality constraints on common columns already
+        applied.
 
     Returns
     -------
@@ -137,9 +140,9 @@ def _finish_join_row_iterable(
         Row iterable that fully implements the join, including all join
         conditions.
     """
-    if condition is None:
+    if predicate is None:
         return base
-    return SelectionRowIterable(base, cast(JoinConditionInterface, condition))
+    return SelectionRowIterable(base, predicate.visit(ToBoolCallable(engine)))
 
 
 class UniqueIndexJoinRowIterable(RowIterable[_T]):

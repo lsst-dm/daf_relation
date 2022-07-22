@@ -20,6 +20,5 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from ._engine import *
-from ._interfaces import *
 from ._select_parts import *
 from ._to_executable import *
