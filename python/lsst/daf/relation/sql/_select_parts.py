@@ -193,7 +193,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
     def visit_materialization(self, visited: operations.Materialization[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(
-            self._to_executable(visited.base).cte(),
+            self._to_executable(visited.base).cte(visited.name),
             [],
             None,
         )
