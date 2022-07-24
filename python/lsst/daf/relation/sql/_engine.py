@@ -63,6 +63,12 @@ class Engine(BaseEngine[_T], Generic[_T, _L]):
     def __repr__(self) -> str:
         return f"lsst.daf.relation.sql.Engine({self.name!r})"
 
+    def __hash__(self) -> int:
+        return id(self)
+
+    def __eq__(self, other: Any) -> bool:
+        return self is other
+
     def evaluate_leaf(self, leaf: Leaf[_T]) -> SelectParts[_T, _L]:
         assert leaf.engine is self, f"Incorrect engine for evaluation: {leaf.engine!r} != {self!r}."
         return self.leaf_cache[leaf]

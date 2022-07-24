@@ -24,6 +24,7 @@ from __future__ import annotations
 __all__ = ("Engine",)
 
 from abc import abstractmethod
+from collections.abc import Hashable
 from typing import TYPE_CHECKING, Any, Generic
 
 from ._columns import _T
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
     from ._leaf import Leaf
 
 
-class Engine(Generic[_T]):
+class Engine(Generic[_T], Hashable):
     """An interface for objects that serve as identifiers for engines.
 
     Notes

@@ -43,6 +43,12 @@ class Engine(BaseEngine[_T]):
         self.leaf_cache: dict[Leaf, RowIterable[_T]] = {}
         self.column_function_cache: dict[str, Callable[..., Any]] = {}
 
+    def __hash__(self) -> int:
+        return id(self)
+
+    def __eq__(self, other: Any) -> bool:
+        return self is other
+
     def __str__(self) -> str:
         return self.name
 
