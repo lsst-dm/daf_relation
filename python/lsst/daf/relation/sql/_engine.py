@@ -24,7 +24,6 @@ from __future__ import annotations
 __all__ = ("Engine",)
 
 import dataclasses
-import operator
 from collections.abc import Callable, Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
@@ -74,7 +73,7 @@ class Engine(BaseEngine[_T], Generic[_T, _L]):
         return self.leaf_cache[leaf]
 
     def get_column_function(self, name: str) -> Callable[..., sqlalchemy.sql.ColumnElement] | None:
-        return self.column_function_cache.get(name, getattr(operator, name, None))
+        return self.column_function_cache.get(name, super().get_column_function(name))
 
     def to_executable(
         self,

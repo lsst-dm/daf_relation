@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("Engine",)
 
+import operator
 from abc import abstractmethod
 from collections.abc import Hashable
 from typing import TYPE_CHECKING, Any, Generic
@@ -56,6 +57,5 @@ class Engine(Generic[_T], Hashable):
     def evaluate_leaf(self, leaf: Leaf[_T]) -> Any:
         ...
 
-    @abstractmethod
     def get_column_function(self, name: str) -> Any | None:
-        ...
+        return getattr(operator, name, None)

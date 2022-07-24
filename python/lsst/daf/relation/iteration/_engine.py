@@ -23,7 +23,6 @@ from __future__ import annotations
 
 __all__ = ("Engine",)
 
-import operator
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -59,7 +58,7 @@ class Engine(BaseEngine[_T]):
         return self.leaf_cache[leaf]
 
     def get_column_function(self, name: str) -> Callable[..., Any] | None:
-        return self.column_function_cache.get(name, getattr(operator, name, None))
+        return self.column_function_cache.get(name, super().get_column_function(name))
 
     def execute(self, relation: Relation[_T]) -> RowIterable[_T]:
         """Execute a native iteration relation, returning a Python iterable.
