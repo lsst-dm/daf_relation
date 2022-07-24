@@ -257,6 +257,11 @@ class Relation(Generic[_T]):
 
         return Join(self, rhs, condition)
 
+    def materialization(self, name: str) -> Relation[_T]:
+        from . import operations
+
+        return operations.Materialization(self, name)
+
     def projection(self, columns: Set[_T]) -> Relation[_T]:
         """Construct a relation whose columns are a subset of this relation's.
 
