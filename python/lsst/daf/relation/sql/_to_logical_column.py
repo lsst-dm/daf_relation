@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING, TypeVar
 
 from .. import column_expressions
 from .._columns import _T
-from .._exceptions import EngineError
 
 if TYPE_CHECKING:
     from ._engine import Engine
@@ -53,4 +52,5 @@ class ToLogicalColumn(column_expressions.ExpressionVisitor[_T, _L]):
     def visit_function(self, visited: column_expressions.Function[_T]) -> _L:
         if (function := self.engine.get_column_function(visited.name)) is not None:
             return function(*[arg.visit(self) for arg in visited.args])
-        raise EngineError(f"Expression function {visited.name!r} is not supported by engine {self.engine}.")
+        first, *rest = [arg.visit(self) for arg in visited.args]
+        return getattr(first, visited.name)(*rest)

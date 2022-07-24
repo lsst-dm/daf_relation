@@ -31,7 +31,6 @@ import sqlalchemy
 
 from .. import column_expressions
 from .._columns import _T
-from .._exceptions import EngineError
 from ._to_logical_column import ToLogicalColumn
 
 if TYPE_CHECKING:
@@ -72,7 +71,8 @@ class ToSqlBooleans(
     ) -> Iterable[sqlalchemy.sql.ColumnElement]:
         if (function := self.engine.get_column_function(visited.name)) is not None:
             return (function(*[arg.visit(self.to_logical_column) for arg in visited.args]),)
-        raise EngineError(f"Predicate function {visited.name!r} is not supported by engine {self.engine}.")
+        first, *rest = [arg.visit(self.to_logical_column) for arg in visited.args]
+        return getattr(first, visited.name)(*rest)
 
     def visit_logical_not(
         self, visited: column_expressions.LogicalNot[_T]

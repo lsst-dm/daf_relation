@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING, Callable
 
 from .. import column_expressions
 from .._columns import _T
-from .._exceptions import EngineError
 from ._to_callable import ToCallable
 from .typing import Row
 
@@ -64,9 +63,11 @@ class ToBoolCallable(column_expressions.PredicateVisitor[_T, Callable[[Row[_T]],
         function = self.engine.get_column_function(visited.name)
         if function is not None:
             arg_callables = [arg.visit(self.to_callable) for arg in visited.args]
-            # MyPy doesn't see 'function' as not-None for some reason.
+            # MyPy doesn't see 'function' as not-None in the capture for some
+            # reason.
             return lambda row: function(*[c(row) for c in arg_callables])  # type: ignore
-        raise EngineError(f"Predicate function {visited.name!r} is not supported by engine {self.engine}.")
+        first, *rest = [arg.visit(self.to_callable) for arg in visited.args]
+        return lambda row: getattr(first(row), visited.name)(*[r(row) for r in rest])
 
     def visit_logical_not(self, visited: column_expressions.LogicalNot[_T]) -> Callable[[Row[_T]], bool]:
         base_callable = visited.base.visit(self)

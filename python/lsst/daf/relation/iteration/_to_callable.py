@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING, Any
 
 from .. import column_expressions
 from .._columns import _T
-from .._exceptions import EngineError
 from .typing import Row
 
 if TYPE_CHECKING:
@@ -54,4 +53,5 @@ class ToCallable(column_expressions.ExpressionVisitor[_T, Callable[[Row[_T]], An
             arg_callables = [arg.visit(self) for arg in visited.args]
             # MyPy doesn't see 'function' as not-None for some reason.
             return lambda row: function(*[c(row) for c in arg_callables])  # type: ignore
-        raise EngineError(f"Expression function {visited.name!r} is not supported by engine {self.engine}.")
+        first, *rest = [arg.visit(self) for arg in visited.args]
+        return lambda row: getattr(first(row), visited.name)(*[r(row) for r in rest])
