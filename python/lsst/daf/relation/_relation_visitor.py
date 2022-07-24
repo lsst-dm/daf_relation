@@ -31,7 +31,7 @@ from ._columns import _T
 if TYPE_CHECKING:
     from . import operations
     from ._leaf import Leaf
-    from ._relation import Identity, Zero
+    from ._relation import Doomed, Identity
 
 _U = TypeVar("_U", covariant=True)
 
@@ -49,6 +49,11 @@ class RelationVisitor(Generic[_T, _U]):
     @abstractmethod
     def visit_distinct(self, visited: operations.Distinct[_T]) -> _U:
         """Hook for processing `~operations.Distinct` operations."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_doomed(self, visited: Doomed[_T]) -> _U:
+        """Hook for processing `~Zero` leaf relations."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -94,9 +99,4 @@ class RelationVisitor(Generic[_T, _U]):
     @abstractmethod
     def visit_identity(self, visited: Identity[_T]) -> _U:
         """Hook for processing `Identity` leaf relations."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def visit_zero(self, visited: Zero[_T]) -> _U:
-        """Hook for processing `~Zero` leaf relations."""
         raise NotImplementedError()

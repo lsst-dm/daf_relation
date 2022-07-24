@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = (
     "Identity",
     "Relation",
-    "Zero",
+    "Doomed",
 )
 
 import json
@@ -551,7 +551,7 @@ class Identity(Relation[_T]):
 
 @final
 @immutable
-class Zero(Relation[_T]):
+class Doomed(Relation[_T]):
     """A leaf `Relation` with no rows.
 
     Joining any relation to the null relation yields the null relation.
@@ -591,4 +591,4 @@ class Zero(Relation[_T]):
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
-        return visitor.visit_zero(self)
+        return visitor.visit_doomed(self)

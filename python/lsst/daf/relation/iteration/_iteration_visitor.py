@@ -40,7 +40,7 @@ from .selection import SelectionRowIterable
 if TYPE_CHECKING:
     from .. import operations
     from .._leaf import Leaf
-    from .._relation import Identity, Zero
+    from .._relation import Doomed, Identity
     from ._engine import Engine
 
 
@@ -64,6 +64,10 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
         base_rows = visited.visit(self)
         key_columns = next(iter(visited.unique_keys))  # don't care which unique key we use
         return base_rows.with_unique_index(key_columns)
+
+    def visit_doomed(self, visited: Doomed[_T]) -> RowIterable[_T]:
+        # Docstring inherited.
+        return RowCollection[_T]([])
 
     def visit_identity(self, visited: Identity[_T]) -> RowIterable[_T]:
         # Docstring inherited.
@@ -124,7 +128,3 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
     def visit_union(self, visited: operations.Union[_T]) -> RowIterable[_T]:
         # Docstring inherited.
         return ChainRowIterable([visited.first.visit(self), visited.second.visit(self)])
-
-    def visit_zero(self, visited: Zero[_T]) -> RowIterable[_T]:
-        # Docstring inherited.
-        return RowCollection[_T]([])

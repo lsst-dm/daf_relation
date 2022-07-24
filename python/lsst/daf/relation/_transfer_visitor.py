@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Mapping, Protocol
 from . import operations
 from ._columns import _T
 from ._exceptions import EngineError
-from ._relation import Identity, Relation, Zero
+from ._relation import Doomed, Identity, Relation
 from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
@@ -53,6 +53,9 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
     def visit_distinct(self, visited: operations.Distinct[_T]) -> Relation[_T]:
         if (base := visited.base.visit(self)) is not visited.base:
             return operations.Distinct(base, visited.unique_keys)
+        return visited
+
+    def visit_doomed(self, visited: Doomed[_T]) -> Relation[_T]:
         return visited
 
     def visit_identity(self, visited: Identity[_T]) -> Relation[_T]:
@@ -106,7 +109,4 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
         new_second = visited.second.visit(self)
         if new_first is not visited.first or new_second is not visited.second:
             return operations.Union(new_first, new_second, visited.unique_keys)
-        return visited
-
-    def visit_zero(self, visited: Zero[_T]) -> Relation[_T]:
         return visited

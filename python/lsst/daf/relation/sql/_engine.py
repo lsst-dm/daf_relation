@@ -174,7 +174,7 @@ class Engine(BaseEngine[_T], Generic[_T, _L]):
         self.handle_empty_columns(select_columns)
         return sqlalchemy.sql.select(*select_columns).select_from(sql_from)
 
-    def make_zero_select(self, tags: Set[_T]) -> sqlalchemy.sql.Select:
+    def make_doomed_select(self, tags: Set[_T]) -> sqlalchemy.sql.Select:
         """Construct a SQLAlchemy SELECT query that yields no rows.
 
         Parameters

@@ -38,7 +38,7 @@ from ._select_parts import ToSelectParts
 if TYPE_CHECKING:
     from .. import column_expressions
     from .._leaf import Leaf
-    from .._relation import Identity, Relation, Zero
+    from .._relation import Doomed, Identity, Relation
     from ._engine import Engine
 
 
@@ -84,6 +84,10 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
         # Docstring inherited.
         return visited.base.visit(dataclasses.replace(self, distinct=True))
 
+    def visit_doomed(self, visited: Doomed[_T]) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
+        return self.engine.make_doomed_select(visited.columns)
+
     def visit_identity(self, visited: Identity[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         return self._use_select_parts(visited)
@@ -101,10 +105,6 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     def visit_join(self, visited: operations.Join[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         return self._use_select_parts(visited)
-
-    def visit_zero(self, visited: Zero[_T]) -> sqlalchemy.sql.expression.SelectBase:
-        # Docstring inherited.
-        return self.engine.make_zero_select(visited.columns)
 
     def visit_projection(self, visited: operations.Projection[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.

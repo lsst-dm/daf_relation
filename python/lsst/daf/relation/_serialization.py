@@ -31,7 +31,7 @@ from . import column_expressions, operations
 from ._columns import _T, UniqueKey
 from ._exceptions import RelationSerializationError
 from ._leaf import Leaf
-from ._relation import Identity, Relation, Zero
+from ._relation import Doomed, Identity, Relation
 from ._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
@@ -76,6 +76,8 @@ class MappingReader(Generic[_T]):
                 )
             case {"type": "distinct", "base": base, "unique_keys": unique_keys}:
                 return operations.Distinct(self.read_relation(base), self.read_unique_keys(unique_keys))
+            case {"type": "doomed", "engine": engine, "columns": columns}:
+                return Doomed(self.read_engine(engine), self.read_column_set(columns))
             case {
                 "type": "leaf",
                 "name": str(name),
@@ -139,8 +141,6 @@ class MappingReader(Generic[_T]):
                 "unique_keys": unique_keys,
             }:
                 return operations.Union(first, second, unique_keys=self.read_unique_keys(unique_keys))
-            case {"type": "zero", "engine": engine, "columns": columns}:
-                return Zero(self.read_engine(engine), self.read_column_set(columns))
             case _:
                 raise RelationSerializationError(
                     f"Expected mapping representing a relation, got {mapping!r}."
@@ -428,6 +428,10 @@ class DictWriter(
             "unique_keys": self.write_unique_keys(visited.unique_keys),
         }
 
+    def visit_doomed(self, visited: Doomed[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        return {"type": "doomed", "columns": self.write_column_set(visited.columns)}
+
     def visit_identity(self, visited: Identity[_T]) -> dict[str, Any]:
         # Docstring inherited.
         return {"type": "identity", "engine": self.write_engine(visited.engine)}
@@ -509,10 +513,6 @@ class DictWriter(
             "second": visited.second.visit(self),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
         }
-
-    def visit_zero(self, visited: Zero[_T]) -> dict[str, Any]:
-        # Docstring inherited.
-        return {"type": "null", "columns": self.write_column_set(visited.columns)}
 
     def visit_literal(self, visited: column_expressions.Literal[_T]) -> dict[str, Any]:
         # Docstring inherited.

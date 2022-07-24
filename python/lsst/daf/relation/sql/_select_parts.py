@@ -37,7 +37,7 @@ from .._relation_visitor import RelationVisitor
 
 if TYPE_CHECKING:
     from .. import column_expressions
-    from .._relation import Identity, Relation, Zero
+    from .._relation import Doomed, Identity, Relation
     from ._engine import Engine
 
 
@@ -178,6 +178,14 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             None,
         )
 
+    def visit_doomed(self, visited: Doomed[_T]) -> SelectParts[_T, _L]:
+        # Docstring inherited.
+        return SelectParts(
+            self._to_executable(visited).subquery(),
+            [],
+            None,
+        )
+
     def visit_identity(self, visited: Identity[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(
@@ -263,14 +271,6 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         raise EngineError("SQL conversion only works on relation trees with no transfers.")
 
     def visit_union(self, visited: operations.Union[_T]) -> SelectParts[_T, _L]:
-        # Docstring inherited.
-        return SelectParts(
-            self._to_executable(visited).subquery(),
-            [],
-            None,
-        )
-
-    def visit_zero(self, visited: Zero[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
         return SelectParts(
             self._to_executable(visited).subquery(),
