@@ -34,6 +34,7 @@ from collections.abc import Set
 from typing import Generic, TypeVar
 
 from lsst.utils.classes import cached_getter
+from lsst.utils.sets.unboundable import FrozenUnboundableSet
 
 from .._columns import _T
 from .._engine import Engine
@@ -49,7 +50,7 @@ class BaseExpression(Generic[_T]):
         raise NotImplementedError()
 
     @abstractmethod
-    def is_supported_by(self, engine: Engine) -> bool:
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
         raise NotImplementedError()
 
 
@@ -61,7 +62,7 @@ class BaseLiteral(BaseExpression[_T], Generic[_T, _V]):
     def columns_required(self) -> Set[_T]:
         return frozenset()
 
-    def is_supported_by(self, engine: Engine) -> bool:
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
         return True
 
 
@@ -73,7 +74,7 @@ class BaseReference(BaseExpression[_T]):
     def columns_required(self) -> Set[_T]:
         return {self.tag}
 
-    def is_supported_by(self, engine: Engine) -> bool:
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
         return True
 
 
@@ -82,6 +83,7 @@ class BaseFunction(BaseExpression[_T], Generic[_T, _A]):
 
     name: str
     args: tuple[_A, ...]
+    supporting_engines: FrozenUnboundableSet[Engine[_T] | type[Engine[_T]]] = FrozenUnboundableSet.full
 
     @property  # type: ignore
     @cached_getter
@@ -91,7 +93,5 @@ class BaseFunction(BaseExpression[_T], Generic[_T, _A]):
             result.update(arg.columns_required)
         return result
 
-    def is_supported_by(self, engine: Engine) -> bool:
-        return engine.get_column_function(self.name) is not None and all(
-            arg.is_supported_by(engine) for arg in self.args
-        )
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        return engine in self.supporting_engines or type(engine) in self.supporting_engines

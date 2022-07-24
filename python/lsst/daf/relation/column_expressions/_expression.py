@@ -32,11 +32,18 @@ __all__ = (
 
 import dataclasses
 from abc import abstractmethod
-from typing import Any, Generic, TypeVar
+from collections.abc import Set
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
+
+from lsst.utils.sets.ellipsis import EllipsisType
+from lsst.utils.sets.unboundable import FrozenUnboundableSet, UnboundableSet
 
 from .._columns import _T
 from ._predicate import Predicate, PredicateVisitor
 from .base import BaseExpression, BaseFunction, BaseLiteral, BaseReference
+
+if TYPE_CHECKING:
+    from .._engine import Engine
 
 _U = TypeVar("_U")
 
@@ -46,23 +53,55 @@ class Expression(BaseExpression[_T]):
     def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
         ...
 
+    @classmethod
+    def reference(cls, tag: _T) -> Expression[_T]:
+        return Reference(tag)
+
+    @classmethod
+    def literal(cls, value: Any) -> Expression[_T]:
+        return Literal(value)
+
+    @classmethod
+    def function(
+        cls,
+        name: str,
+        *args: Expression[_T],
+        supporting_engines: Set[Engine[_T] | type[Engine[_T]]]
+        | EllipsisType
+        | UnboundableSet[Engine[_T] | type[Engine[_T]]] = FrozenUnboundableSet.full,
+    ) -> Expression[_T]:
+        return Function(name, args, supporting_engines=FrozenUnboundableSet.coerce(supporting_engines))
+
     def eq(self, other: Expression[_T]) -> Predicate[_T]:
-        return PredicateFunction[_T]("__eq__", (self, other))
+        return self.predicate_function("__eq__", other)
 
     def ne(self, other: Expression[_T]) -> Predicate[_T]:
-        return PredicateFunction[_T]("__ne__", (self, other))
+        return self.predicate_function("__ne__", other)
 
     def lt(self, other: Expression[_T]) -> Predicate[_T]:
-        return PredicateFunction[_T]("__lt__", (self, other))
+        return self.predicate_function("__lt__", other)
 
     def gt(self, other: Expression[_T]) -> Predicate[_T]:
-        return PredicateFunction[_T]("__gt__", (self, other))
+        return self.predicate_function("__gt__", other)
 
     def le(self, other: Expression[_T]) -> Predicate[_T]:
-        return PredicateFunction[_T]("__le__", (self, other))
+        return self.predicate_function("__le__", other)
 
     def ge(self, other: Expression[_T]) -> Predicate[_T]:
-        return PredicateFunction[_T]("__ge__", (self, other))
+        return self.predicate_function("__ge__", other)
+
+    def predicate_function(
+        self,
+        name: str,
+        *args: Expression[_T],
+        supporting_engines: Set[Engine[_T] | type[Engine[_T]]]
+        | EllipsisType
+        | UnboundableSet[Engine[_T] | type[Engine[_T]]] = FrozenUnboundableSet.full,
+    ) -> Predicate[_T]:
+        return PredicateFunction[_T](
+            name,
+            (self,) + args,
+        )
 
 
 class ExpressionVisitor(Generic[_T, _U]):

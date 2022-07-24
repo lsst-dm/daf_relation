@@ -109,7 +109,7 @@ class LogicalNot(Predicate[_T]):
     def columns_required(self) -> Set[_T]:
         return self.base.columns_required
 
-    def is_supported_by(self, engine: Engine) -> bool:
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
         return self.base.is_supported_by(engine)
 
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
@@ -129,7 +129,7 @@ class LogicalAnd(Predicate[_T]):
             result.update(operand.columns_required)
         return result
 
-    def is_supported_by(self, engine: Engine) -> bool:
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
         return all(operand.is_supported_by(engine) for operand in self.operands)
 
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
@@ -149,7 +149,7 @@ class LogicalOr(Predicate[_T]):
             result.update(operand.columns_required)
         return result
 
-    def is_supported_by(self, engine: Engine) -> bool:
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
         return all(operand.is_supported_by(engine) for operand in self.operands)
 
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
