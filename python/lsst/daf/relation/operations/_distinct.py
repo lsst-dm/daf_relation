@@ -31,7 +31,7 @@ from lsst.utils.classes import immutable
 from .._columns import _T, UniqueKey, check_unique_keys_in_columns
 from .._engine import Engine
 from .._exceptions import RelationalAlgebraError
-from .._relation import Relation
+from .._relation import Relation, UnaryOperation
 
 if TYPE_CHECKING:
     from .. import column_expressions
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 @final
 @immutable
-class Distinct(Relation[_T]):
+class Distinct(UnaryOperation[_T]):
     """An operation `.Relation` that guarantees unique rows.
 
     Parameters
@@ -59,13 +59,14 @@ class Distinct(Relation[_T]):
                 f"Base relation {base} is already unique on keys {base.unique_keys}, "
                 f"but distinct operation declares it to be unique on {unique_keys}."
             )
-        self.base = base
+        self._base = base
         self._unique_keys = unique_keys
         check_unique_keys_in_columns(self)
 
-    base: Relation[_T]
-    """Relation this operation acts upon (`.Relation`).
-    """
+    @property
+    def base(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._base
 
     def __str__(self) -> str:
         return f"distinct {self.base!s}"
@@ -84,6 +85,10 @@ class Distinct(Relation[_T]):
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
         return self._unique_keys
+
+    def _rebase(self, base: Relation[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        return base.distinct(self._unique_keys)
 
     def _try_selection(self, predicate: column_expressions.Predicate[_T]) -> Relation[_T] | None:
         # Docstring inherited.

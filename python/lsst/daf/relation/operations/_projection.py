@@ -30,7 +30,7 @@ from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey
 from .._exceptions import ColumnError
-from .._relation import Relation
+from .._relation import Relation, UnaryOperation
 
 if TYPE_CHECKING:
     from .. import column_expressions
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 @final
 @immutable
-class Projection(Relation[_T]):
+class Projection(UnaryOperation[_T]):
     """An operation `.Relation` that propagates a subset of its input's
     columns.
 
@@ -58,12 +58,13 @@ class Projection(Relation[_T]):
                 f"Cannot project column(s) {set(columns) - base.columns} "
                 f"that are not present in the base relation {base}."
             )
-        self.base = base
+        self._base = base
         self._columns = columns
 
-    base: Relation[_T]
-    """Relation this operation acts upon (`.Relation`).
-    """
+    @property
+    def base(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._base
 
     def __str__(self) -> str:
         return f"Π({self.base!s}, {{{', '.join(str(c) for c in self.columns)}}})"
@@ -82,6 +83,10 @@ class Projection(Relation[_T]):
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
         return {keys for keys in self.base.unique_keys if keys.issubset(self._columns)}
+
+    def _rebase(self, base: Relation[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        return base.projection(self._columns)
 
     def _try_join(
         self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]

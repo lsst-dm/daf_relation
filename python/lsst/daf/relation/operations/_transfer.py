@@ -30,7 +30,7 @@ from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey
 from .._engine import Engine
-from .._relation import Relation
+from .._relation import Relation, UnaryOperation
 
 if TYPE_CHECKING:
     from .. import column_expressions
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 @final
 @immutable
-class Transfer(Relation[_T]):
+class Transfer(UnaryOperation[_T]):
     """An operation `.Relation` that indicates a transfer from one engine to
     another.
 
@@ -62,12 +62,13 @@ class Transfer(Relation[_T]):
     """
 
     def __init__(self, base: Relation[_T], destination: Engine[_T]):
-        self.base = base
+        self._base = base
         self._destination = destination
 
-    base: Relation[_T]
-    """Relation this operation acts upon, in the source engine (`.Relation`).
-    """
+    @property
+    def base(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._base
 
     def __str__(self) -> str:
         return f"{self.base!s} → {self._destination!s}"
@@ -87,6 +88,10 @@ class Transfer(Relation[_T]):
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
         return self.base.unique_keys
+
+    def _rebase(self, base: Relation[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        return base.transfer(self._destination)
 
     def _try_join(
         self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]

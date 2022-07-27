@@ -31,7 +31,7 @@ from lsst.utils.classes import immutable
 from .._columns import _T, UniqueKey, compute_join_unique_keys, is_unique_key_covered
 from .._engine import Engine
 from .._exceptions import ColumnError
-from .._relation import Relation
+from .._relation import BinaryOperation, Relation
 
 if TYPE_CHECKING:
     from .. import column_expressions
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 @final
 @immutable
-class Union(Relation[_T]):
+class Union(BinaryOperation[_T]):
     """An operation `.Relation` that combines the rows of its input relations.
 
     Parameters
@@ -55,47 +55,61 @@ class Union(Relation[_T]):
 
     def __init__(
         self,
-        first: Relation[_T],
-        second: Relation[_T],
+        lhs: Relation[_T],
+        rhs: Relation[_T],
         unique_keys: Set[UniqueKey[_T]] = frozenset(),
     ):
         assert (
-            first.engine is None or second.engine is None or first.engine == second.engine
+            lhs.engine is None or rhs.engine is None or lhs.engine == rhs.engine
         ), "should be guaranteed by calling factory"
-        if first.columns != second.columns:
-            raise ColumnError(f"Mismatched union columns: {set(first.columns)} != {set(second.columns)}.")
-        for key in self.unique_keys:
-            if not is_unique_key_covered(key, first.unique_keys):
+        if lhs.columns != rhs.columns:
+            raise ColumnError(f"Mismatched union columns: {set(lhs.columns)} != {set(rhs.columns)}.")
+        for key in unique_keys:
+            if not is_unique_key_covered(key, lhs.unique_keys):
                 raise ColumnError(
                     f"Union is declared to have unique key {set(key)}, but "
-                    f"first operand {first} is not unique with those columns."
+                    f"first operand {lhs} is not unique with those columns."
                 )
-            if not is_unique_key_covered(key, second.unique_keys):
+            if not is_unique_key_covered(key, rhs.unique_keys):
                 raise ColumnError(
                     f"Union is declared to have unique key {set(key)}, but "
-                    f"second operand {second} is not unique with those columns."
+                    f"second operand {rhs} is not unique with those columns."
                 )
-        self.first = first
-        self.second = second
+        self._lhs = lhs
+        self._rhs = rhs
         self._unique_keys = unique_keys
 
+    @property
+    def lhs(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._lhs
+
+    @property
+    def rhs(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._rhs
+
     def __str__(self) -> str:
-        return f"({self.first} ∪ {self.second})"
+        return f"({self.lhs} ∪ {self.rhs})"
 
     @property
     def engine(self) -> Engine[_T]:
         # Docstring inherited.
-        return self.first.engine if self.first.engine is not None else self.second.engine
+        return self.lhs.engine if self.lhs.engine is not None else self.rhs.engine
 
     @property
     def columns(self) -> Set[_T]:
         # Docstring inherited.
-        return self.first.columns
+        return self.lhs.columns
 
     @property
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
         return self._unique_keys
+
+    def rebase(self, lhs: Relation[_T], rhs: Relation[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        return lhs.union(rhs, self._unique_keys)
 
     def _try_join(
         self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]
@@ -103,9 +117,9 @@ class Union(Relation[_T]):
         # Docstring inherited.
         if (result := super()._try_join(rhs, condition)) is not None:
             return result
-        if (new_first := self.first._try_join(rhs, condition)) is None:
+        if (new_first := self.lhs._try_join(rhs, condition)) is None:
             return None
-        if (new_second := self.second._try_join(rhs, condition)) is None:
+        if (new_second := self.rhs._try_join(rhs, condition)) is None:
             return None
         return Union(new_first, new_second, compute_join_unique_keys(self.unique_keys, rhs.unique_keys))
 
@@ -113,9 +127,9 @@ class Union(Relation[_T]):
         # Docstring inherited.
         if (result := super()._try_selection(predicate)) is not None:
             return result
-        if (new_first := self.first._try_selection(predicate)) is None:
+        if (new_first := self.lhs._try_selection(predicate)) is None:
             return None
-        if (new_second := self.second._try_selection(predicate)) is None:
+        if (new_second := self.rhs._try_selection(predicate)) is None:
             return None
         return Union(new_first, new_second, self.unique_keys)
 

@@ -127,4 +127,4 @@ class IterationVisitor(RelationVisitor[_T, RowIterable[_T]]):
 
     def visit_union(self, visited: operations.Union[_T]) -> RowIterable[_T]:
         # Docstring inherited.
-        return ChainRowIterable([visited.first.visit(self), visited.second.visit(self)])
+        return ChainRowIterable([visited.lhs.visit(self), visited.rhs.visit(self)])

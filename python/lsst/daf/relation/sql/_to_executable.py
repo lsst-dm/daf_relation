@@ -142,8 +142,8 @@ class ToExecutable(RelationVisitor[_T, sqlalchemy.sql.expression.SelectBase], Ge
     def visit_union(self, visited: operations.Union[_T]) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
         nested_visitor = dataclasses.replace(self, distinct=False, order_by=False, offset=0, limit=None)
-        new_first = visited.first.visit(nested_visitor)
-        new_second = visited.second.visit(nested_visitor)
+        new_first = visited.lhs.visit(nested_visitor)
+        new_second = visited.rhs.visit(nested_visitor)
         executable: sqlalchemy.sql.CompoundSelect = (
             sqlalchemy.sql.union(new_first, new_second)
             if self.distinct

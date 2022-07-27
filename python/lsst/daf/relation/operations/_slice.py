@@ -30,7 +30,7 @@ from lsst.utils.classes import immutable
 
 from .._columns import _T, UniqueKey
 from .._exceptions import ColumnError, EngineError
-from .._relation import Relation
+from .._relation import Relation, UnaryOperation
 
 if TYPE_CHECKING:
     from .. import column_expressions
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 @final
 @immutable
-class Slice(Relation[_T]):
+class Slice(UnaryOperation[_T]):
     """An operation `.Relation` that sorts and/or filters rows positionally.
 
     Parameters
@@ -80,14 +80,15 @@ class Slice(Relation[_T]):
                     f"Order-by term {o} for base relation {self.base} needs "
                     f"columns {o.expression.columns_required - self.base.columns}."
                 )
-        self.base = base
+        self._base = base
         self.order_by = order_by
         self.offset = offset
         self.limit = limit
 
-    base: Relation[_T]
-    """Relation this operation acts upon (`.Relation`).
-    """
+    @property
+    def base(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._base
 
     order_by: tuple[column_expressions.OrderByTerm[_T], ...]
     """Criteria for sorting rows (`tuple` [ `.OrderByTerm`, ... ])."""
@@ -119,6 +120,10 @@ class Slice(Relation[_T]):
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
         return self.base.unique_keys
+
+    def _rebase(self, base: Relation[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        return base.slice(self.order_by, self.offset, self.limit)
 
     def _try_selection(self, predicate: column_expressions.Predicate[_T]) -> Relation[_T] | None:
         # Docstring inherited.

@@ -30,7 +30,7 @@ from lsst.utils.classes import immutable
 
 from .._columns import _T, UniqueKey
 from .._engine import Engine
-from .._relation import Relation
+from .._relation import Relation, UnaryOperation
 
 if TYPE_CHECKING:
     from .._relation_visitor import _U, RelationVisitor
@@ -38,19 +38,15 @@ if TYPE_CHECKING:
 
 @final
 @immutable
-class Materialization(Relation[_T]):
+class Materialization(UnaryOperation[_T]):
     def __init__(self, base: Relation[_T], name: str):
-        self.base = base
+        self._base = base
         self.name = name
 
-    base: Relation[_T]
-    """Relation this operation acts upon, in the source engine (`.Relation`).
-    """
-
-    name: str
-    """Name for the permanent or semi-permanent storage of this relation's
-    rows in the engine that evaluates it (`str`).
-    """
+    @property
+    def base(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._base
 
     def __str__(self) -> str:
         return f"materialize({self.base!s}" + f" as {self.name!r})" if self.name is not None else ")"
@@ -69,6 +65,10 @@ class Materialization(Relation[_T]):
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
         return self.base.unique_keys
+
+    def _rebase(self, base: Relation[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        return base.materialization(self.name)
 
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.

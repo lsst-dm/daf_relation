@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 
 
 _L = TypeVar("_L")
+_S = TypeVar("_S", bound="Engine")
 
 
 @dataclasses.dataclass(eq=False, frozen=True, kw_only=True)
@@ -68,6 +69,14 @@ class Engine(BaseEngine[_T], Generic[_T, _L]):
     def __eq__(self, other: Any) -> bool:
         return self is other
 
+    def copy(self: _S, name: str) -> _S:
+        return dataclasses.replace(
+            self,
+            name=name,
+            leaf_cache=self.leaf_cache.copy(),
+            column_function_cache=self.column_function_cache.copy(),
+        )
+
     def evaluate_leaf(self, leaf: Leaf[_T]) -> SelectParts[_T, _L]:
         assert leaf.engine is self, f"Incorrect engine for evaluation: {leaf.engine!r} != {self!r}."
         return self.leaf_cache[leaf]
@@ -90,8 +99,6 @@ class Engine(BaseEngine[_T], Generic[_T, _L]):
         ----------
         relation : `.Relation`
             Root of the relation tree to convert.
-        sql_engine : `ButlerSqlEngine`
-            Object that relates column tags to logical columns.
         distinct : `bool`
             Whether to generate an expression whose rows are forced to be
             unique.
@@ -241,7 +248,7 @@ class Engine(BaseEngine[_T], Generic[_T, _L]):
 
     def convert_predicate(
         self, predicate: column_expressions.Predicate[_T], columns_available: Mapping[_T, _L]
-    ) -> sqlalchemy.sql.ColumnElement:
+    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
         return predicate.visit(ToSqlBooleans(self, columns_available))
 
     def convert_order_by(

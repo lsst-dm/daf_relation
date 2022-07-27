@@ -30,7 +30,7 @@ from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey
 from .._exceptions import ColumnError, EngineError
-from .._relation import Relation
+from .._relation import Relation, UnaryOperation
 
 if TYPE_CHECKING:
     from .. import column_expressions
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 @final
 @immutable
-class Calculation(Relation[_T]):
+class Calculation(UnaryOperation[_T]):
     """An operation `.Relation` that adds a new column whose values are
     calculated from one or more existing columns.
 
@@ -61,13 +61,14 @@ class Calculation(Relation[_T]):
             )
         if not expression.is_supported_by(base.engine):
             raise EngineError(f"Column expression {expression} does not support engine {base.engine}.")
-        self.base = base
+        self._base = base
         self.expression = expression
         self.tag = tag
 
-    base: Relation[_T]
-    """Relation this operation acts upon (`.Relation`).
-    """
+    @property
+    def base(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._base
 
     def __str__(self) -> str:
         return f"({self.base!s} + {self.tag}={self.expression!s})"
@@ -88,6 +89,10 @@ class Calculation(Relation[_T]):
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
         return self.base.unique_keys
+
+    def _rebase(self, base: Relation[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        return base.calculation(self.tag, self.expression)
 
     def _try_join(
         self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]

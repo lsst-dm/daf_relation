@@ -105,8 +105,8 @@ class TransferVisitor(RelationVisitor[_T, Relation[_T]]):
         return transfer_function(visited.base)
 
     def visit_union(self, visited: operations.Union[_T]) -> Relation[_T]:
-        new_first = visited.first.visit(self)
-        new_second = visited.second.visit(self)
-        if new_first is not visited.first or new_second is not visited.second:
+        new_first = visited.lhs.visit(self)
+        new_second = visited.rhs.visit(self)
+        if new_first is not visited.lhs or new_second is not visited.rhs:
             return operations.Union(new_first, new_second, visited.unique_keys)
         return visited

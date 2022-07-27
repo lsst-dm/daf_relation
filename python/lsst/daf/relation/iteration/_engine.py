@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("Engine",)
 
+import dataclasses
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -36,11 +37,11 @@ if TYPE_CHECKING:
     from .._relation import Relation
 
 
+@dataclasses.dataclass(eq=False, frozen=True, kw_only=True)
 class Engine(BaseEngine[_T]):
-    def __init__(self, name: str) -> None:
-        self.name = name
-        self.leaf_cache: dict[Leaf, RowIterable[_T]] = {}
-        self.column_function_cache: dict[str, Callable[..., Any]] = {}
+    name: str = "iteration"
+    leaf_cache: dict[Leaf, RowIterable[_T]] = dataclasses.field(default_factory=dict)
+    column_function_cache: dict[str, Callable[..., Any]] = dataclasses.field(default_factory=dict)
 
     def __hash__(self) -> int:
         return id(self)

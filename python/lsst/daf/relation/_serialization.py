@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("MappingReader", "DictWriter")
 
 from abc import abstractmethod
-from collections.abc import Iterator, Mapping, Set
+from collections.abc import Iterator, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, Generic, TypeGuard
 
 from . import column_expressions, operations
@@ -42,6 +42,12 @@ def is_str_mapping(mapping: Any) -> TypeGuard[Mapping[str, Any]]:
     if not isinstance(mapping, Mapping):
         return False
     return all(type(k) is str for k in mapping)
+
+
+def is_str_sequence(sequence: Any) -> TypeGuard[Sequence[str]]:
+    if not isinstance(sequence, Sequence):
+        return False
+    return all(type(k) is str for k in sequence)
 
 
 class MappingReader(Generic[_T]):
@@ -76,8 +82,16 @@ class MappingReader(Generic[_T]):
                 )
             case {"type": "distinct", "base": base, "unique_keys": unique_keys}:
                 return operations.Distinct(self.read_relation(base), self.read_unique_keys(unique_keys))
-            case {"type": "doomed", "engine": engine, "columns": columns}:
-                return Doomed(self.read_engine(engine), self.read_column_set(columns))
+            case {"type": "doomed", "engine": engine, "columns": columns, "messages": messages}:
+                if not is_str_sequence(messages):
+                    raise RelationSerializationError(
+                        f"Expected sequence of strings for doomed relation messages, got {messages}."
+                    )
+                return Doomed(
+                    self.read_engine(engine),
+                    self.read_column_set(columns),
+                    list(messages),
+                )
             case {
                 "type": "leaf",
                 "name": str(name),
@@ -509,8 +523,8 @@ class DictWriter(
         # Docstring inherited.
         return {
             "type": "union",
-            "first": visited.first.visit(self),
-            "second": visited.second.visit(self),
+            "first": visited.lhs.visit(self),
+            "second": visited.rhs.visit(self),
             "unique_keys": self.write_unique_keys(visited.unique_keys),
         }
 

@@ -21,6 +21,7 @@
 
 from . import column_expressions, operations
 from ._columns import *
+from ._diagnostics import *
 from ._engine import *
 from ._exceptions import *
 from ._leaf import *

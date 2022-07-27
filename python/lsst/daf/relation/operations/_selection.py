@@ -30,7 +30,7 @@ from lsst.utils.classes import immutable
 
 from .._columns import _T, UniqueKey
 from .._exceptions import ColumnError, EngineError
-from .._relation import Relation
+from .._relation import Relation, UnaryOperation
 
 if TYPE_CHECKING:
     from .. import column_expressions
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 @final
 @immutable
-class Selection(Relation[_T]):
+class Selection(UnaryOperation[_T]):
     """An operation `.Relation` that filters rows via `.Predicate` objects.
 
     Parameters
@@ -59,12 +59,13 @@ class Selection(Relation[_T]):
             )
         if not predicate.is_supported_by(base.engine):
             raise EngineError(f"Predicate {predicate} does not support engine {base.engine}.")
-        self.base = base
+        self._base = base
         self.predicate = predicate
 
-    base: Relation[_T]
-    """Relation this operation acts upon (`.Relation`).
-    """
+    @property
+    def base(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._base
 
     predicate: column_expressions.Predicate[_T]
     """Predicate to apply (`.Predicate`)."""
@@ -86,6 +87,10 @@ class Selection(Relation[_T]):
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
         return self.base.unique_keys
+
+    def _rebase(self, base: Relation[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        return base.selection(self.predicate)
 
     def _try_join(
         self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]

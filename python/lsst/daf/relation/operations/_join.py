@@ -30,7 +30,7 @@ from lsst.utils.classes import cached_getter, immutable
 
 from .._columns import _T, UniqueKey, compute_join_unique_keys
 from .._engine import Engine
-from .._relation import Relation
+from .._relation import BinaryOperation, Relation
 
 if TYPE_CHECKING:
     from .. import column_expressions
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 @final
 @immutable
-class Join(Relation[_T]):
+class Join(BinaryOperation[_T]):
     """An operation `.Relation` that performs a natural join.
 
     A natural join includes all columns from all input relations while keeping
@@ -64,17 +64,19 @@ class Join(Relation[_T]):
         rhs: Relation[_T],
         condition: column_expressions.JoinCondition[_T],
     ):
-        self.lhs = lhs
-        self.rhs = rhs
+        self._lhs = lhs
+        self._rhs = rhs
         self.condition = condition
 
-    lhs: Relation[_T]
-    """Left-hand side operand (`.Relation`).
-    """
+    @property
+    def lhs(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._lhs
 
-    rhs: Relation[_T]
-    """Right-hand side operand (`.Relation`).
-    """
+    @property
+    def rhs(self) -> Relation[_T]:
+        # Docstring inherited.
+        return self._rhs
 
     condition: column_expressions.JoinCondition[_T]
     """Explicit condition that must be satisfied by returned join rows,
@@ -101,6 +103,10 @@ class Join(Relation[_T]):
     def unique_keys(self) -> Set[UniqueKey[_T]]:
         # Docstring inherited.
         return compute_join_unique_keys(self.lhs.unique_keys, self.rhs.unique_keys)
+
+    def rebase(self, lhs: Relation[_T], rhs: Relation[_T]) -> Relation[_T]:
+        # Docstring inherited.
+        return lhs.join(rhs, self.condition.predicate)
 
     def _try_join(
         self, rhs: Relation[_T], condition: column_expressions.JoinCondition[_T]

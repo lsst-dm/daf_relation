@@ -160,7 +160,9 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         # Docstring inherited.
         base_parts = visited.base.visit(self)
         if base_parts.columns_available is None:
-            columns_available = self.engine.extract_mapping(visited.base.columns, base_parts.from_clause)
+            columns_available = self.engine.extract_mapping(
+                visited.base.columns, base_parts.from_clause.columns
+            )
         else:
             columns_available = dict(base_parts.columns_available)
         columns_available[visited.tag] = self.engine.convert_expression(visited.expression, columns_available)
@@ -255,7 +257,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         new_where = self.engine.convert_predicate(visited.predicate, base_parts.columns_available)
         return dataclasses.replace(
             base_parts,
-            where=tuple(base_parts.where) + (new_where,),
+            where=list(base_parts.where) + list(new_where),
         )
 
     def visit_slice(self, visited: operations.Slice[_T]) -> SelectParts[_T, _L]:

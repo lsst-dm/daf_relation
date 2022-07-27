@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("ToSqlBooleans",)
 
 import dataclasses
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 import sqlalchemy
@@ -41,7 +41,7 @@ _L = TypeVar("_L")
 
 @dataclasses.dataclass(eq=False, slots=True)
 class ToSqlBooleans(
-    column_expressions.PredicateVisitor[_T, Iterable[sqlalchemy.sql.ColumnElement]], Generic[_T, _L]
+    column_expressions.PredicateVisitor[_T, Sequence[sqlalchemy.sql.ColumnElement]], Generic[_T, _L]
 ):
     def __init__(self, engine: Engine[_T, _L], columns_available: Mapping[_T, _L]):
         self.to_logical_column = ToLogicalColumn(engine, columns_available)
@@ -58,33 +58,47 @@ class ToSqlBooleans(
 
     def visit_predicate_literal(
         self, visited: column_expressions.PredicateLiteral[_T]
-    ) -> Iterable[sqlalchemy.sql.ColumnElement]:
-        return (sqlalchemy.sql.literal(visited.value),)
+    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
+        return [sqlalchemy.sql.literal(visited.value)]
 
     def visit_predicate_reference(
         self, visited: column_expressions.PredicateReference[_T]
-    ) -> Iterable[sqlalchemy.sql.ColumnElement]:
-        return (self.columns_available[visited.tag],)
+    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
+        return [self.columns_available[visited.tag]]
 
     def visit_predicate_function(
         self, visited: column_expressions.PredicateFunction[_T]
-    ) -> Iterable[sqlalchemy.sql.ColumnElement]:
+    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
         if (function := self.engine.get_column_function(visited.name)) is not None:
             return (function(*[arg.visit(self.to_logical_column) for arg in visited.args]),)
         first, *rest = [arg.visit(self.to_logical_column) for arg in visited.args]
-        return getattr(first, visited.name)(*rest)
+        return [getattr(first, visited.name)(*rest)]
 
     def visit_logical_not(
         self, visited: column_expressions.LogicalNot[_T]
-    ) -> Iterable[sqlalchemy.sql.ColumnElement]:
-        return (sqlalchemy.sql.not_(visited.base.visit(self)),)
+    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
+        return [sqlalchemy.sql.not_(self._and_if_needed(visited.base.visit(self)))]
 
     def visit_logical_and(
         self, visited: column_expressions.LogicalAnd[_T]
-    ) -> Iterable[sqlalchemy.sql.ColumnElement]:
-        return [operand.visit(self) for operand in visited.operands]
+    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
+        result: list[sqlalchemy.sql.ColumnElement] = []
+        for operand in visited.operands:
+            nested = operand.visit(self)
+            result.extend(nested)
+        return result
 
     def visit_logical_or(
         self, visited: column_expressions.LogicalOr[_T]
-    ) -> Iterable[sqlalchemy.sql.ColumnElement]:
-        return (sqlalchemy.sql.or_(*[operand.visit(self) for operand in visited.operands]),)
+    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
+        return (
+            sqlalchemy.sql.or_(*[self._and_if_needed(operand.visit(self)) for operand in visited.operands]),
+        )
+
+    def _and_if_needed(self, items: Sequence[sqlalchemy.sql.ColumnElement]) -> sqlalchemy.sql.ColumnElement:
+        if not items:
+            return sqlalchemy.sql.literal(True)
+        if len(items) == 1:
+            return items[0]
+        else:
+            return sqlalchemy.sql.and_(*items)

@@ -25,11 +25,13 @@ __all__ = (
     "Identity",
     "Relation",
     "Doomed",
+    "UnaryOperation",
+    "BinaryOperation",
 )
 
 import json
 from abc import abstractmethod
-from collections.abc import Iterable, Set
+from collections.abc import Iterable, Sequence, Set
 from typing import TYPE_CHECKING, Generic, TypeVar, final
 
 from lsst.utils.classes import cached_getter, immutable
@@ -554,21 +556,20 @@ class Identity(Relation[_T]):
 class Doomed(Relation[_T]):
     """A leaf `Relation` with no rows.
 
-    Joining any relation to the null relation yields the null relation.
-    The union of the null relation with any other relation is the other
-    relation.
-
     Parameters
     ----------
     engine : `.EngineTag`
         Engine that evaluates this relation.
     columns : `~collections.abc.Set` [ `.ColumnTag` ]
         Set of columns for this relation.
+    messages : `Sequence` [ `str` ]
+        Diagnostics messages explaining why this relation has no rows.
     """
 
-    def __init__(self, engine: Engine, columns: Set[_T]):
+    def __init__(self, engine: Engine, columns: Set[_T], messages: Sequence[str]):
         self._engine = engine
         self._columns = columns
+        self.messages = messages
 
     def __str__(self) -> str:
         return "∅"
@@ -592,3 +593,35 @@ class Doomed(Relation[_T]):
     def visit(self, visitor: RelationVisitor[_T, _U]) -> _U:
         # Docstring inherited.
         return visitor.visit_doomed(self)
+
+
+class UnaryOperation(Relation[_T]):
+    def rebase(self, base: Relation[_T]) -> Relation[_T]:
+        if base is self.base:
+            return self
+        return self._rebase(base)
+
+    @abstractmethod
+    def _rebase(self, base: Relation[_T]) -> Relation[_T]:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def base(self) -> Relation[_T]:
+        raise NotImplementedError()
+
+
+class BinaryOperation(Relation[_T]):
+    @abstractmethod
+    def rebase(self, lhs: Relation[_T], rhs: Relation[_T]) -> Relation[_T]:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def lhs(self) -> Relation[_T]:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def rhs(self) -> Relation[_T]:
+        raise NotImplementedError()
