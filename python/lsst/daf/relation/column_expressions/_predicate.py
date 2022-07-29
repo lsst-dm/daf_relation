@@ -22,13 +22,14 @@
 from __future__ import annotations
 
 __all__ = (
+    "InContainer",
+    "LogicalNot",
+    "LogicalAnd",
+    "LogicalOr",
     "Predicate",
     "PredicateVisitor",
     "PredicateLiteral",
     "PredicateReference",
-    "LogicalNot",
-    "LogicalAnd",
-    "LogicalOr",
 )
 
 import dataclasses
@@ -43,7 +44,7 @@ from .._engine import Engine
 from .base import BaseExpression, BaseLiteral, BaseReference
 
 if TYPE_CHECKING:
-    from ._expression import PredicateFunction
+    from ._expression import Expression, PredicateFunction
 
 _U = TypeVar("_U")
 
@@ -77,6 +78,10 @@ class PredicateVisitor(Generic[_T, _U]):
         raise NotImplementedError()
 
     @abstractmethod
+    def visit_in_container(self, visited: InContainer[_T]) -> _U:
+        raise NotImplementedError()
+
+    @abstractmethod
     def visit_logical_not(self, visited: LogicalNot[_T]) -> _U:
         raise NotImplementedError()
 
@@ -99,6 +104,23 @@ class PredicateLiteral(BaseLiteral[_T, bool], Predicate[_T]):
 class PredicateReference(BaseReference[_T], Predicate[_T]):
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_predicate_reference(self)
+
+
+@dataclasses.dataclass
+class InContainer(Predicate[_T]):
+    lhs: Expression[_T]
+    rhs: range | list
+
+    def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
+        return visitor.visit_in_container(self)
+
+    @property  # type: ignore
+    @cached_getter
+    def columns_required(self) -> Set[_T]:
+        return self.lhs.columns_required
+
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        return self.lhs.is_supported_by(engine)
 
 
 @dataclasses.dataclass

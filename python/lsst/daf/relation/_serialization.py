@@ -318,6 +318,22 @@ class MappingReader(Generic[_T]):
                         )
                     ),
                 )
+            case {"type": "in_container", "lhs": lhs, "rhs": rhs_serialized}:
+                rhs: list[Any] | range
+                match rhs_serialized:
+                    case {"start": start, "stop": stop, "step": step}:
+                        rhs = range(start, stop, step)
+                    case _:
+                        rhs = list(
+                            self._iter(
+                                rhs_serialized,
+                                (
+                                    "Expected a sequence representing a "
+                                    "RHS container for an 'in' expression, got {!r}."
+                                ),
+                            )
+                        )
+                return column_expressions.InContainer(self.read_expression(lhs), rhs)
             case _:
                 raise RelationSerializationError(
                     f"Expected mapping representing a predicate, got {serialized!r}."
@@ -539,6 +555,16 @@ class DictWriter(
     def visit_function(self, visited: column_expressions.Function[_T]) -> dict[str, Any]:
         # Docstring inherited.
         return {"type": "function", "name": visited.name, "args": [arg.visit(self) for arg in visited.args]}
+
+    def visit_in_container(self, visited: column_expressions.InContainer[_T]) -> dict[str, Any]:
+        # Docstring inherited.
+        rhs_serialized: dict[str, int] | list[Any]
+        match visited.rhs:
+            case range(start=start, stop=stop, step=step):
+                rhs_serialized = {"start": start, "stop": stop, "step": step}
+            case _:
+                rhs_serialized = visited.rhs
+        return {"type": "in_container", "lhs": visited.lhs.visit(self), "rhs": rhs_serialized}
 
     def visit_predicate_literal(self, visited: column_expressions.PredicateLiteral[_T]) -> dict[str, Any]:
         # Docstring inherited.

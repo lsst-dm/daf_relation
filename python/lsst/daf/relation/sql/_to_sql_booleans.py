@@ -56,6 +56,37 @@ class ToSqlBooleans(
     def columns_available(self) -> Mapping[_T, _L]:
         return self.to_logical_column.columns_available
 
+    def visit_in_container(
+        self, visited: column_expressions.InContainer[_T]
+    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
+        lhs = visited.lhs.visit(self.to_logical_column)
+        match visited.rhs:
+            case range(start=start, stop=stop_exclusive, step=step):
+                # The convert_expression_literal calls here should just call
+                # sqlalchemy.sql.literal(int), which would also happen
+                # automatically internal to any of the other sqlalchemy
+                # function calls, but they get the typing right, reflecting the
+                # fact that the engine is supposed to have final say over how
+                # we convert literals.
+                stop_inclusive = stop_exclusive - 1
+                if start == stop_inclusive:
+                    return [lhs == self.engine.convert_expression_literal(start)]
+                else:
+                    base = sqlalchemy.sql.between(
+                        lhs,
+                        self.engine.convert_expression_literal(start),
+                        self.engine.convert_expression_literal(stop_inclusive),
+                    )
+                    if step != 1:
+                        return [
+                            base,
+                            lhs % self.engine.convert_expression_literal(step)
+                            == self.engine.convert_expression_literal(start % step),
+                        ]
+                    else:
+                        return [base]
+        return self.engine.convert_expression_in_container(lhs, visited.rhs)
+
     def visit_predicate_literal(
         self, visited: column_expressions.PredicateLiteral[_T]
     ) -> Sequence[sqlalchemy.sql.ColumnElement]:

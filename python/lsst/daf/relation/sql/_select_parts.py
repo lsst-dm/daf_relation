@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("MutableSelectParts", "SelectParts", "ToSelectParts")
 
 import dataclasses
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 import sqlalchemy
@@ -53,13 +53,13 @@ class SelectParts(Generic[_T, _L]):
     (`sqlalchemy.sql.FromClause`).
     """
 
-    where: Sequence[sqlalchemy.sql.ColumnElement]
+    where: Sequence[sqlalchemy.sql.ColumnElement] = tuple()
     """SQLAlchemy representation of the WHERE clause, as a sequence of
     boolean expressions to be combined with ``AND``
     (`Sequence` [ `sqlalchemy.sql.ColumnElement` ]).
     """
 
-    columns_available: Mapping[_T, _L] | None
+    columns_available: Mapping[_T, _L] | None = None
     """Mapping from `.ColumnTag` to logical column for the columns available
     from the FROM clause (`Mapping` or `None`).
 
@@ -68,6 +68,11 @@ class SelectParts(Generic[_T, _L]):
     calling `ColumnTypeInfo.extract_mapping` on `from_clause`.  This is an
     optimization that avoids calls to `Engine.extract_mapping` when
     `columns_available` isn't actually needed.
+    """
+
+    select_only_columns: Set[_T] = frozenset()
+    """Set of column tags that can only appear in a SELECT clause, not a
+    WHERE or ORDER BY clause (such as window-function expressions).
     """
 
     def to_executable(
@@ -127,6 +132,13 @@ class SelectParts(Generic[_T, _L]):
             select = select.limit(limit)
         return select
 
+    def with_columns_fully_available(
+        self, columns_required: Set[_T], relation: Relation[_T], engine: Engine[_T, _L]
+    ) -> SelectParts[_T, _L]:
+        if self.select_only_columns.isdisjoint(columns_required):
+            return self
+        return SelectParts(self.to_executable(relation, engine).subquery())
+
 
 @dataclasses.dataclass(slots=True, eq=False)
 class MutableSelectParts(SelectParts[_T, _L]):
@@ -140,6 +152,7 @@ class MutableSelectParts(SelectParts[_T, _L]):
 
     where: list[sqlalchemy.sql.ColumnElement] = dataclasses.field(default_factory=list)
     columns_available: dict[_T, _L] = dataclasses.field(default_factory=dict)
+    select_only_columns: set[_T] = dataclasses.field(default_factory=set)
 
 
 @dataclasses.dataclass(eq=False)
@@ -166,35 +179,27 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
         else:
             columns_available = dict(base_parts.columns_available)
         columns_available[visited.tag] = self.engine.convert_expression(visited.expression, columns_available)
-        return SelectParts(
-            base_parts.from_clause,
-            base_parts.where,
-            columns_available,
+        select_only_columns: Set[_T]
+        if visited.expression.has_window_function:
+            select_only_columns = set(base_parts.select_only_columns)
+            select_only_columns.add(visited.tag)
+        else:
+            select_only_columns = base_parts.select_only_columns
+        return dataclasses.replace(
+            base_parts, columns_available=columns_available, select_only_columns=select_only_columns
         )
 
     def visit_distinct(self, visited: operations.Distinct[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        return SelectParts(
-            self._to_executable(visited).subquery(),
-            [],
-            None,
-        )
+        return SelectParts(self._to_executable(visited).subquery())
 
     def visit_doomed(self, visited: Doomed[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        return SelectParts(
-            self._to_executable(visited).subquery(),
-            [],
-            None,
-        )
+        return SelectParts(self._to_executable(visited).subquery())
 
     def visit_identity(self, visited: Identity[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        return SelectParts(
-            self.engine.make_identity_subquery(),
-            [],
-            None,
-        )
+        return SelectParts(self.engine.make_identity_subquery())
 
     def visit_leaf(self, visited: Leaf[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
@@ -202,20 +207,30 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
     def visit_materialization(self, visited: operations.Materialization[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        return SelectParts(
-            self._to_executable(visited.base).cte(visited.name),
-            [],
-            None,
-        )
+        return SelectParts(self._to_executable(visited.base).cte(visited.name))
 
     def visit_join(self, visited: operations.Join[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        lhs_parts = visited.lhs.visit(self)
+        columns_required = (
+            frozenset()
+            if visited.condition.predicate is None
+            else visited.condition.predicate.columns_required
+        )
+        lhs_parts = visited.lhs.visit(self).with_columns_fully_available(
+            columns_required, visited.lhs, self.engine
+        )
+        if (
+            visited.condition.predicate is not None
+            and not visited.condition.predicate.columns_required.isdisjoint(lhs_parts.select_only_columns)
+        ):
+            lhs_parts = SelectParts(lhs_parts.to_executable(visited.lhs, self.engine).subquery())
         if lhs_parts.columns_available is None:
             lhs_parts.columns_available = self.engine.extract_mapping(
                 visited.lhs.columns, lhs_parts.from_clause.columns
             )
-        rhs_parts = visited.rhs.visit(self)
+        rhs_parts = visited.rhs.visit(self).with_columns_fully_available(
+            columns_required, visited.lhs, self.engine
+        )
         if rhs_parts.columns_available is None:
             rhs_parts.columns_available = self.engine.extract_mapping(
                 visited.rhs.columns, rhs_parts.from_clause.columns
@@ -238,6 +253,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
             from_clause=lhs_parts.from_clause.join(rhs_parts.from_clause, onclause=on_clause),
             where=tuple(lhs_parts.where) + tuple(rhs_parts.where),
             columns_available=columns_available,
+            select_only_columns=lhs_parts.select_only_columns | rhs_parts.select_only_columns,
         )
 
     def visit_projection(self, visited: operations.Projection[_T]) -> SelectParts[_T, _L]:
@@ -249,10 +265,12 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
     def visit_selection(self, visited: operations.Selection[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        base_parts = visited.base.visit(self)
+        base_parts = visited.base.visit(self).with_columns_fully_available(
+            visited.predicate.columns_required, visited.base, self.engine
+        )
         if base_parts.columns_available is None:
             base_parts.columns_available = self.engine.extract_mapping(
-                visited.base.columns, base_parts.from_clause
+                visited.base.columns, base_parts.from_clause.columns
             )
         new_where = self.engine.convert_predicate(visited.predicate, base_parts.columns_available)
         return dataclasses.replace(
@@ -262,11 +280,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
     def visit_slice(self, visited: operations.Slice[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        return SelectParts(
-            self._to_executable(visited).subquery(),
-            [],
-            None,
-        )
+        return SelectParts(self._to_executable(visited).subquery())
 
     def visit_transfer(self, visited: operations.Transfer) -> SelectParts[_T, _L]:
         # Docstring inherited.
@@ -274,11 +288,7 @@ class ToSelectParts(RelationVisitor[_T, SelectParts[_T, _L]], Generic[_T, _L]):
 
     def visit_union(self, visited: operations.Union[_T]) -> SelectParts[_T, _L]:
         # Docstring inherited.
-        return SelectParts(
-            self._to_executable(visited).subquery(),
-            [],
-            None,
-        )
+        return SelectParts(self._to_executable(visited).subquery())
 
     def _to_executable(self, relation: Relation[_T]) -> sqlalchemy.sql.expression.SelectBase:
         """Delegate to `ToExecutable` to implement visitation for a relation.

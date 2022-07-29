@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("Engine",)
 
 import dataclasses
-from collections.abc import Callable, Iterable, Mapping, Sequence, Set
+from collections.abc import Callable, Container, Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 import sqlalchemy
@@ -245,6 +245,11 @@ class Engine(BaseEngine[_T], Generic[_T, _L]):
 
     def convert_expression_literal(self, value: Any) -> _L:
         return sqlalchemy.sql.literal(value)
+
+    def convert_expression_in_container(
+        self, lhs: _L, rhs: Container
+    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
+        return cast(sqlalchemy.sql.ColumnElement, lhs).in_(rhs)
 
     def convert_predicate(
         self, predicate: column_expressions.Predicate[_T], columns_available: Mapping[_T, _L]

@@ -27,6 +27,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Generic
 
 from .._columns import _T
+from .._exceptions import RelationalAlgebraError
 
 if TYPE_CHECKING:
     from ._expression import Expression
@@ -37,3 +38,7 @@ class OrderByTerm(Generic[_T]):
 
     expression: Expression[_T]
     ascending: bool = True
+
+    def __post_init__(self) -> None:
+        if self.expression.has_window_function:
+            raise RelationalAlgebraError(f"Cannot sort by window function expression {self.expression}.")

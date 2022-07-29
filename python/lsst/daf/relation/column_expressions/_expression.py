@@ -39,6 +39,7 @@ from lsst.utils.sets.ellipsis import EllipsisType
 from lsst.utils.sets.unboundable import FrozenUnboundableSet, UnboundableSet
 
 from .._columns import _T
+from .._exceptions import RelationalAlgebraError
 from ._predicate import Predicate, PredicateVisitor
 from .base import BaseExpression, BaseFunction, BaseLiteral, BaseReference
 
@@ -51,7 +52,12 @@ _U = TypeVar("_U")
 class Expression(BaseExpression[_T]):
     @abstractmethod
     def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
-        ...
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def has_window_function(self) -> bool:
+        raise NotImplementedError()
 
     @classmethod
     def reference(cls, tag: _T) -> Expression[_T]:
@@ -69,8 +75,14 @@ class Expression(BaseExpression[_T]):
         supporting_engines: Set[Engine[_T] | type[Engine[_T]]]
         | EllipsisType
         | UnboundableSet[Engine[_T] | type[Engine[_T]]] = FrozenUnboundableSet.full,
+        is_window_function: bool = False,
     ) -> Expression[_T]:
-        return Function(name, args, supporting_engines=FrozenUnboundableSet.coerce(supporting_engines))
+        return Function(
+            name,
+            args,
+            supporting_engines=FrozenUnboundableSet.coerce(supporting_engines),
+            is_window_function=is_window_function,
+        )
 
     def eq(self, other: Expression[_T]) -> Predicate[_T]:
         return self.predicate_function("__eq__", other)
@@ -123,20 +135,40 @@ class Literal(BaseLiteral[_T, Any], Expression[_T]):
     def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
         return visitor.visit_literal(self)
 
+    @property
+    def has_window_function(self) -> bool:
+        return False
+
 
 @dataclasses.dataclass
 class Reference(BaseReference[_T], Expression[_T]):
     def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
         return visitor.visit_reference(self)
 
+    @property
+    def has_window_function(self) -> bool:
+        return False
+
 
 @dataclasses.dataclass
 class Function(BaseFunction[_T, Expression[_T]], Expression[_T]):
+
+    is_window_function: bool = dataclasses.field(default=False)
+
     def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
         return visitor.visit_function(self)
+
+    @property
+    def has_window_function(self) -> bool:
+        return self.is_window_function or any(arg.has_window_function for arg in self.args)
 
 
 @dataclasses.dataclass
 class PredicateFunction(BaseFunction[_T, Expression[_T]], Predicate[_T]):
+    def __post_init__(self) -> None:
+        for arg in self.args:
+            if arg.has_window_function:
+                raise RelationalAlgebraError(f"Cannot use window function expression {arg} in predicate.")
+
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_predicate_function(self)

@@ -22,3 +22,5 @@
 from ._engine import *
 from ._select_parts import *
 from ._to_executable import *
+from ._to_logical_column import *
+from ._to_sql_booleans import *

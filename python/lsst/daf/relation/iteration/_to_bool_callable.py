@@ -47,6 +47,10 @@ class ToBoolCallable(column_expressions.PredicateVisitor[_T, Callable[[Row[_T]],
     def engine(self) -> Engine:
         return self.to_callable.engine
 
+    def visit_in_container(self, visited: column_expressions.InContainer[_T]) -> Callable[[Row[_T]], bool]:
+        lhs_callable = visited.lhs.visit(self.to_callable)
+        return lambda row: lhs_callable(row) in visited.rhs
+
     def visit_predicate_literal(
         self, visited: column_expressions.PredicateLiteral[_T]
     ) -> Callable[[Row[_T]], bool]:
