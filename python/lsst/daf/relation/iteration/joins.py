@@ -32,7 +32,6 @@ from typing import TYPE_CHECKING
 
 from .._columns import _T, is_unique_key_covered
 from ._row_iterable import RowIterable
-from ._to_bool_callable import ToBoolCallable
 from .selection import SelectionRowIterable
 
 if TYPE_CHECKING:
@@ -140,9 +139,11 @@ def _finish_join_row_iterable(
         Row iterable that fully implements the join, including all join
         conditions.
     """
+    from ._iteration_visitor import IterationVisitor
+
     if predicate is None:
         return base
-    return SelectionRowIterable(base, predicate.visit(ToBoolCallable(engine)))
+    return SelectionRowIterable(base, predicate.visit(IterationVisitor(engine)))
 
 
 class UniqueIndexJoinRowIterable(RowIterable[_T]):

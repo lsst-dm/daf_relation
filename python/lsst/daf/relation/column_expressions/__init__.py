@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from ._container import *
 from ._expression import *
 from ._join_condition import *
 from ._order_by_term import *

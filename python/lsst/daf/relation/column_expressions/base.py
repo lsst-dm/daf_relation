@@ -94,4 +94,6 @@ class BaseFunction(BaseExpression[_T], Generic[_T, _A]):
         return result
 
     def is_supported_by(self, engine: Engine[_T]) -> bool:
-        return engine in self.supporting_engines or type(engine) in self.supporting_engines
+        return (engine in self.supporting_engines or type(engine) in self.supporting_engines) and all(
+            arg.is_supported_by(engine) for arg in self.args
+        )

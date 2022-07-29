@@ -19,8 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from ._convert_expression import *
 from ._engine import *
 from ._select_parts import *
 from ._to_executable import *
-from ._to_logical_column import *
-from ._to_sql_booleans import *

@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("Engine",)
 
 import dataclasses
-from collections.abc import Callable, Container, Iterable, Mapping, Sequence, Set
+from collections.abc import Callable, Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 import sqlalchemy
@@ -32,9 +32,8 @@ import sqlalchemy
 from .._columns import _T
 from .._engine import Engine as BaseEngine
 from .._exceptions import EngineError
+from ._convert_expression import ConvertExpression
 from ._to_executable import ToExecutable
-from ._to_logical_column import ToLogicalColumn
-from ._to_sql_booleans import ToSqlBooleans
 
 if TYPE_CHECKING:
     from .. import column_expressions
@@ -241,20 +240,18 @@ class Engine(BaseEngine[_T], Generic[_T, _L]):
     def convert_expression(
         self, expression: column_expressions.Expression[_T], columns_available: Mapping[_T, _L]
     ) -> _L:
-        return expression.visit(ToLogicalColumn(self, columns_available))
+        return expression.visit(ConvertExpression(self, columns_available))
 
     def convert_expression_literal(self, value: Any) -> _L:
         return sqlalchemy.sql.literal(value)
 
-    def convert_expression_in_container(
-        self, lhs: _L, rhs: Container
-    ) -> Sequence[sqlalchemy.sql.ColumnElement]:
-        return cast(sqlalchemy.sql.ColumnElement, lhs).in_(rhs)
+    def expect_expression_scalar(self, logical_column: _L) -> sqlalchemy.sql.ColumnElement:
+        return cast(sqlalchemy.sql.ColumnElement, logical_column)
 
     def convert_predicate(
         self, predicate: column_expressions.Predicate[_T], columns_available: Mapping[_T, _L]
     ) -> Sequence[sqlalchemy.sql.ColumnElement]:
-        return predicate.visit(ToSqlBooleans(self, columns_available))
+        return predicate.visit(ConvertExpression(self, columns_available))
 
     def convert_order_by(
         self, term: column_expressions.OrderByTerm[_T], columns_available: Mapping[_T, _L]

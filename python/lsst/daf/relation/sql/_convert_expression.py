@@ -21,17 +21,16 @@
 
 from __future__ import annotations
 
-__all__ = ("ToSqlBooleans",)
+__all__ = ("ConvertExpression",)
 
 import dataclasses
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar, Union
 
 import sqlalchemy
 
 from .. import column_expressions
 from .._columns import _T
-from ._to_logical_column import ToLogicalColumn
 
 if TYPE_CHECKING:
     from ._engine import Engine
@@ -40,27 +39,34 @@ _L = TypeVar("_L")
 
 
 @dataclasses.dataclass(eq=False, slots=True)
-class ToSqlBooleans(
-    column_expressions.PredicateVisitor[_T, Sequence[sqlalchemy.sql.ColumnElement]], Generic[_T, _L]
+class ConvertExpression(
+    column_expressions.ExpressionVisitor[_T, _L],
+    column_expressions.PredicateVisitor[_T, Sequence[sqlalchemy.sql.ColumnElement]],
+    column_expressions.ContainerVisitor[_T, Union[Sequence[sqlalchemy.sql.ColumnElement], range]],
+    Generic[_T, _L],
 ):
-    def __init__(self, engine: Engine[_T, _L], columns_available: Mapping[_T, _L]):
-        self.to_logical_column = ToLogicalColumn(engine, columns_available)
 
-    to_logical_column: ToLogicalColumn[_T, _L]
+    engine: Engine[_T, _L]
+    columns_available: Mapping[_T, _L]
 
-    @property
-    def engine(self) -> Engine:
-        return self.to_logical_column.engine
+    def visit_literal(self, visited: column_expressions.Literal[_T]) -> _L:
+        return self.engine.convert_expression_literal(visited.value)
 
-    @property
-    def columns_available(self) -> Mapping[_T, _L]:
-        return self.to_logical_column.columns_available
+    def visit_reference(self, visited: column_expressions.Reference[_T]) -> _L:
+        return self.columns_available[visited.tag]
+
+    def visit_function(self, visited: column_expressions.Function[_T]) -> _L:
+        if (function := self.engine.get_column_function(visited.name)) is not None:
+            return function(*[arg.visit(self) for arg in visited.args])
+        first, *rest = [arg.visit(self) for arg in visited.args]
+        return getattr(first, visited.name)(*rest)
 
     def visit_in_container(
         self, visited: column_expressions.InContainer[_T]
     ) -> Sequence[sqlalchemy.sql.ColumnElement]:
-        lhs = visited.lhs.visit(self.to_logical_column)
-        match visited.rhs:
+        lhs = self.engine.expect_expression_scalar(visited.lhs.visit(self))
+        rhs = visited.rhs.visit(self)
+        match rhs:
             case range(start=start, stop=stop_exclusive, step=step):
                 # The convert_expression_literal calls here should just call
                 # sqlalchemy.sql.literal(int), which would also happen
@@ -85,7 +91,7 @@ class ToSqlBooleans(
                         ]
                     else:
                         return [base]
-        return self.engine.convert_expression_in_container(lhs, visited.rhs)
+        return [lhs.in_(rhs)]
 
     def visit_predicate_literal(
         self, visited: column_expressions.PredicateLiteral[_T]
@@ -101,8 +107,8 @@ class ToSqlBooleans(
         self, visited: column_expressions.PredicateFunction[_T]
     ) -> Sequence[sqlalchemy.sql.ColumnElement]:
         if (function := self.engine.get_column_function(visited.name)) is not None:
-            return (function(*[arg.visit(self.to_logical_column) for arg in visited.args]),)
-        first, *rest = [arg.visit(self.to_logical_column) for arg in visited.args]
+            return (function(*[arg.visit(self) for arg in visited.args]),)
+        first, *rest = [arg.visit(self) for arg in visited.args]
         return [getattr(first, visited.name)(*rest)]
 
     def visit_logical_not(
@@ -122,9 +128,23 @@ class ToSqlBooleans(
     def visit_logical_or(
         self, visited: column_expressions.LogicalOr[_T]
     ) -> Sequence[sqlalchemy.sql.ColumnElement]:
-        return (
-            sqlalchemy.sql.or_(*[self._and_if_needed(operand.visit(self)) for operand in visited.operands]),
-        )
+        terms = [self._and_if_needed(operand.visit(self)) for operand in visited.operands]
+        if not terms:
+            return [sqlalchemy.sql.literal(False)]
+        if len(terms) == 1:
+            return [terms[0]]
+        else:
+            return [sqlalchemy.sql.or_(*terms)]
+
+    def visit_range_literal(
+        self, visited: column_expressions.RangeLiteral[_T]
+    ) -> Sequence[sqlalchemy.sql.ColumnElement] | range:
+        return visited.value
+
+    def visit_expression_sequence(
+        self, visited: column_expressions.ExpressionSequence[_T]
+    ) -> Sequence[sqlalchemy.sql.ColumnElement] | range:
+        return [self.engine.expect_expression_scalar(item.visit(self)) for item in visited.items]
 
     def _and_if_needed(self, items: Sequence[sqlalchemy.sql.ColumnElement]) -> sqlalchemy.sql.ColumnElement:
         if not items:
