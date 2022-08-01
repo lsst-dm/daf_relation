@@ -34,13 +34,12 @@ __all__ = (
 import dataclasses
 from abc import abstractmethod
 from collections.abc import Set
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar
 
 from lsst.utils.classes import cached_getter
 
 from .._columns import _T
 from .._engine import Engine
-from .base import BaseExpression, BaseLiteral, BaseReference
 
 if TYPE_CHECKING:
     from ._container import InContainer
@@ -49,7 +48,18 @@ if TYPE_CHECKING:
 _U = TypeVar("_U")
 
 
-class Predicate(BaseExpression[_T]):
+class Predicate(Generic[_T]):
+    @property
+    @abstractmethod
+    def columns_required(self) -> Set[_T]:
+        raise NotImplementedError()
+
+    dtype: ClassVar[type[bool]]
+
+    @abstractmethod
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        raise NotImplementedError()
+
     @abstractmethod
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         raise NotImplementedError()
@@ -58,10 +68,22 @@ class Predicate(BaseExpression[_T]):
         return LogicalNot(self)
 
     def logical_and(*operands: Predicate[_T]) -> Predicate[_T]:
-        return LogicalAnd(operands)
+        all_operands: list[Predicate[_T]] = []
+        for operand in operands:
+            all_operands.extend(operand.flatten_logical_and())
+        return LogicalAnd(tuple(all_operands))
 
     def logical_or(*operands: Predicate[_T]) -> Predicate[_T]:
-        return LogicalOr(operands)
+        all_operands: list[Predicate[_T]] = []
+        for operand in operands:
+            all_operands.extend(operand.flatten_logical_or())
+        return LogicalOr(tuple(all_operands))
+
+    def flatten_logical_and(self) -> tuple[Predicate[_T], ...]:
+        return (self,)
+
+    def flatten_logical_or(self) -> tuple[Predicate[_T], ...]:
+        return (self,)
 
 
 class PredicateVisitor(Generic[_T, _U]):
@@ -95,13 +117,33 @@ class PredicateVisitor(Generic[_T, _U]):
 
 
 @dataclasses.dataclass
-class PredicateLiteral(BaseLiteral[_T, bool], Predicate[_T]):
+class PredicateLiteral(Predicate[_T]):
+
+    value: bool
+
+    @property
+    def columns_required(self) -> Set[_T]:
+        return frozenset()
+
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        return True
+
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_predicate_literal(self)
 
 
 @dataclasses.dataclass
-class PredicateReference(BaseReference[_T], Predicate[_T]):
+class PredicateReference(Predicate[_T]):
+
+    tag: _T
+
+    @property
+    def columns_required(self) -> Set[_T]:
+        return frozenset()
+
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        return True
+
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_predicate_reference(self)
 
@@ -140,6 +182,9 @@ class LogicalAnd(Predicate[_T]):
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_logical_and(self)
 
+    def flatten_logical_and(self) -> tuple[Predicate[_T], ...]:
+        return self.operands
+
 
 @dataclasses.dataclass
 class LogicalOr(Predicate[_T]):
@@ -159,3 +204,6 @@ class LogicalOr(Predicate[_T]):
 
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_logical_or(self)
+
+    def flatten_logical_or(self) -> tuple[Predicate[_T], ...]:
+        return self.operands

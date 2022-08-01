@@ -241,6 +241,9 @@ class MappingReader(Generic[_T]):
         """
         return {UniqueKey(self.read_column_set(k)) for k in serialized}
 
+    def read_expression_dtype(self, type_name: str | None) -> type | None:
+        return getattr(__builtins__, type_name) if type_name is not None else None
+
     def read_expression(self, serialized: Any) -> column_expressions.Expression[_T]:
         """Read a column expression.
 
@@ -255,17 +258,18 @@ class MappingReader(Generic[_T]):
             Deserialized column expression.
         """
         match serialized:
-            case {"type": "literal", "value": value}:
-                return column_expressions.Literal(value)
-            case {"type": "reference", "tag": tag}:
-                return column_expressions.Reference(tag)
-            case {"type": "function", "name": str(name), "args": args}:
+            case {"type": "literal", "value": value, "dtype": type_name}:
+                return column_expressions.Literal(value, self.read_expression_dtype(type_name))
+            case {"type": "reference", "tag": tag, "dtype": type_name}:
+                return column_expressions.Reference(tag, self.read_expression_dtype(type_name))
+            case {"type": "function", "name": str(name), "args": args, "dtype": type_name}:
                 return column_expressions.Function(
                     name,
                     tuple(
                         self.read_expression(arg)
                         for arg in self._iter(args, "Expected a sequence of column expressions, got {!r}.")
                     ),
+                    self.read_expression_dtype(type_name),
                 )
             case _:
                 raise RelationSerializationError(
@@ -276,12 +280,13 @@ class MappingReader(Generic[_T]):
         match serialized:
             case {"type": "range_literal", "start": int(start), "stop": int(stop), "step": int(step)}:
                 return column_expressions.RangeLiteral(range(start, stop, step))
-            case {"type": "expression_sequence", "items": items}:
+            case {"type": "expression_sequence", "items": items, "dtype": type_name}:
                 return column_expressions.ExpressionSequence(
                     [
                         self.read_expression(item)
                         for item in self._iter(items, "Expected sequence of expressions, got {}")
-                    ]
+                    ],
+                    self.read_expression_dtype(type_name),
                 )
             case _:
                 raise RelationSerializationError(
@@ -549,15 +554,28 @@ class DictWriter(
 
     def visit_literal(self, visited: column_expressions.Literal[_T]) -> dict[str, Any]:
         # Docstring inherited.
-        return {"type": "literal", "value": visited.value}
+        return {
+            "type": "literal",
+            "value": visited.value,
+            "dtype": self.write_expression_dtype(visited.dtype),
+        }
 
     def visit_reference(self, visited: column_expressions.Reference[_T]) -> dict[str, Any]:
         # Docstring inherited.
-        return {"type": "reference", "tag": self.write_column(visited.tag)}
+        return {
+            "type": "reference",
+            "tag": self.write_column(visited.tag),
+            "dtype": self.write_expression_dtype(visited.dtype),
+        }
 
     def visit_function(self, visited: column_expressions.Function[_T]) -> dict[str, Any]:
         # Docstring inherited.
-        return {"type": "function", "name": visited.name, "args": [arg.visit(self) for arg in visited.args]}
+        return {
+            "type": "function",
+            "name": visited.name,
+            "args": [arg.visit(self) for arg in visited.args],
+            "dtype": self.write_expression_dtype(visited.dtype),
+        }
 
     def visit_range_literal(self, visited: column_expressions.RangeLiteral[_T]) -> dict[str, Any]:
         # Docstring inherited.
@@ -570,7 +588,11 @@ class DictWriter(
 
     def visit_expression_sequence(self, visited: column_expressions.ExpressionSequence[_T]) -> dict[str, Any]:
         # Docstring inherited.
-        return {"type": "expression_sequence", "items": [item.visit(self) for item in visited.items]}
+        return {
+            "type": "expression_sequence",
+            "items": [item.visit(self) for item in visited.items],
+            "dtype": self.write_expression_dtype(visited.dtype),
+        }
 
     def visit_in_container(self, visited: column_expressions.InContainer[_T]) -> dict[str, Any]:
         # Docstring inherited.
@@ -667,3 +689,6 @@ class DictWriter(
             on each key and returns a sorted list of the results.
         """
         return sorted(self.write_column_set(key) for key in unique_keys)
+
+    def write_expression_dtype(self, dtype: type | None) -> str | None:
+        return dtype.__name__ if dtype is not None else None

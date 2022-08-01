@@ -35,13 +35,13 @@ from abc import abstractmethod
 from collections.abc import Set
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
+from lsst.utils.classes import cached_getter
 from lsst.utils.sets.ellipsis import EllipsisType
 from lsst.utils.sets.unboundable import FrozenUnboundableSet, UnboundableSet
 
 from .._columns import _T
 from .._exceptions import RelationalAlgebraError
 from ._predicate import Predicate, PredicateVisitor
-from .base import BaseExpression, BaseFunction, BaseLiteral, BaseReference
 
 if TYPE_CHECKING:
     from .._engine import Engine
@@ -49,7 +49,21 @@ if TYPE_CHECKING:
 _U = TypeVar("_U")
 
 
-class Expression(BaseExpression[_T]):
+class Expression(Generic[_T]):
+    @property
+    @abstractmethod
+    def columns_required(self) -> Set[_T]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def dtype(self) -> type | None:
+        raise NotImplementedError()
+
     @abstractmethod
     def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
         raise NotImplementedError()
@@ -60,18 +74,19 @@ class Expression(BaseExpression[_T]):
         raise NotImplementedError()
 
     @classmethod
-    def reference(cls, tag: _T) -> Expression[_T]:
-        return Reference(tag)
+    def reference(cls, tag: _T, dtype: type | None = None) -> Expression[_T]:
+        return Reference(tag, dtype)
 
     @classmethod
-    def literal(cls, value: Any) -> Expression[_T]:
-        return Literal(value)
+    def literal(cls, value: Any, dtype: type | None = None) -> Expression[_T]:
+        return Literal(value, dtype)
 
     @classmethod
     def function(
         cls,
         name: str,
         *args: Expression[_T],
+        dtype: type | None = None,
         supporting_engines: Set[Engine[_T] | type[Engine[_T]]]
         | EllipsisType
         | UnboundableSet[Engine[_T] | type[Engine[_T]]] = FrozenUnboundableSet.full,
@@ -80,6 +95,7 @@ class Expression(BaseExpression[_T]):
         return Function(
             name,
             args,
+            dtype,
             supporting_engines=FrozenUnboundableSet.coerce(supporting_engines),
             is_window_function=is_window_function,
         )
@@ -110,10 +126,7 @@ class Expression(BaseExpression[_T]):
         | EllipsisType
         | UnboundableSet[Engine[_T] | type[Engine[_T]]] = FrozenUnboundableSet.full,
     ) -> Predicate[_T]:
-        return PredicateFunction[_T](
-            name,
-            (self,) + args,
-        )
+        return PredicateFunction[_T](name, (self,) + args)
 
 
 class ExpressionVisitor(Generic[_T, _U]):
@@ -131,7 +144,17 @@ class ExpressionVisitor(Generic[_T, _U]):
 
 
 @dataclasses.dataclass
-class Literal(BaseLiteral[_T, Any], Expression[_T]):
+class Literal(Expression[_T]):
+    value: Any
+    dtype: type | None
+
+    @property
+    def columns_required(self) -> Set[_T]:
+        return frozenset()
+
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        return True
+
     def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
         return visitor.visit_literal(self)
 
@@ -141,7 +164,17 @@ class Literal(BaseLiteral[_T, Any], Expression[_T]):
 
 
 @dataclasses.dataclass
-class Reference(BaseReference[_T], Expression[_T]):
+class Reference(Expression[_T]):
+    tag: _T
+    dtype: type | None
+
+    @property
+    def columns_required(self) -> Set[_T]:
+        return frozenset()
+
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        return True
+
     def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
         return visitor.visit_reference(self)
 
@@ -151,24 +184,59 @@ class Reference(BaseReference[_T], Expression[_T]):
 
 
 @dataclasses.dataclass
-class Function(BaseFunction[_T, Expression[_T]], Expression[_T]):
+class Function(Expression[_T]):
 
+    name: str
+    args: tuple[Expression[_T], ...]
+    dtype: type | None
+    supporting_engines: FrozenUnboundableSet[Engine[_T] | type[Engine[_T]]] = FrozenUnboundableSet.full
     is_window_function: bool = dataclasses.field(default=False)
 
-    def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
-        return visitor.visit_function(self)
+    @property  # type: ignore
+    @cached_getter
+    def columns_required(self) -> Set[_T]:
+        result: set[_T] = set()
+        for arg in self.args:
+            result.update(arg.columns_required)
+        return result
+
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        return (engine in self.supporting_engines or type(engine) in self.supporting_engines) and all(
+            arg.is_supported_by(engine) for arg in self.args
+        )
 
     @property
     def has_window_function(self) -> bool:
         return self.is_window_function or any(arg.has_window_function for arg in self.args)
 
+    def visit(self, visitor: ExpressionVisitor[_T, _U]) -> _U:
+        return visitor.visit_function(self)
+
 
 @dataclasses.dataclass
-class PredicateFunction(BaseFunction[_T, Expression[_T]], Predicate[_T]):
+class PredicateFunction(Predicate[_T]):
+
+    name: str
+    args: tuple[Expression[_T], ...]
+    supporting_engines: FrozenUnboundableSet[Engine[_T] | type[Engine[_T]]] = FrozenUnboundableSet.full
+
     def __post_init__(self) -> None:
         for arg in self.args:
             if arg.has_window_function:
                 raise RelationalAlgebraError(f"Cannot use window function expression {arg} in predicate.")
+
+    @property  # type: ignore
+    @cached_getter
+    def columns_required(self) -> Set[_T]:
+        result: set[_T] = set()
+        for arg in self.args:
+            result.update(arg.columns_required)
+        return result
+
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        return (engine in self.supporting_engines or type(engine) in self.supporting_engines) and all(
+            arg.is_supported_by(engine) for arg in self.args
+        )
 
     def visit(self, visitor: PredicateVisitor[_T, _U]) -> _U:
         return visitor.visit_predicate_function(self)

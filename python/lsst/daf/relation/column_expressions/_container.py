@@ -40,7 +40,6 @@ from .._columns import _T
 from .._engine import Engine
 from .._exceptions import RelationalAlgebraError
 from ._predicate import Predicate, PredicateVisitor
-from .base import BaseExpression, BaseLiteral
 
 if TYPE_CHECKING:
     from ._expression import Expression
@@ -48,7 +47,21 @@ if TYPE_CHECKING:
 _U = TypeVar("_U")
 
 
-class Container(BaseExpression[_T]):
+class Container(Generic[_T]):
+    @property
+    @abstractmethod
+    def columns_required(self) -> Set[_T]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def dtype(self) -> type | None:
+        raise NotImplementedError()
+
     @abstractmethod
     def visit(self, visitor: ContainerVisitor[_T, _U]) -> _U:
         raise NotImplementedError()
@@ -61,8 +74,8 @@ class Container(BaseExpression[_T]):
         return RangeLiteral(r)
 
     @classmethod
-    def from_sequence(cls, items: Sequence[Expression[_T]]) -> Container[_T]:
-        return ExpressionSequence(items)
+    def sequence(cls, items: Sequence[Expression[_T]], dtype: type | None = None) -> Container[_T]:
+        return ExpressionSequence(items, dtype)
 
 
 class ContainerVisitor(Generic[_T, _U]):
@@ -76,7 +89,20 @@ class ContainerVisitor(Generic[_T, _U]):
 
 
 @dataclasses.dataclass
-class RangeLiteral(BaseLiteral[_T, range], Container[_T]):
+class RangeLiteral(Container[_T]):
+    value: range
+
+    @property
+    def columns_required(self) -> Set[_T]:
+        return frozenset()
+
+    def is_supported_by(self, engine: Engine[_T]) -> bool:
+        return True
+
+    @property
+    def dtype(self) -> type[int]:
+        return int
+
     def visit(self, visitor: ContainerVisitor[_T, _U]) -> _U:
         return visitor.visit_range_literal(self)
 
@@ -84,6 +110,7 @@ class RangeLiteral(BaseLiteral[_T, range], Container[_T]):
 @dataclasses.dataclass
 class ExpressionSequence(Container[_T]):
     items: Sequence[Expression[_T]]
+    dtype: type | None
 
     def visit(self, visitor: ContainerVisitor[_T, _U]) -> _U:
         return visitor.visit_expression_sequence(self)
